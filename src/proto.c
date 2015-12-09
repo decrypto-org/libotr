@@ -237,16 +237,33 @@ char *otrl_proto_default_query_msg(const char *ourname, OtrlPolicy policy)
     int v1_supported, v2_supported, v3_supported;
     char *version_tag;
     char *bufp;
+    char *format;
     /* Don't use g_strdup_printf here, because someone (not us) is going
      * to free() the *message pointer, not g_free() it.  We can't
      * require that they g_free() it, because this pointer will probably
      * get passed to the main IM application for processing (and
      * free()ing). */
-    const char *format = "?OTR%s\n<b>%s</b> has requested an "
+    const char *format_username = "?OTR%s\n<b>%s</b> has requested an "
 	    "<a href=\"https://otr.cypherpunks.ca/\">Off-the-Record "
 	    "private conversation</a>.  However, you do not have a plugin "
 	    "to support that.\nSee <a href=\"https://otr.cypherpunks.ca/\">"
 	    "https://otr.cypherpunks.ca/</a> for more information.";
+
+    const char *format_no_username = "?OTR%s\nYou have been requested to join an "
+	    "<a href=\"https://otr.cypherpunks.ca/\">Off-the-Record "
+	    "private conversation</a>.  However, you do not have a plugin "
+	    "to support that.\nSee <a href=\"https://otr.cypherpunks.ca/\">"
+	    "https://otr.cypherpunks.ca/</a> for more information.";
+
+    /* Check if the application provided a username
+     * and use the appropriate formatter*/
+    if(ourname) {
+	format = format_username;
+    }
+    else {
+	format = format_no_username;
+    }
+
 
     /* Figure out the version tag */
     v1_supported = (policy & OTRL_POLICY_ALLOW_V1);
@@ -274,13 +291,27 @@ char *otrl_proto_default_query_msg(const char *ourname, OtrlPolicy policy)
     }
     *bufp = '\0';
 
-    /* Remove two "%s", add '\0' */
-    msg = malloc(strlen(format) + strlen(version_tag) + strlen(ourname) - 3);
+    if(ourname) {
+	/* Remove two "%s", add '\0' */
+        msg = malloc(strlen(format) + strlen(version_tag) + strlen(ourname) - 3);
+    }
+    else {
+	/* Remove one "%s", add '\0' */
+	msg = malloc(strlen(format) + strlen(version_tag) - 1);
+    }
+
     if (!msg) {
 	free(version_tag);
 	return NULL;
     }
-    sprintf(msg, format, version_tag, ourname);
+
+    if(ourname) {
+        sprintf(msg, format, version_tag, ourname);
+    }
+    else {
+	sprintf(msg, format, version_tag);
+    }
+
     free(version_tag);
     return msg;
 }
