@@ -715,7 +715,7 @@ gcry_error_t otrl_proto_accept_data(char **plaintextp, OtrlTLV **tlvsp,
     unsigned int sender_keyid, recipient_keyid;
     gcry_mpi_t sender_next_y = NULL;
     unsigned char ctr[8];
-    unsigned int datalen, reveallen;
+    size_t datalen, reveallen;
     unsigned char *data = NULL;
     unsigned char *nul = NULL;
     unsigned char givenmac[20];
@@ -916,7 +916,7 @@ OtrlFragmentResult otrl_proto_fragment_accumulate(char **unfragmessagep,
 
     if (k > 0 && n > 0 && k <= n && start > 0 && end > 0 && start < end) {
 	if (k == 1) {
-	    int fraglen = end - start - 1;
+	    size_t fraglen = end - start - 1;
 	    size_t newsize = fraglen + 1;
 	    free(context->context_priv->fragment);
 	    context->context_priv->fragment = NULL;
@@ -937,7 +937,7 @@ OtrlFragmentResult otrl_proto_fragment_accumulate(char **unfragmessagep,
 	    }
 	} else if (n == context->context_priv->fragment_n &&
 		k == context->context_priv->fragment_k + 1) {
-	    int fraglen = end - start - 1;
+	    size_t fraglen = end - start - 1;
 	    char *newfrag = NULL;
 	    size_t newsize = context->context_priv->fragment_len + fraglen + 1;
 	    /* Check for overflow */
@@ -989,10 +989,10 @@ gcry_error_t otrl_proto_fragment_create(int mms, int fragment_count,
 	char ***fragments, ConnContext *context, const char *message)
 {
     char *fragdata;
-    int fragdatalen = 0;
+    size_t fragdatalen = 0;
     int curfrag = 0;
-    int index = 0;
-    int msglen = strlen(message);
+    size_t index = 0;
+    size_t msglen = strlen(message);
     /* Should vary by number of msgs */
     int headerlen = context->protocol_version == 3 ? 37 : 19;
 
@@ -1012,7 +1012,7 @@ gcry_error_t otrl_proto_fragment_create(int mms, int fragment_count,
 	int i;
 	char *fragmentmsg;
 
-	if (msglen - index < mms - headerlen) {
+	if (msglen - index < (size_t)(mms - headerlen)) {
 	    fragdatalen = msglen - index;
 	} else {
 	    fragdatalen = mms - headerlen;
