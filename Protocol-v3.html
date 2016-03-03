@@ -1280,7 +1280,8 @@ fragmentation on outgoing messages is optional.</p>
 
     <li>Note that k and n are unsigned short ints (2 bytes), and each has
       a maximum value of 65535.  Also, each piece[k] must be
-      non-empty.</li>
+      non-empty.  The instance tags (if applicable) and the k and n
+      values may have leading zeroes.</li>
     </ul>
     <p>Note that fragments are not themselves messages that can be
     fragmented: you can't fragment a fragment.</p></dd>
