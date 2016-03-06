@@ -1,3 +1,7 @@
+2016-03-06
+
+	* Makefile.am: Add bootstrap to the tarball
+
 2016-03-04
 
 	* README:
