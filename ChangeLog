@@ -1,3 +1,8 @@
+2016-03-07
+
+	* tests/regression/client/Makefile.am:
+	* tests/unit/Makefile.am: Add LIBGCRYPT_CFLAGS to the test suite
+
 2016-03-06
 
 	* Makefile.am: Add bootstrap to the tarball
