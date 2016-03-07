@@ -30,6 +30,17 @@ LT_INIT
 
 AM_PATH_LIBGCRYPT(1:1.2.0,,AC_MSG_ERROR(libgcrypt 1.2.0 or newer is required.))
 
+AC_CANONICAL_HOST
+# Identify which OS we are building and do specific things based on the host
+case $host_os in
+  *linux*)
+    HOST_OS=linux
+    ;;
+esac
+
+# Build tests for now only for Linux.
+AM_CONDITIONAL([BUILD_TESTS], [test x$HOST_OS = xlinux])
+
 dnl 1:flags
 dnl Taken from Tor's autoconf magic repository
 AC_DEFUN([OTR_CHECK_CFLAGS], [

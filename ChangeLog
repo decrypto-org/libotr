@@ -3,6 +3,10 @@
 	* tests/regression/client/Makefile.am:
 	* tests/unit/Makefile.am: Add LIBGCRYPT_CFLAGS to the test suite
 
+	* Makefile.am:
+	* configure.ac: Only build the test suite on Linux, since it
+	currently uses Linux-specific features such as epoll
+
 2016-03-06
 
 	* Makefile.am: Add bootstrap to the tarball
