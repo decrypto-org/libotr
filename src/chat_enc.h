@@ -32,6 +32,7 @@
 //	unsigned char key[32];
 //} OtrlChatEncInfo;
 
+
 /* Initialise ChatEncInfo struct. this is not for production.
  * A "secret" key is also generated. this will change in production */
 gcry_error_t chat_enc_initialize_cipher(OtrlChatEncInfo *enc_info);
@@ -40,19 +41,24 @@ gcry_error_t chat_enc_initialize_cipher(OtrlChatEncInfo *enc_info);
 gcry_error_t chat_enc_sync_key(OtrlChatEncInfo *enc_info,
 		const OtrlAuthGKAInfo *auth_info);
 
-/* Encrypts data in plaintext using the cipher in ctx */
+/* Encrypts data in plaintext using the cipher in ctx. For the time being
+ * the plaintext is only textual data and no tlv's or other binaries.
+ *
+ * TODO add support for encryption of any data, no just text, this might need
+ * an extra msglen argument? */
 unsigned char * chat_enc_encrypt(OtrlChatContext *ctx,  const char *plaintext);
 
-/* Decrypts the data in ciphertext using the cipher in ctx and ctr in top_ctr */
+/* Decrypts the data in ciphertext using the cipher information in ctx and
+ * top_ctr as the top half (8 bytes) of the AES counter */
 char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphertext,
-		size_t datalen, const unsigned char top_ctr[8]);
+		size_t datalen, const unsigned char top_ctr[8], const otrl_instag_t sender_id);
 
 /* Encrypts buffer in to buffer out. The buffers must be already allocated */
-gcry_error_t chat_enc_encrypt_data(OtrlChatEncInfo *enc_info, const char *in, size_t inlen,
-		unsigned char *out, size_t outlen);
+//gcry_error_t chat_enc_encrypt_data(OtrlChatEncInfo *enc_info, const char *in, size_t inlen,
+//		unsigned char *out, size_t outlen);
 
-gcry_error_t chat_enc_decrypt_data(const OtrlChatEncInfo *enc_info, const unsigned char ctr[16],
-                               char *out, size_t outlen,
-                               const unsigned char *in, size_t inlen);
+//gcry_error_t chat_enc_decrypt_data(const OtrlChatEncInfo *enc_info, const unsigned char ctr[16],
+//                               char *out, size_t outlen,
+//                               const unsigned char *in, size_t inlen);
 
 #endif /* CHAT_ENC_H */
