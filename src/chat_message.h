@@ -75,25 +75,25 @@ OtrlChatMessage * chat_message_parse(const char *message);
 
 MessagePayloadPtr chat_message_payload_parse(OtrlChatMessage *msg, const unsigned char *message, size_t length);
 
+char * chat_message_serialize(OtrlChatMessage *msg);
+
 MessagePayloadPtr chat_message_payload_query_parse(const unsigned char * message, size_t length);
-
-MessagePayloadPtr chat_message_payload_query_ack_parse(const unsigned char * message, size_t length);
-
-MessagePayloadPtr chat_message_payload_data_parse(const unsigned char *message, size_t length);
 
 void chat_message_payload_query_free(MessagePayloadPtr payload);
 
-void chat_message_payload_query_ack_free(MessagePayloadPtr payload);
-
-void chat_message_payload_data_free(MessagePayloadPtr payload);
-
 unsigned char * chat_message_payload_query_serialize(MessagePayloadPtr payload);
+
+MessagePayloadPtr chat_message_payload_query_ack_parse(const unsigned char * message, size_t length);
+
+void chat_message_payload_query_ack_free(MessagePayloadPtr payload);
 
 unsigned char * chat_message_payload_query_ack_serialize(MessagePayloadPtr payload);
 
-unsigned char * chat_message_payload_data_serialize(MessagePayloadPtr payload);
+MessagePayloadPtr chat_message_payload_data_parse(const unsigned char *message, size_t length);
 
-char * chat_message_serialize(OtrlChatMessage *msg);
+void chat_message_payload_data_free(MessagePayloadPtr payload);
+
+unsigned char * chat_message_payload_data_serialize(MessagePayloadPtr payload);
 
 size_t chat_message_payload_size(OtrlChatMessage *msg);
 
@@ -107,13 +107,16 @@ int chat_message_is_otr(const char * message);
 
 int chat_message_is_fragment(const char * message);
 
-OtrlChatMessage * chat_message_data_create(int16_t protoVersion, otrl_instag_t ourInstag, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
+OtrlChatMessage * chat_message_create(unsigned int proto_version, OtrlMessageType msgType ,otrl_instag_t our_instag);
 
 OtrlChatMessage * chat_message_query_create(int16_t proto_version,
 		otrl_instag_t our_instag, const unsigned char *key);
 
 OtrlChatMessage * chat_message_query_ack_create(int16_t protoVersion,
 		otrl_instag_t ourInstag);
+
+OtrlChatMessage * chat_message_data_create(int16_t protoVersion,
+		otrl_instag_t ourInstag, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
 
 int chat_message_send(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg);
 

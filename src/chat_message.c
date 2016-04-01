@@ -37,6 +37,7 @@
 #include "chat_auth.h"
 #include "chat_enc.h"
 #include "b64.h"
+#include "chat_serial.h"
  
 
 int otrl_chat_message_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
@@ -147,7 +148,7 @@ int otrl_chat_message_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 				case OTRL_MSGSTATE_ENCRYPTED:
 					fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: case OTRL_MSGSTATE_ENCRYPTED\n");
 					plaintext = chat_enc_decrypt(ctx, ((OtrlChatMessagePayloadData *)msg->payload)->ciphertext,
-							((OtrlChatMessagePayloadData *)msg->payload)->datalen, ((OtrlChatMessagePayloadData *)msg->payload)->ctr);
+							((OtrlChatMessagePayloadData *)msg->payload)->datalen, ((OtrlChatMessagePayloadData *)msg->payload)->ctr, msg->senderInsTag);
 					if (!plaintext) {
 						/* ignore if there was an error. handle this more gracefully in
 						 * the future */
@@ -246,11 +247,21 @@ int otrl_chat_message_sending(OtrlUserState us,
 			break;
 	}
 
-	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_sending: eend\n\n\n");
+	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_sending: end\n\n\n");
 
 	return 0;
 }
 
+/*
+ * Function: chat_message_parse
+ * ------------------------
+ * Converts a message in a serialized form to a ChatMessage structure
+ *
+ * message: the message in serialized form
+ *
+ * returns: a pointer to the parsed ChatMessage structure
+ * 			returns NULL in error
+ */
 OtrlChatMessage * chat_message_parse(const char *message)
 {
 	OtrlChatMessage *msg;
@@ -289,10 +300,14 @@ OtrlChatMessage * chat_message_parse(const char *message)
 
 	// TODO Dimitris: make some better functions to convert
 	fprintf(stderr, "libotr-mpOTR: chat_message_parse: before converts\n");
-	msg->protoVersion = buf[0] << 8 | buf[1];
+	//msg->protoVersion = buf[0] << 8 | buf[1];
+	//msg->msgType = chat_message_message_type_parse(buf[2]);
+	//msg->senderInsTag = (buf[3] << 24) | (buf[4] << 16) | (buf[5] << 8) | buf[6];
+	//msg->chatInsTag = (buf[7] << 24) | (buf[8] << 16) | (buf[9] << 8) | buf[10];
+	msg->protoVersion = chat_serial_string_to_int16(&buf[0]);
 	msg->msgType = chat_message_message_type_parse(buf[2]);
-	msg->senderInsTag = (buf[3] << 24) | (buf[4] << 16) | (buf[5] << 8) | buf[6];
-	msg->chatInsTag = (buf[7] << 24) | (buf[8] << 16) | (buf[9] << 8) | buf[10];
+	msg->senderInsTag = chat_serial_string_to_int(&buf[3]);
+	msg->chatInsTag = chat_serial_string_to_int(&buf[7]);
 
 	fprintf(stderr, "libotr-mpOTR: chat_message_parse: before chat_message_payload_parse\n");
 	if(!chat_message_payload_parse(msg, &buf[11], buflen-11)) {
@@ -341,6 +356,16 @@ MessagePayloadPtr chat_message_payload_parse(OtrlChatMessage *msg, const unsigne
 	return msg->payload;
 }
 
+/*
+ * Function: chat_message_serialize
+ * ------------------------
+ * Converts a message in a ChatMessage structure form to a serialized form
+ *
+ * msg: the message in ChatMessage structure form
+ *
+ * returns: the string containing the serialized message
+ * 			returns NULL in error
+ */
 char * chat_message_serialize(OtrlChatMessage *msg)
 {
 	char *message = NULL;
@@ -371,20 +396,23 @@ char * chat_message_serialize(OtrlChatMessage *msg)
 	}
 
 	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before protoVersion\n");
-	buf[0] = (msg->protoVersion >> 8) & 0xff;
-	buf[1] = msg->protoVersion & 0xff;
+	//buf[0] = (msg->protoVersion >> 8) & 0xff;
+	//buf[1] = msg->protoVersion & 0xff;
+	chat_serial_int16_to_string(msg->protoVersion, &buf[0]);
 	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before chat_message_message_type_serialize\n");
 	buf[2] = chat_message_message_type_serialize(msg->msgType);
 	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before senderInsTag\n");
-	buf[3] = (msg->senderInsTag >> 24) & 0xff;
-	buf[4] = (msg->senderInsTag >> 16) & 0xff;
-	buf[5] = (msg->senderInsTag >> 8) & 0xff;
-	buf[6] = msg->senderInsTag & 0xff;
+	//buf[3] = (msg->senderInsTag >> 24) & 0xff;
+	//buf[4] = (msg->senderInsTag >> 16) & 0xff;
+	//buf[5] = (msg->senderInsTag >> 8) & 0xff;
+	//buf[6] = msg->senderInsTag & 0xff;
+	chat_serial_int_to_string((int)msg->senderInsTag, &buf[3]);
 	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before chatInsTag\n");
-	buf[7] = (msg->chatInsTag >> 24) & 0xff;
-	buf[8] = (msg->chatInsTag >> 16) & 0xff;
-	buf[9] = (msg->chatInsTag >> 8) & 0xff;
-	buf[10] = msg->chatInsTag & 0xff;
+	//buf[7] = (msg->chatInsTag >> 24) & 0xff;
+	//buf[8] = (msg->chatInsTag >> 16) & 0xff;
+	//buf[9] = (msg->chatInsTag >> 8) & 0xff;
+	//buf[10] = msg->chatInsTag & 0xff;
+	chat_serial_int_to_string((int)msg->chatInsTag, &buf[7]);
 	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before memcpy, buflen-11: %d\n", buflen-11);
 	memcpy(&buf[11], payload_serialized, buflen-11);
 
@@ -473,7 +501,8 @@ MessagePayloadPtr chat_message_payload_data_parse(const unsigned char *message, 
 	}
 
 	fprintf(stderr, "libotr-mpOTR: chat_message_payload_data_parse: before datalen\n");
-	payload->datalen = (message[8] << 24) | (message[9] << 16) | (message[10] << 8) | message[11];
+	//payload->datalen = (message[8] << 24) | (message[9] << 16) | (message[10] << 8) | message[11];
+	payload->datalen = chat_serial_string_to_int(&message[8]);
 
 	// 8 bytes for ctr, 4 for datalen, datalen for data
 	if(length != 12 + payload->datalen) {
@@ -524,10 +553,11 @@ unsigned char * chat_message_payload_data_serialize(MessagePayloadPtr payload)
 
 	fprintf(stderr, "libotr-mpOTR: chat_message_payload_data_serialize: before datalen, datalen: %ld\n", myPayload->datalen);
 	// TODO use a function or define to make the big endian encoding
-	buf[8] = (myPayload->datalen >> 24) & 0xff;
-	buf[9] = (myPayload->datalen >> 16) & 0xff;
-	buf[10] = (myPayload->datalen >> 8) & 0xff;
-	buf[11] = myPayload->datalen & 0xff;
+	//buf[8] = (myPayload->datalen >> 24) & 0xff;
+	//buf[9] = (myPayload->datalen >> 16) & 0xff;
+	//buf[10] = (myPayload->datalen >> 8) & 0xff;
+	//buf[11] = myPayload->datalen & 0xff;
+	chat_serial_int_to_string((int)myPayload->datalen, &buf[8]);
 	memcpy(&buf[12], myPayload->ciphertext, myPayload->datalen);
 
 	fprintf(stderr, "libotr-mpOTR: chat_message_payload_data_serialize: end\n");
