@@ -54,3 +54,6 @@ libotr.pc
 /tests/unit/test_sm
 /tests/unit/test_instag
 /tests/unit/test_privkey
+
+.cproject
+.project

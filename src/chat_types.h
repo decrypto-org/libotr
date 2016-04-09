@@ -60,11 +60,14 @@ typedef struct OtrlChatMessagePayloadDataStruct {
 
 /* Chat encryption type declarations */
 typedef struct ChatEncInfoStruct {
-        gcry_cipher_hd_t cipher;    /* Cipher used for sending and receiving group
-                                       messages */
         unsigned char ctr[16];    /* our counter */
 
-        unsigned char key[32];
+        // TODO this should probably be a pointer since
+        // this needs to be on secure memory. We can't
+        // have secure memory with static allocation,
+        // and allocating the whole struct in secure memory
+        // would be a waste of resources.
+        unsigned char *key;   //[32];
 } OtrlChatEncInfo;
 
 

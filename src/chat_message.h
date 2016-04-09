@@ -71,6 +71,11 @@ int otrl_chat_message_sending(OtrlUserState us,
 	const char *message, otrl_chat_token_t chat_token, OtrlTLV *tlvs,
 	char **messagep, OtrlFragmentPolicy fragPolicy);
 
+int otrl_chat_message_send_query(OtrlUserState us,
+		const OtrlMessageAppOps *ops,
+		const char *accountname, const char *protocol,
+		otrl_chat_token_t chat_token, OtrlFragmentPolicy fragPolicy);
+
 OtrlChatMessage * chat_message_parse(const char *message);
 
 MessagePayloadPtr chat_message_payload_parse(OtrlChatMessage *msg, const unsigned char *message, size_t length);

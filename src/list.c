@@ -24,24 +24,24 @@
 
 OtrlList * otrl_list_init(struct OtrlListOpsStruct *ops, size_t payload_size)
 {
-	OtrlList *alist = malloc(sizeof(OtrlList));
+	OtrlList *aList = malloc(sizeof *aList);
 
-	if(!alist || !ops || !ops->compar)
+	if(!aList || !ops || !ops->compar)
 		return NULL;
 
-	alist->ops = ops;
-	alist->payload_size = payload_size;
+	aList->ops = ops;
+	aList->payload_size = payload_size;
 
-	alist->head = NULL;
-	alist->tail = NULL;
+	aList->head = NULL;
+	aList->tail = NULL;
 
-	return alist;
+	return aList;
 }
 
 OtrlListNode * otrl_list_node_create(PayloadPtr payload) {
 	OtrlListNode *aNode;
 
-	aNode = (OtrlListNode *)malloc(sizeof(OtrlListNode));
+	aNode = malloc(sizeof *aNode);
 	if(aNode) {
 		aNode->payload = payload;
 		aNode->next = NULL;
@@ -52,28 +52,24 @@ OtrlListNode * otrl_list_node_create(PayloadPtr payload) {
 }
 
 OtrlListNode * otrl_list_insert(OtrlList *aList, PayloadPtr payload) {
-	fprintf(stderr, "libotr-mpOTR: otrl_list_insert: start\n");
 	OtrlListNode *aNode, *cur;
 
-	fprintf(stderr, "libotr-mpOTR: otrl_list_insert: before otrl_list_node_create\n");
 	aNode = otrl_list_node_create(payload);
 	if(aNode) {
 		if(aList->head == NULL || aList->ops->compar(aNode->payload, aList->head->payload) > 0) {
-			fprintf(stderr, "libotr-mpOTR: otrl_list_insert: inserting head\n");
 			aNode->next = aList->head;
 			if(aList->head)
 				aList->head->prev = aNode;
 			aList->head = aNode;
 			aList->tail = aNode;
 		} else {
-			fprintf(stderr, "libotr-mpOTR: otrl_list_insert: before looping\n");
 			for(cur = aList->head; cur->next!=NULL && aList->ops->compar(aNode->payload, cur->next->payload) < 0; cur = cur->next);
 			aNode->next = cur->next;
 			aNode->prev = cur;
 			cur->next = aNode;
 		}
 	}
-	fprintf(stderr, "libotr-mpOTR: otrl_list_insert: end\n");
+
 	return aNode;
 }
 
@@ -134,19 +130,11 @@ OtrlListNode * otrl_list_find(OtrlList *aList, PayloadPtr target)
 	int res;
 	cur = aList->head;
 
-	fprintf(stderr, "libotr-mpOTR: otrl_list_find: start\n");
-	fprintf(stderr, "libotr-mpOTR: otrl_list_find: dumping the list:\n");
-
-	otrl_list_dump(aList);
-
-	fprintf(stderr, "libotr-mpOTR: otrl_list_find: dumped the list.\n");
-
 	// check if the list is empty
 	if(cur == NULL)
 		return NULL;
 
 	while(cur != NULL) {
-		fprintf(stderr, "libotr-mpOTR: otrl_list_find: comparing\n");
 		res = aList->ops->compar(target, cur->payload);
 		if(res == 0)
 			return cur;
@@ -154,7 +142,7 @@ OtrlListNode * otrl_list_find(OtrlList *aList, PayloadPtr target)
 			break;
 		cur = cur->next;
 	}
-	fprintf(stderr, "libotr-mpOTR: otrl_list_find: end\n");
+
 	return NULL;
 }
 

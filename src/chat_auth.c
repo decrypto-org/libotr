@@ -105,8 +105,6 @@ gcry_error_t chat_auth_handle_query_response(OtrlChatContext *ctx, const OtrlCha
 	//get the payload
 	OtrlChatMessagePayloadQueryAck *payload = msg->payload;
 
-	fprintf(stderr, "libotr-mpOTR: chat_auth_handle_query_response: start\n");
-
 	if(!payload->magicnum) {
 	    fprintf(stderr, "libotr-mpOTR: chat_auth_handle_query_response: !magicnum\n");
 	    return gcry_error(GPG_ERR_NO_DATA);
@@ -116,8 +114,6 @@ gcry_error_t chat_auth_handle_query_response(OtrlChatContext *ctx, const OtrlCha
 	// check if the magicnum is 0x00 0x01 0x02 0x03
 	// by xor'ing each magicnum byte with i.
 	// xoring a value with itself always returns 0
-	fprintf(stderr, "libotr-mpOTR: chat_auth_handle_query_response: before magicnum check\n");
-	fprintf(stderr, "libotr-mpOTR: chat_auth_handle_query_response: magicnum %d \n", *(int *) payload->magicnum);
 	for(int i=0; i<4; i++)
 		if(payload->magicnum[i] != i+1) {
 		    fprintf(stderr, "libotr-mpOTR: chat_auth_handle_query_response: wrong magicnum %d %d\n",i, payload->magicnum[i]);
@@ -127,7 +123,6 @@ gcry_error_t chat_auth_handle_query_response(OtrlChatContext *ctx, const OtrlCha
 	ctx->gka_info.state = OTRL_CHAT_AUTHSTATE_NONE;
 	ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
 
-	fprintf(stderr, "libotr-mpOTR: chat_auth_handle_query_response: end\n");
 	return err;
 }
 
