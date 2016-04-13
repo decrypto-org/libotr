@@ -73,14 +73,14 @@ typedef struct ChatEncInfoStruct {
 
 /* Chat auth type declaration */
 typedef enum {
-        OTRL_CHAT_AUTHSTATE_NONE,
-        OTRL_CHAT_AUTHSTATE_AWAITING_RES
+        OTRL_CHAT_GKASTATE_NONE,
+        OTRL_CHAT_GKASTATE_AWAITING_DOWNFLOW
 } OtrlAuthGKAState;
 
 typedef struct {
         OtrlAuthGKAState state;  /* the gka state */
 
-        unsigned char key[32];
+        DH_keypair keypair;
 
         OtrlChatMessage *auth_msg; /* the next message to be send for GKA */
 } OtrlAuthGKAInfo;
@@ -99,6 +99,9 @@ typedef struct OtrlChatContextStruct {
         char * protocol;                   /* ... and this protocol */
         otrl_instag_t our_instance;        /* Our instance tag for this computer*/
         otrl_chat_token_t the_chat_token;  /* The token of the chat */
+
+        OtrlList *participants_list;       /* The list of the participants in
+                                              this chatroom */
 
         Fingerprint fingerprint_root;      /* The root of a linked list of
                                               Fingerprints entries. This list will
@@ -129,6 +132,11 @@ typedef struct OtrlChatContextStruct {
 } OtrlChatContext;
 
 
+typedef struct OtrlChatParticipantStruct {
+        char *username; //The username of this participant
 
+        gcry_mpi_t signing_pub_key; //The signing pub key that this participant uses
+
+} OtrlChatParticipant;
 
 #endif /* CHAT_TYPES_H */

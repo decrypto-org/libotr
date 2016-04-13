@@ -64,6 +64,11 @@ void chat_auth_create_query_message(OtrlAuthGKAInfo *gka_info, unsigned int prot
 	gka_info->auth_msg = the_msg;
 }
 */
+gcry_error_t chat_auth_gka_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
+{
+
+}
+
 gcry_error_t chat_auth_handle_query(OtrlChatContext *ctx, const OtrlChatMessage *msg, OtrlChatMessage **msgToSend)
 {
 	//Parse message
