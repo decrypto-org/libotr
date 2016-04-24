@@ -24,5 +24,7 @@ void chat_serial_int16_to_string(int16_t input, unsigned char *output);
 int16_t chat_serial_string_to_int16(const unsigned char *input);
 void chat_serial_int_to_string(int input, unsigned char *output);
 int chat_serial_string_to_int(const unsigned char *input);
+int chat_serial_mpi_to_string(gcry_mpi_t w, unsigned char** output, size_t *size);
+int chat_serial_string_to_mpi(const unsigned char* input, gcry_mpi_t *output, size_t size);
 
 #endif /* CHAT_SERIAL_H_ */

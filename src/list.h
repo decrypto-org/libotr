@@ -39,6 +39,7 @@ struct OtrlListOpsStruct {
 typedef struct OtrlListStruct {
 	OtrlListNode * head;
 	OtrlListNode * tail;
+	unsigned int size;
 	size_t payload_size;
 	struct OtrlListOpsStruct *ops;
 } OtrlList;
@@ -68,20 +69,49 @@ OtrlList * otrl_list_init(struct OtrlListOpsStruct *ops, size_t payload_size);
  * returns: a pointer to the new list node
  * 			returns NULL in error
  */
-OtrlListNode * otrl_list_node_create(PayloadPtr payload);
+OtrlListNode * otrl_list_node_create(const PayloadPtr payload);
 
 /*
  * Function: otrl_list_insert
  * ------------------------
- * inserts a list node into a list
+ * inserts a list node into a sorted list
  *
- * aList: a pointer to the list in which the node will be inserted
+ * list: a pointer to the list in which the node will be inserted
  * payload: a pointer to the node to be inserted
  *
  * returns: a pointer to the inserted list node
  * 			returns NULL if error
  */
-OtrlListNode * otrl_list_insert(OtrlList *aList, PayloadPtr payload);
+OtrlListNode * otrl_list_insert(OtrlList *list, const PayloadPtr payload);
+
+/*
+ * Function: otrl_list_prepend
+ * ------------------------
+ * prepends a list node to the head o a list
+ *
+ * list: a pointer to the list in which the node will be prepended
+ * payload: a pointer to the node to be prepended
+ *
+ * returns: a pointer to the prepended list node
+ * 			returns NULL if error
+ */
+OtrlListNode * otrl_list_prepend(OtrlList *list, PayloadPtr payload);
+
+/*
+ * Function: otrl_list_append
+ * ------------------------
+ * appends a list node to the end of a list
+ *
+ * list: a pointer to the list to which the node will be appended
+ * payload: a pointer to the node to be appended
+ *
+ * returns: a pointer to the appended list node
+ * 			returns NULL if error
+ */
+OtrlListNode * otrl_list_append(OtrlList *list, PayloadPtr payload);
+
+void otrl_list_remove(OtrlList *list, OtrlListNode *node);
+void otrl_list_remove_and_destroy(OtrlList *list, OtrlListNode *node);
 
 
 /*
@@ -89,10 +119,10 @@ OtrlListNode * otrl_list_insert(OtrlList *aList, PayloadPtr payload);
  * ------------------------
  * applies a function on every node of a list
  *
- * aList: a pointer to the list, the nodes of which the function will be applied on
+ * list: a pointer to the list, the nodes of which the function will be applied on
  * fun: a pointer to the function to be applied on the nodes
  */
-void otrl_list_foreach(OtrlList *aList, void (*fun)(OtrlListNode *) );
+void otrl_list_foreach(OtrlList *list, void (*fun)(OtrlListNode *) );
 
 
 /*
@@ -100,33 +130,48 @@ void otrl_list_foreach(OtrlList *aList, void (*fun)(OtrlListNode *) );
  * ------------------------
  * finds a node containing a specific payload value
  *
- * aList: a pointer to the list in which to search for the target
+ * list: a pointer to the list in which to search for the target
  * target: the value of the payload we want to find
  *
  * returns: a pointer to the first list node containing the payload value
  * 			returns NULL if there is no such node
  */
-OtrlListNode * otrl_list_find(OtrlList *aList, PayloadPtr target);
+OtrlListNode * otrl_list_find(OtrlList *list, PayloadPtr target);
 
+OtrlListNode * otrl_list_get(OtrlList *list, unsigned int i);
+
+/*
+ * Function: otrl_list_get_last
+ * ------------------------
+ * returns a pointer to the tail node
+ *
+ * list: a pointer to the list
+ *
+ * returns: a pointer to the the tail node
+ * 			returns NULL if the list is empty
+ */
+OtrlListNode * otrl_list_get_last(OtrlList *list);
 
 /*
  * Function: otrl_list_dump
  * ------------------------
  * prints the contents of a list
  *
- * aList: a pointer to the list to be printed
+ * list: a pointer to the list to be printed
  */
-void otrl_list_dump(OtrlList *aList);
+void otrl_list_dump(OtrlList *list);
 
+
+void otrl_list_clear(OtrlList *list);
 
 /*
  * Function: otrl_list_destroy
  * ------------------------
  * deletes a list
  *
- * aList: a pointer to the list to be destroyed
+ * list: a pointer to the list to be destroyed
  */
-void otrl_list_destroy(OtrlList *aList);
+void otrl_list_destroy(OtrlList *list);
 
 
 /*
@@ -134,10 +179,11 @@ void otrl_list_destroy(OtrlList *aList);
  * ------------------------
  * deletes a list node
  *
- * aNode: a pointer to the node to be destroyed
+ * list: the list
+ * node: a pointer to the node to be destroyed
  */
-void otrl_list_node_destroy(OtrlListNode *aNode);
+void otrl_list_node_destroy(OtrlList *list, OtrlListNode *node);
 
-
+unsigned int otrl_list_length(OtrlList *list);
 
 #endif /* LIST_H_ */

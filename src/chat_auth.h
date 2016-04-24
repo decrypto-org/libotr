@@ -24,6 +24,9 @@
 //#include "chat_context.h"
 //#include "chat_message.h"
 #include "chat_types.h"
+
+struct OtrlListOpsStruct interKeyOps;
+
 //typedef enum {
 //	OTRL_CHAT_AUTHSTATE_NONE,
 //	OTRL_CHAT_AUTHSTATE_AWAITING_RES
@@ -37,11 +40,49 @@
 //	OtrlChatMessage *auth_msg; /* the next message to be send for GKA */
 //} OtrlAuthGKAInfo;
 
+/**
+ Initialize the query exchange
+
+ This function will intialize the query exchange proccess. Call this when you want to send a query
+ message.
+
+ @param ops Client callbacks, used to get the participants of the chat
+ @param ctx The context for which the qery will be created
+ @param msgToSend The query message will be stored here
+ */
+gcry_error_t chat_auth_init(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage **msgToSend);
+
 /* Handle a chat query message msg using the ctx context. Prepares the Query response
  * and stores it in msgToSend */
-gcry_error_t chat_auth_handle_query(OtrlChatContext *ctx, const OtrlChatMessage *msg,
-		OtrlChatMessage **msgToSend);
+//TODO remove this gcry_error_t chat_auth_handle_query(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, const OtrlChatMessage *msg,
+//		OtrlChatMessage **msgToSend);
 
 /* Handles a chat query response message */
-gcry_error_t chat_auth_handle_query_response(OtrlChatContext *ctx, const OtrlChatMessage *msg);
+//TODO remove this gcry_error_t chat_auth_handle_query_response(OtrlChatContext *ctx, const OtrlChatMessage *msg);
+
+/**
+  Check if the msg belongs to the authentication protocol
+
+  This function accepts a message and determines if it should be handled by the
+  authentication protocol.
+
+  @param msg The message to check
+  @returns 1 if the message belongs to the authentication protocol. 0 otherwise
+ */
+int chat_auth_is_auth_message(const OtrlChatMessage *msg);
+
+/**
+  Handle a message that belongs to the authentication protocol
+
+  This function accepts a message tha belongs to the the authentication protocol and
+  performs the required actions mandated by it.
+
+  @param ops A pointer to the operations struct in order to get the participants list
+  @param ctx The context in which any action is performed
+  @param msg The message to handle
+  @param msgToSend a pointer to a pointer to a message. The apropriate response
+   to the handled message will be stored here
+  @returns 1 if the message belongs to the authentication protocol. 0 otherwise
+ */
+int chat_auth_handle_message(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg, OtrlChatMessage **msgToSend);
 #endif /* CHAT_AUTH_H_ */

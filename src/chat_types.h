@@ -22,23 +22,35 @@
 
 #define CHAT_PROTOCOL_VERSION 1
 
+#define CHAT_PARTICIPANTS_HASH_LENGTH 64
+#define CHAT_SECRET_LENGTH 64
+
 #include "proto.h"
 #include "tlv.h"
 #include "dh.h"
-#include "message.h"
 #include "instag.h"
 
+#include <gcrypt.h>
+
 /* Chat Message type declerations */
+
+typedef enum {
+	OTRL_MSGTYPE_CHAT_NOTOTR,
+    OTRL_MSGTYPE_CHAT_UPFLOW,
+    OTRL_MSGTYPE_CHAT_DOWNFLOW,
+    OTRL_MSGTYPE_CHAT_DATA
+} OtrlChatMessageType;
+
 typedef void * MessagePayloadPtr;
 
 typedef struct OtrlChatMessageStruct {
-        int16_t protoVersion;
-        OtrlMessageType msgType;
-        otrl_instag_t senderInsTag;
-        otrl_instag_t chatInsTag;
-        MessagePayloadPtr payload;
-        void (*payload_free)(MessagePayloadPtr);
-        unsigned char * (*payload_serialize)(MessagePayloadPtr);
+		int16_t protoVersion;
+		OtrlChatMessageType msgType;
+		otrl_instag_t senderInsTag;
+		otrl_instag_t chatInsTag;
+		MessagePayloadPtr payload;
+		void (*payload_free)(MessagePayloadPtr);
+		unsigned char * (*payload_serialize)(MessagePayloadPtr, size_t *);
 } OtrlChatMessage;
 
 typedef struct OtrlChatMessagePayloadQueryStruct {
@@ -50,6 +62,17 @@ typedef struct OtrlChatMessagePayloadQueryAckStruct {
         //TODO this is to change
         unsigned char magicnum[4];
 } OtrlChatMessagePayloadQueryAck;
+
+typedef struct OtrlChatMessagePayloadUpflowStruct {
+		unsigned int recipient;
+		unsigned char partlistHash[CHAT_PARTICIPANTS_HASH_LENGTH];
+		OtrlList *interKeys;
+} OtrlChatMessagePayloadGkaUpflow;
+
+typedef struct OtrlChatMessagePayloadDownflowStruct {
+		unsigned char partlistHash[CHAT_PARTICIPANTS_HASH_LENGTH];
+		OtrlList *interKeys;
+} OtrlChatMessagePayloadGkaDownflow;
 
 typedef struct OtrlChatMessagePayloadDataStruct {
         unsigned char ctr[8];
@@ -74,15 +97,20 @@ typedef struct ChatEncInfoStruct {
 /* Chat auth type declaration */
 typedef enum {
         OTRL_CHAT_GKASTATE_NONE,
-        OTRL_CHAT_GKASTATE_AWAITING_DOWNFLOW
-} OtrlAuthGKAState;
+        OTRL_CHAT_GKASTATE_AWAITING_DOWNFLOW,
+        OTRL_CHAT_GKASTATE_FINISHED
+} OtrlChatAuthGKAState;
 
 typedef struct {
-        OtrlAuthGKAState state;  /* the gka state */
+        OtrlChatAuthGKAState state;  /* the gka state */
 
-        DH_keypair keypair;
+        unsigned int position;
+
+        DH_keypair *keypair;		/* The keypair used for the gka */
 
         OtrlChatMessage *auth_msg; /* the next message to be send for GKA */
+
+        unsigned char participants_hash[CHAT_PARTICIPANTS_HASH_LENGTH];
 } OtrlAuthGKAInfo;
 
 
@@ -97,11 +125,13 @@ typedef struct OtrlChatContextStruct {
 
         char * accountname;                /* The username is relative to this account... */
         char * protocol;                   /* ... and this protocol */
+
+        unsigned int id;				   /* Our id in this chat */
+
         otrl_instag_t our_instance;        /* Our instance tag for this computer*/
         otrl_chat_token_t the_chat_token;  /* The token of the chat */
 
-        OtrlList *participants_list;       /* The list of the participants in
-                                              this chatroom */
+        OtrlList *participants_list;       /* The users in this chatroom */
 
         Fingerprint fingerprint_root;      /* The root of a linked list of
                                               Fingerprints entries. This list will
@@ -132,10 +162,10 @@ typedef struct OtrlChatContextStruct {
 } OtrlChatContext;
 
 
-typedef struct OtrlChatParticipantStruct {
-        char *username; //The username of this participant
+typedef  struct OtrlChatParticipantStruct {
+        char *username; // This users username
 
-        gcry_mpi_t signing_pub_key; //The signing pub key that this participant uses
+        gcry_mpi_t signing_pub_key; //This users signing key
 
 } OtrlChatParticipant;
 

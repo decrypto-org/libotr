@@ -35,11 +35,34 @@
 
 /* Initialise ChatEncInfo struct. this is not for production.
  * A "secret" key is also generated. this will change in production */
-gcry_error_t chat_enc_initialize_cipher(OtrlChatEncInfo *enc_info);
+//gcry_error_t chat_enc_initialize_cipher(OtrlChatEncInfo *enc_info);
 
 /* Synchonizes the cipher in enc_info with the data stored in auth_info */
-gcry_error_t chat_enc_sync_key(OtrlChatEncInfo *enc_info,
-		const OtrlAuthGKAInfo *auth_info);
+//gcry_error_t chat_enc_sync_key(OtrlChatEncInfo *enc_info,
+//		const OtrlAuthGKAInfo *auth_info);
+
+/**
+  Initializes an OtrlChatEncInfo struct
+
+  @param enc_info a pointer to the struct to be initialized
+ */
+void chat_enc_initialize_enc_info(OtrlChatEncInfo *enc_info);
+
+
+/**
+  Generates the shared secret
+
+  This function accepts a final intermediate key w, and our private keypair and creates
+  a shared secret which is stored to the corresponding enc_info struct
+
+  @param enc_info the corresponding enc_info struct
+  @param w the final intermediate key
+  @param key our private keypair
+  @return GPG_ERR_NO_ERROR if everything was ok. GPG_ERR_ENOMEM if an allocation operation
+   failed. Other gpg errors returned by gcry functions if there were other errors.
+ */
+
+gcry_error_t chat_enc_create_secret(OtrlChatEncInfo *enc_info ,gcry_mpi_t w, DH_keypair *key);
 
 /* Encrypts data in plaintext using the cipher in ctx. For the time being
  * the plaintext is only textual data and no tlv's or other binaries.
@@ -51,7 +74,7 @@ unsigned char * chat_enc_encrypt(OtrlChatContext *ctx,  const char *plaintext);
 /* Decrypts the data in ciphertext using the cipher information in ctx and
  * top_ctr as the top half (8 bytes) of the AES counter */
 char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphertext,
-		size_t datalen, const unsigned char top_ctr[8], const otrl_instag_t sender_id);
+		size_t datalen, const unsigned char top_ctr[8], const char *sender);
 
 /* Encrypts buffer in to buffer out. The buffers must be already allocated */
 //gcry_error_t chat_enc_encrypt_data(OtrlChatEncInfo *enc_info, const char *in, size_t inlen,

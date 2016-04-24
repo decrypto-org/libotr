@@ -24,58 +24,138 @@
 
 OtrlList * otrl_list_init(struct OtrlListOpsStruct *ops, size_t payload_size)
 {
-	OtrlList *aList = malloc(sizeof *aList);
+	OtrlList *list = malloc(sizeof *list);
 
-	if(!aList || !ops || !ops->compar)
+	if(!list || !ops || !ops->compar)
 		return NULL;
 
-	aList->ops = ops;
-	aList->payload_size = payload_size;
+	list->ops = ops;
+	list->size = 0;
+	list->payload_size = payload_size;
 
-	aList->head = NULL;
-	aList->tail = NULL;
+	list->head = NULL;
+	list->tail = NULL;
 
-	return aList;
+	return list;
 }
 
-OtrlListNode * otrl_list_node_create(PayloadPtr payload) {
-	OtrlListNode *aNode;
+OtrlListNode * otrl_list_node_create(const PayloadPtr payload) {
+	OtrlListNode *node;
 
-	aNode = malloc(sizeof *aNode);
-	if(aNode) {
-		aNode->payload = payload;
-		aNode->next = NULL;
-		aNode->prev = NULL;
+	node = malloc(sizeof *node);
+	if(node) {
+		node->payload = payload;
+		node->next = NULL;
+		node->prev = NULL;
 	}
 
-	return aNode;
+	return node;
 }
 
-OtrlListNode * otrl_list_insert(OtrlList *aList, PayloadPtr payload) {
-	OtrlListNode *aNode, *cur;
+//TODO Kostis: maybe add const qualifier in payload?
+OtrlListNode * otrl_list_insert(OtrlList *list, const PayloadPtr payload) {
+	OtrlListNode *node, *cur;
 
-	aNode = otrl_list_node_create(payload);
-	if(aNode) {
-		if(aList->head == NULL || aList->ops->compar(aNode->payload, aList->head->payload) > 0) {
-			aNode->next = aList->head;
-			if(aList->head)
-				aList->head->prev = aNode;
-			aList->head = aNode;
-			aList->tail = aNode;
+	node = otrl_list_node_create(payload);
+	if(node) {
+		// if list is empty
+		if(list->head == NULL) {
+			node->prev = NULL;
+			node->next = NULL;
+			list->head = node;
+			list->tail = node;
+
+		//if it should be the first node
+		} else if (list->ops->compar(node->payload, list->head->payload) > 0) {
+			node->next = list->head;
+			node->prev = NULL;
+			list->head->prev = node;
+			list->head = node;
+
 		} else {
-			for(cur = aList->head; cur->next!=NULL && aList->ops->compar(aNode->payload, cur->next->payload) < 0; cur = cur->next);
-			aNode->next = cur->next;
-			aNode->prev = cur;
-			cur->next = aNode;
+			for(cur = list->head; cur->next!=NULL && list->ops->compar(node->payload, cur->next->payload) < 0; cur = cur->next);
+			node->next = cur->next;
+			node->prev = cur;
+			cur->next = node;
+			if(node->next == NULL) {
+				list->tail = node;
+			}
 		}
+
+		list->size++;
 	}
 
-	return aNode;
+	return node;
 }
 
-void otrl_list_foreach(OtrlList *aList, void (*fun)(OtrlListNode *) )
+OtrlListNode * otrl_list_prepend(OtrlList *list, PayloadPtr payload) {
+	OtrlListNode *node;
+
+	node = otrl_list_node_create(payload);
+	node->prev = NULL;
+	node->next = list->head;
+
+	// if empty list
+	if(list->head == NULL) {
+		list->head = node;
+		list->tail = node;
+	} else {
+		list->head->prev = node;
+		list->head = node;
+	}
+
+	list->size++;
+
+	return node;
+}
+
+OtrlListNode * otrl_list_append(OtrlList *list, PayloadPtr payload) {
+	OtrlListNode *node;
+
+	node = otrl_list_node_create(payload);
+	node->prev = list->tail;
+	node->next = NULL;
+
+	// if empty list
+	if(list->tail == NULL) {
+		list->head = node;
+		list->tail = node;
+	} else {
+		list->tail->next = node;
+		list->tail = node;
+	}
+
+	list->size++;
+
+	return node;
+}
+
+void otrl_list_remove(OtrlList *list, OtrlListNode *node)
 {
-	OtrlListNode *cur = aList->head;
+	if(!list || !node) return;
+
+	if(node->prev)
+		node->prev->next = node->next;
+	else
+		list->head = node->next;
+
+	if(node->next)
+		node->next->prev = node->prev;
+	else
+		list->tail = node->prev;
+
+	list->size--;
+}
+
+void otrl_list_remove_and_destroy(OtrlList *list, OtrlListNode *node)
+{
+	otrl_list_remove(list, node);
+	otrl_list_node_destroy(list, node);
+}
+
+void otrl_list_foreach(OtrlList *list, void (*fun)(OtrlListNode *) )
+{
+	OtrlListNode *cur = list->head;
 
 	if(!cur)
 		return;
@@ -86,56 +166,67 @@ void otrl_list_foreach(OtrlList *aList, void (*fun)(OtrlListNode *) )
 
 }
 
-void otrl_list_dump(OtrlList *aList)
+void otrl_list_dump(OtrlList *list)
 {
-	if(aList->ops == NULL || aList->ops->toString == NULL) {
+	if(list->ops == NULL || list->ops->toString == NULL) {
 		return;
 	}
 
-	otrl_list_foreach(aList, aList->ops->toString);
+	otrl_list_foreach(list, list->ops->toString);
 }
 
 
-void otrl_list_node_destroy(OtrlListNode *aNode)
+void otrl_list_node_destroy(OtrlList *list, OtrlListNode *node)
 {
-	free(aNode);
+	list->ops->payload_destroy(node->payload);
+	free(node);
 }
 
-void otrl_list_destroy(OtrlList *aList)
+void otrl_list_clear(OtrlList *list)
 {
-	OtrlListNode *cur;
+	while( list->head != NULL)
+		otrl_list_remove_and_destroy(list, list->head);
+}
 
-	cur = aList->head;
+// TODO Dimitris: maybe use otrl_list_clear???
+void otrl_list_destroy(OtrlList *list)
+{
+	/*OtrlListNode *cur;
 
-	/* Destroy each node in the list */
-	while( (cur = cur->next) ){
-		aList->ops->payload_destroy(cur->prev);
-		otrl_list_node_destroy(cur->prev);
+	cur = list->head;
+
+	for(cur = list->head; cur != NULL; cur = cur->next) {
+		list->ops->payload_destroy(cur->payload);
+		if(cur->prev)
+			otrl_list_node_destroy(list, cur->prev);
 	}
 
-	/* And the last one */
-	aList->ops->payload_destroy(aList->tail);
-	otrl_list_node_destroy(aList->tail);
+	if(list->tail)
+		otrl_list_node_destroy(list, list->tail);*/
+
+	otrl_list_clear(list);
+
 
 	/* Destroy the ops struct */
-	free(aList->ops);
+	// TODO Dimitris: check this out
+	//free(list->ops);
 
-	free(aList);
+	free(list);
 
 }
 
-OtrlListNode * otrl_list_find(OtrlList *aList, PayloadPtr target)
+OtrlListNode * otrl_list_find(OtrlList *list, PayloadPtr target)
 {
 	OtrlListNode *cur = NULL;
 	int res;
-	cur = aList->head;
+	cur = list->head;
 
 	// check if the list is empty
 	if(cur == NULL)
 		return NULL;
 
 	while(cur != NULL) {
-		res = aList->ops->compar(target, cur->payload);
+		res = list->ops->compar(target, cur->payload);
 		if(res == 0)
 			return cur;
 		if(res > 0)
@@ -146,3 +237,33 @@ OtrlListNode * otrl_list_find(OtrlList *aList, PayloadPtr target)
 	return NULL;
 }
 
+OtrlListNode * otrl_list_get(OtrlList *list, unsigned int i)
+{
+	unsigned int j;
+	OtrlListNode *cur;
+
+	if(!list || i >= list->size) {
+		return NULL;
+	}
+
+	cur = list->head;
+	for(j=0; j<i; j++) {
+		cur = cur->next;
+	}
+
+	return cur;
+}
+
+OtrlListNode * otrl_list_get_last(OtrlList *list)
+{
+	if(list) {
+		return list->tail;
+	} else {
+		return NULL;
+	}
+}
+
+unsigned int otrl_list_length(OtrlList *list)
+{
+	return list->size;
+}

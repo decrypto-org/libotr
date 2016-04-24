@@ -18,7 +18,10 @@
  */
 
 #include <stdint.h>
+#include <stddef.h>
+#include <gcrypt.h>
 
+// TODO allocate memory inside functions
 void chat_serial_int16_to_string(int16_t input, unsigned char *output)
 {
 	output[0] = (input >> 8) & 0xff;
@@ -43,3 +46,39 @@ int chat_serial_string_to_int(const unsigned char *input)
 	return (input[0] << 24) | (input[1] << 16) | (input[2] << 8) | input[3];
 }
 
+int chat_serial_mpi_to_string(gcry_mpi_t w, unsigned char** output, size_t *size)
+{
+	gcry_error_t err;
+    size_t s;
+
+    err = gcry_mpi_print(GCRYMPI_FMT_HEX, NULL, 0, &s, w);
+    if(err)
+    	return 1;
+
+    *output = malloc(s * sizeof *output);
+    if(!*output)
+    	return 1;
+
+    err = gcry_mpi_print(GCRYMPI_FMT_HEX, *output, s, NULL, w);
+    if(err) {
+    	free(*output);
+    	return 1;
+    }
+
+    *size = s;
+
+    return 0;
+}
+
+int chat_serial_string_to_mpi(const unsigned char* input, gcry_mpi_t *output, size_t size)
+{
+	gcry_error_t err;
+
+	*output = gcry_mpi_new(320);
+
+	err = gcry_mpi_scan(output, GCRYMPI_FMT_HEX, input, 0, NULL);
+	if(err)
+		return 1;
+
+	return 0;
+}

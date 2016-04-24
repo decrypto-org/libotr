@@ -23,6 +23,7 @@
 #include "userstate.h"
 #include "list.h"
 #include "chat_token.h"
+#include "chat_participant.h"
 
 int chat_context_compare(PayloadPtr a, PayloadPtr b)
 {
@@ -89,9 +90,9 @@ int chat_context_add(OtrlUserState us, OtrlChatContext* ctx)
 	aNode = otrl_list_insert(us->chat_context_list, (PayloadPtr)ctx);
 
 	if(!aNode)
-		return -1;
-	else
 		return 1;
+	else
+		return 0;
 }
 
 OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname, const char *protocol,
@@ -113,6 +114,10 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname,
 		}
 		ctx->our_instance = ourInstanceTag->instag;
 		ctx->the_chat_token = the_chat_token;
+		ctx->participants_list = otrl_list_init(&chat_participant_listOps, sizeof(OtrlChatParticipant));
+		ctx->gka_info.auth_msg = NULL;
+		ctx->gka_info.keypair = NULL;
+		ctx->gka_info.state = OTRL_CHAT_GKASTATE_NONE;
 		ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
 		ctx->protocol_version = CHAT_PROTOCOL_VERSION;
 		// TODO Dimitris: maybe define enc_info as a pointer, and change this
@@ -134,7 +139,7 @@ OtrlChatContext* chat_context_find_or_add(OtrlUserState us,
 	if(!ctx) {
 		ctx = chat_context_create(us, accountname, protocol, the_chat_token);
 		if(ctx) {
-			if (!chat_context_add(us, ctx)) {
+			if (chat_context_add(us, ctx)) {
 				chat_context_free((PayloadPtr)ctx);
 				ctx = NULL;
 			}
