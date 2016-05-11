@@ -26,9 +26,11 @@ typedef struct s_OtrlUserState* OtrlUserState;
 #include "instag.h"
 #include "context.h"
 #include "privkey-t.h"
+#include "list.h" /* DIKOMAS */
 
 struct s_OtrlUserState {
     ConnContext *context_root;
+    OtrlList *chat_context_list; /* DIKOMAS */
     OtrlPrivKey *privkey_root;
     OtrlInsTag *instag_root;
     OtrlPendingPrivKey *pending_root;

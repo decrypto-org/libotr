@@ -30,6 +30,7 @@
 #define OTRL_INSTAG_RECENT 2
 #define OTRL_INSTAG_RECENT_RECEIVED 3
 #define OTRL_INSTAG_RECENT_SENT 4
+#define OTRL_INSTAG_CHAT 5
 
 #define OTRL_MIN_VALID_INSTAG 0x100 /* Instag values below this are reserved
 				     * for meta instags, defined above, */

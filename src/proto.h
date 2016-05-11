@@ -83,7 +83,7 @@ typedef enum {
     OTRL_MSGTYPE_V1_KEYEXCH,
     OTRL_MSGTYPE_DATA,
     OTRL_MSGTYPE_ERROR,
-    OTRL_MSGTYPE_UNKNOWN
+    OTRL_MSGTYPE_UNKNOWN,
 } OtrlMessageType;
 
 typedef enum {
