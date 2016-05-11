@@ -24,7 +24,7 @@
 //#include "chat_context.h"
 //#include "chat_message.h"
 #include "chat_types.h"
-
+#include "message.h"
 struct OtrlListOpsStruct interKeyOps;
 
 //typedef enum {
@@ -39,6 +39,13 @@ struct OtrlListOpsStruct interKeyOps;
 //
 //	OtrlChatMessage *auth_msg; /* the next message to be send for GKA */
 //} OtrlAuthGKAInfo;
+
+/**
+  Destroyes an OtrlAuthGKAInfo struct. It does not free the struct itself.
+
+  @param gka_info the struct to be destroyed.
+ */
+void chat_auth_gka_info_destroy(OtrlAuthGKAInfo *gka_info);
 
 /**
  Initialize the query exchange
@@ -84,5 +91,5 @@ int chat_auth_is_auth_message(const OtrlChatMessage *msg);
    to the handled message will be stored here
   @returns 1 if the message belongs to the authentication protocol. 0 otherwise
  */
-int chat_auth_handle_message(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg, OtrlChatMessage **msgToSend);
+int chat_auth_handle_message(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, const OtrlChatMessage *msg, OtrlChatMessage **msgToSend);
 #endif /* CHAT_AUTH_H_ */

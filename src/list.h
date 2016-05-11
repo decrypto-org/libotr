@@ -32,6 +32,15 @@ struct OtrlListNodeStruct {
 
 struct OtrlListOpsStruct {
 	int (*compar)(PayloadPtr, PayloadPtr);  	/* function for comparing elements */
+
+	/* TODO
+	 * 1. This name and the comment on the
+	 * side is misleading. Maybe change them.
+	 *
+	 * 2. Why does this function accepts a list
+	 * node and not a payload like the rest? Maybe
+	 * refactor?
+	 */
 	void (*toString)(OtrlListNode*);             /* String representation of elements */
 	void (*payload_destroy)(PayloadPtr);
 };
@@ -56,7 +65,7 @@ typedef struct OtrlListStruct {
  * returns: a pointer to the new list
  * 			returns NULL in error
  */
-OtrlList * otrl_list_init(struct OtrlListOpsStruct *ops, size_t payload_size);
+OtrlList * otrl_list_create(struct OtrlListOpsStruct *ops, size_t payload_size);
 
 
 /*

@@ -24,76 +24,8 @@
 #include "list.h"
 #include "chat_token.h"
 #include "chat_participant.h"
-
-int chat_context_compare(PayloadPtr a, PayloadPtr b)
-{
-	OtrlChatContext *a1 = (OtrlChatContext *)a;
-	OtrlChatContext *b1 = (OtrlChatContext *)b;
-	int res = 0;
-
-	res = strcmp(a1->accountname, b1->accountname);
-	if(res == 0) {
-		res = strcmp(a1->protocol, b1->protocol);
-		if(res == 0) {
-			res = chat_token_compare(a1->the_chat_token, b1->the_chat_token);
-		}
-	}
-
-	return res;
-}
-
-
-void chat_context_free(PayloadPtr a)
-{
-	OtrlChatContext *a1 = (OtrlChatContext *)a;
-	if(a1) {
-		if(a1->accountname) {
-			free(a1->accountname);
-		}
-		// TODO Dimitris: maybe define enc_info as a pointer, and change this
-		if(a1->enc_info.key) {
-			free(a1->enc_info.key);
-		}
-		if(a1->protocol) {
-			free(a1->protocol);
-		}
-		if(a1->app_data && a1->app_data_free) {
-			a1->app_data_free(a1->app_data);
-		}
-		free(a1);
-	}
-}
-
-OtrlChatContext* chat_context_find(OtrlUserState us,
-		const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token)
-{
-	OtrlListNode *foundListNode;
-	OtrlChatContext *target;
-
-	target = chat_context_create(us, accountname, protocol, the_chat_token);
-	if(!target)
-		return NULL;
-
-	foundListNode = otrl_list_find(us->chat_context_list, (PayloadPtr)target);
-	chat_context_free((PayloadPtr)target);
-
-	if(!foundListNode)
-		return NULL;
-
-	return (OtrlChatContext *)foundListNode->payload;
-}
-
-int chat_context_add(OtrlUserState us, OtrlChatContext* ctx)
-{
-	OtrlListNode * aNode;
-
-	aNode = otrl_list_insert(us->chat_context_list, (PayloadPtr)ctx);
-
-	if(!aNode)
-		return 1;
-	else
-		return 0;
-}
+#include "chat_auth.h"
+#include "chat_enc.h"
 
 OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname, const char *protocol,
 		otrl_chat_token_t the_chat_token)
@@ -114,8 +46,7 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname,
 		}
 		ctx->our_instance = ourInstanceTag->instag;
 		ctx->the_chat_token = the_chat_token;
-		ctx->participants_list = otrl_list_init(&chat_participant_listOps, sizeof(OtrlChatParticipant));
-		ctx->gka_info.auth_msg = NULL;
+		ctx->participants_list = otrl_list_create(&chat_participant_listOps, sizeof(OtrlChatParticipant));
 		ctx->gka_info.keypair = NULL;
 		ctx->gka_info.state = OTRL_CHAT_GKASTATE_NONE;
 		ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
@@ -129,31 +60,109 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname,
 	return ctx;
 }
 
+int chat_context_add(OtrlUserState us, OtrlChatContext* ctx)
+{
+	OtrlListNode * aNode;
+
+	aNode = otrl_list_insert(us->chat_context_list, (PayloadPtr)ctx);
+
+	if(!aNode)
+		return 1;
+	else
+		return 0;
+}
+
+OtrlChatContext* chat_context_find(OtrlUserState us,
+		const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token)
+{
+	OtrlListNode *foundListNode;
+	OtrlChatContext *target;
+
+	target = chat_context_create(us, accountname, protocol, the_chat_token);
+	if(!target) { goto error; }
+
+	otrl_list_dump(us->chat_context_list);
+
+	foundListNode = otrl_list_find(us->chat_context_list, (PayloadPtr)target);
+	if(!foundListNode) { goto error_with_target; }
+
+	chat_context_free((PayloadPtr)target);
+
+	return (OtrlChatContext *)foundListNode->payload;
+
+error_with_target:
+	chat_context_free((PayloadPtr)target);
+error:
+	return NULL;
+}
+
 OtrlChatContext* chat_context_find_or_add(OtrlUserState us,
 		const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token)
 {
 	OtrlChatContext *ctx;
+	int err;
 
 	ctx = chat_context_find(us, accountname, protocol, the_chat_token);
 
 	if(!ctx) {
 		ctx = chat_context_create(us, accountname, protocol, the_chat_token);
-		if(ctx) {
-			if (chat_context_add(us, ctx)) {
-				chat_context_free((PayloadPtr)ctx);
-				ctx = NULL;
-			}
-		}
+		if(!ctx) { goto error; }
+		err = chat_context_add(us, ctx);
+		if(err) { goto error_with_ctx; }
 	}
 
 	return ctx;
+
+error_with_ctx:
+	chat_context_free((PayloadPtr)ctx);
+error:
+	return NULL;
 }
 
-struct OtrlListOpsStruct chat_context_listOps = {
-		chat_context_compare,
-		chat_context_toString,
-		chat_context_free
-};
+int chat_context_compare(PayloadPtr a, PayloadPtr b)
+{
+	OtrlChatContext *a1 = (OtrlChatContext *)a;
+	OtrlChatContext *b1 = (OtrlChatContext *)b;
+	int res = 0;
+
+	res = strcmp(a1->accountname, b1->accountname);
+	if(res == 0) {
+		res = strcmp(a1->protocol, b1->protocol);
+		if(res == 0) {
+			res = chat_token_compare(a1->the_chat_token, b1->the_chat_token);
+		}
+	}
+
+	return res;
+}
+
+void chat_context_free(PayloadPtr a)
+{
+	OtrlChatContext *ctx = a;
+	if(ctx) {
+		if(ctx->accountname) {
+			free(ctx->accountname);
+		}
+		// TODO Dimitris: maybe define enc_info as a pointer, and change this
+		if(ctx->protocol) {
+			free(ctx->protocol);
+		}
+
+		if(ctx->participants_list) {
+			otrl_list_destroy(ctx->participants_list);
+		}
+		fprintf(stderr, "libotr-mpOTR: chat_context_free: before chat_auth_gka_info_destroy\n");
+		chat_auth_gka_info_destroy(&(ctx->gka_info));
+		fprintf(stderr, "libotr-mpOTR: chat_context_free: before chat_enc_info_destroy\n");
+		chat_enc_info_destroy(&(ctx->enc_info));
+		fprintf(stderr, "libotr-mpOTR: chat_context_free: before ctx->app_data_free\n");
+		if(ctx->app_data && ctx->app_data_free) {
+			ctx->app_data_free(ctx->app_data);
+		}
+		free(ctx);
+	}
+}
+
 
 void chat_context_toString(OtrlListNode *node) {
 	OtrlChatContext *ctx = (OtrlChatContext *)(node->payload);
@@ -164,3 +173,9 @@ void chat_context_toString(OtrlListNode *node) {
 	// TODO change the way we typecast the_chat_token
 	fprintf(stderr, "|-the_chat_token: %d\n", *((int *)ctx->the_chat_token));
 }
+
+struct OtrlListOpsStruct chat_context_listOps = {
+		chat_context_compare,
+		chat_context_toString,
+		chat_context_free
+};

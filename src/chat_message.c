@@ -46,38 +46,29 @@ int otrl_chat_message_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 	char **newmessagep,	OtrlTLV **tlvsp)
 {
 	OtrlChatContext * ctx;
-	OtrlChatMessageType msgtype;
 	OtrlChatMessage *msg, *msgToSend = NULL;
 	int ignore_message = 0; // flag to determine if the message should be ignored
-	int err = 0;
+	int err;
+	char *plaintext;
 
 	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: start\n");
 
-	if( !accountname || !protocol || !sender || !message || !newmessagep)
-		return 1;
+	if( !accountname || !protocol || !sender || !message || !newmessagep) { goto error; }
 
 	ctx = chat_context_find_or_add(us, accountname, protocol, chat_token);
+	if(!ctx) { goto error; }
 
-	// TODO define return values
-	if(!ctx)
-		return 1;
-
-	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: before chat_message_parse\n");
 	msg = chat_message_parse(message);
-	// TODO handle this case
-	if(!msg)
-		return 1;
+	if(!msg) { goto error; }
 
 	// TODO Dimitris: code refactoring, change checking against values using the appropriate handling functions
 	// 				  using err and msgToSend
-	msgtype = msg->msgType;
-	if(msgtype == OTRL_MSGTYPE_CHAT_NOTOTR) {
+	if(msg->msgType == OTRL_MSGTYPE_CHAT_NOTOTR) {
 		fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: case OTRL_MSGTYPE_NOTOTR\n");
+
 		if (ctx->msg_state != OTRL_MSGSTATE_PLAINTEXT) {
 			if(ops->handle_msg_event) {
 				ops->handle_msg_event(/*opdata*/ NULL, OTRL_MSGEVENT_RCVDMSG_UNENCRYPTED, NULL,  message, gcry_error(GPG_ERR_NO_ERROR));
-				free(*newmessagep);
-				*newmessagep = NULL;
 				ignore_message = 1;
 			}
 		}
@@ -85,57 +76,53 @@ int otrl_chat_message_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 	// handle authentication messages
 	} else if(chat_auth_is_auth_message(msg)) {
 		fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: in chat_auth_is_auth_message\n");
+		//TODO Dimitris: in case of error should I check if free of msgToSend is needed?
 		err = chat_auth_handle_message(ops, ctx, msg, &msgToSend);
+		if(err) { goto error_with_msg; }
+		ignore_message = 1;
 
 	// handle data messages
-	} else if(msgtype == OTRL_MSGTYPE_CHAT_DATA) {
+	} else if(msg->msgType == OTRL_MSGTYPE_CHAT_DATA) {
 
 		fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: case OTRL_MSGTYPE_CHAT_DATA\n");
-		OtrlChatMessagePayloadData *payload = msg->payload;
 
+		OtrlChatMessagePayloadData *payload = msg->payload;
 		switch(ctx->msg_state) {
-			char *plaintext;
 
 			case OTRL_MSGSTATE_PLAINTEXT:
 			case OTRL_MSGSTATE_FINISHED:
 				/* TODO if plaintext or finished ignore the message. In the future handle this more gracefully */
 				fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: case OTRL_MSGSTATE_PLAINTEXT OR OTRL_MSGSTATE_FINISHED\n");
-				ignore_message = 1;
+				goto error_with_msg;
 				break;
 
 			case OTRL_MSGSTATE_ENCRYPTED:
 				fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: case OTRL_MSGSTATE_ENCRYPTED\n");
-				fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: sender: %s\n", sender);
 				plaintext = chat_enc_decrypt(ctx, payload->ciphertext, payload->datalen, payload->ctr, sender);
-				if (!plaintext) {
-					/* ignore if there was an error. handle this more gracefully in the future */
-					ignore_message = 1;
-					break;
-				}
-				/* if we got here this means that we can display the message to the user */
+				/* TODO ignore if there was an error. handle this more gracefully in the future */
+				if (!plaintext) { goto error_with_msg; }
 				*newmessagep = plaintext;
-				ignore_message = 0;
 				break;
 		}
 	}
 
-	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: before if(err) \n");
-	if(err) {
-		ignore_message = 1;
-		if(msgToSend)
-			chat_message_free(msgToSend);
-	}
-
-	if(!err && msgToSend) {
-		chat_message_send(ops, ctx, msgToSend);
+	if(msgToSend) {
+		err = chat_message_send(ops, ctx, msgToSend);
+		if(err) { goto error_with_msgToSend; }
 		chat_message_free(msgToSend);
 	}
 
-	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: before chat_message_free(msg) \n");
 	chat_message_free(msg);
 
 	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_receiving: end\n");
 	return ignore_message;
+
+error_with_msgToSend:
+	chat_message_free(msgToSend);
+error_with_msg:
+	chat_message_free(msg);
+error:
+	return 1;
 }
 
 int otrl_chat_message_sending(OtrlUserState us,
@@ -145,35 +132,36 @@ int otrl_chat_message_sending(OtrlUserState us,
 	char **messagep, OtrlFragmentPolicy fragPolicy)
 {
 	OtrlChatContext * ctx;
+	unsigned char *ciphertext;
+	OtrlChatMessage *msg;
+	size_t datalen;
 
 	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_sending: start\n");
 
 	if( !accountname || !protocol || !message) { goto error; }
 
 	ctx = chat_context_find_or_add(us, accountname, protocol, chat_token);
-
-	// TODO define better return values
 	if(!ctx) { goto error; }
 
 	switch(ctx->msg_state) {
-		unsigned char *ciphertext;
-		OtrlChatMessage *msg;
-		size_t datalen;
-
 		case OTRL_MSGSTATE_PLAINTEXT:
 			fprintf(stderr, "libotr-mpOTR: otrl_chat_message_sending: case OTRL_MSGSTATE_PLAINTEXT\n");
 			break;
 		case OTRL_MSGSTATE_ENCRYPTED:
 			fprintf(stderr, "libotr-mpOTR: otrl_chat_message_sending: case OTRL_MSGSTATE_ENCRYPTED\n");
+
 			ciphertext = chat_enc_encrypt(ctx, message);
-			if(!ciphertext)
-				return 1;
+			if(!ciphertext) { goto error; }
+
 			// TODO maybe get length from chat_enc_encrypt so that we can support other modes of aes
 			datalen = strlen(message);
+
 			msg = chat_message_data_create(ctx, ctx->enc_info.ctr, datalen, ciphertext);
-			if(!msg) { goto error; }
+			if(!msg) { goto error_with_ciphertext; }
 
 			*messagep = chat_message_serialize(msg);
+			if(!*messagep) { goto error_with_msg; }
+
 			chat_message_free(msg);
 
 			break;
@@ -183,9 +171,12 @@ int otrl_chat_message_sending(OtrlUserState us,
 	}
 
 	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_sending: end\n");
-
 	return 0;
 
+error_with_msg:
+	chat_message_free(msg);
+error_with_ciphertext:
+	free(ciphertext);
 error:
 	return 1;
 }
@@ -199,8 +190,6 @@ int otrl_chat_message_send_query(OtrlUserState us,
 	OtrlChatContext *ctx;
 	int err;
 
-	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_send_query: start\n");
-
 	ctx = chat_context_find_or_add(us, accountname, protocol, chat_token);
 	if(!ctx) { goto error; }
 
@@ -212,12 +201,10 @@ int otrl_chat_message_send_query(OtrlUserState us,
 
 	chat_message_free(msg);
 
-	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_send_query: end\n");
-
 	return 0;
 
 error_with_msg:
-chat_message_free(msg);
+	chat_message_free(msg);
 error:
 	return 1;
 }
@@ -248,23 +235,37 @@ OtrlChatMessage * chat_message_parse(const char *message)
 	if(chat_message_is_fragment(message)) { goto error_with_msg; }
 
 	res = otrl_base64_otr_decode(message, &buf, &buflen);
-	if(res != 0 || buflen < 11)	{ goto error_with_msg; }
+	if(res != 0 ) { goto error_with_msg; }
+	if(buflen < 11)	{ goto error_with_buf; }
 
 	msg->protoVersion = chat_serial_string_to_int16(&buf[0]);
 	msg->msgType = chat_message_message_type_parse(buf[2]);
 	msg->senderInsTag = chat_serial_string_to_int(&buf[3]);
 	msg->chatInsTag = chat_serial_string_to_int(&buf[7]);
 	err = chat_message_payload_parse(msg, &buf[11], buflen-11);
-	if(err) { goto error_with_msg; }
+	if(err) { goto error_with_buf; }
+
+	free(buf);
 
 	return msg;
 
+error_with_buf:
+	free(buf);
 error_with_msg:
 	chat_message_free(msg);
 error:
 	return NULL;
 }
 
+/**
+ * Parses the serialized payload of a message.
+ * The caller should free the msg->payload using chat_message_free()
+ *
+ * @param msg A pointer to the OtrlChatMessage that will hold the parsed payload
+ * @param message The serialized payload
+ * @param length The length of the serialized payload
+ * @return 0. 1 in case of error
+ */
 int chat_message_payload_parse(OtrlChatMessage *msg, const unsigned char *message, size_t length)
 {
 	if(!msg) { goto error; }
@@ -274,18 +275,21 @@ int chat_message_payload_parse(OtrlChatMessage *msg, const unsigned char *messag
 			msg->payload_free = chat_message_payload_gka_upflow_free;
 			msg->payload_serialize = chat_message_payload_gka_upflow_serialize;
 			msg->payload = chat_message_payload_gka_upflow_parse(message, length);
+			if(!msg->payload) { goto error; }
 			break;
 
 		case OTRL_MSGTYPE_CHAT_DOWNFLOW:
 			msg->payload_free = chat_message_payload_gka_downflow_free;
 			msg->payload_serialize = chat_message_payload_gka_downflow_serialize;
 			msg->payload = chat_message_payload_gka_downflow_parse(message, length);
+			if(!msg->payload) { goto error; }
 			break;
 
 		case OTRL_MSGTYPE_CHAT_DATA:
 			msg->payload_free = chat_message_payload_data_free;
 			msg->payload_serialize = chat_message_payload_data_serialize;
 			msg->payload = chat_message_payload_data_parse(message, length);
+			if(!msg->payload) { goto error; }
 			break;
 
 		default:
@@ -298,6 +302,13 @@ error:
 	return 1;
 }
 
+/**
+ * Serializes a message.
+ * The caller should free the returned value using free()
+ *
+ * @param msg A pointer to the OtrlChatMessage that will be serialized
+ * @return The serialized message. NULL in case of error
+ */
 char * chat_message_serialize(OtrlChatMessage *msg)
 {
 	char *message;
@@ -448,6 +459,14 @@ int chat_message_is_fragment(const char * message)
 		return 0;
 }
 
+/**
+ * Create a new message.
+ * The caller should free the returned value using chat_message_free()
+ *
+ * @param ctx A pointer to the context
+ * @param msgType The message type
+ * @return The created message. NULL in case of error.
+ */
 OtrlChatMessage * chat_message_create(OtrlChatContext *ctx, OtrlChatMessageType msgType)
 {
 	OtrlChatMessage *msg;
@@ -491,7 +510,7 @@ MessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char *mes
 	keysLength = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
 
-	payload->interKeys = otrl_list_init(&interKeyOps, sizeof(gcry_mpi_t));
+	payload->interKeys = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
 	if(!payload->interKeys) { goto error_with_payload; }
 
 	for(i=0; i<keysLength; i++) {
@@ -617,7 +636,7 @@ MessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned char *m
 	keysLength = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
 
-	payload->interKeys = otrl_list_init(&interKeyOps, sizeof(gcry_mpi_t));
+	payload->interKeys = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
 	if(!payload->interKeys) { goto error_with_payload; }
 
 	for(i=0; i<keysLength; i++) {
@@ -806,13 +825,13 @@ int chat_message_send(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlCh
 	fprintf(stderr, "libotr-mpOTR: chat_message_send: start\n");
 
 	message = chat_message_serialize(msg);
-	if(!message){ goto err; }
+	if(!message){ goto error; }
 
 	// TODO Dimtiris: this is a work-around to pass the token as a recipient string. We should change that ASAP
 	// 				  maybe define another callback with this prototype:
 	//				  inject_chat_message(const char * accountname, const char *protocol, otrl_chat_token_t token, const char *message)
 	token = malloc(sizeof(int));
-	if(!token) { goto err_with_message;	}
+	if(!token) { goto error_with_message;	}
 
 	memcpy(token, (char*)ctx->the_chat_token, sizeof(int));
 	ops->inject_message(&chat_flag, ctx->accountname, ctx->protocol, token, message);
@@ -824,9 +843,9 @@ int chat_message_send(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlCh
 
 	return 0;
 
-err_with_message:
+error_with_message:
 	free(message);
-err:
+error:
 	return 1;
 }
 

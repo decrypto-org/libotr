@@ -27,12 +27,23 @@
 
 #include <stdio.h>
 
+/**
+  Compares two MPIs stored in a otr list
 
+  @param a the first MPI to compare
+  @param b the second MPI to compare
+  @return 0 if a = b, a positive value if a > b and a negative value if a < b
+ */
 int keys_compare(PayloadPtr a, PayloadPtr b)
 {
 	return gcry_mpi_cmp(a, b);
 }
 
+/**
+  Releases and free's an MPI stored in an otr list
+
+  @param a the MPI to be free'd and released
+ */
 void key_free(PayloadPtr a)
 {
 	gcry_mpi_t *w = a;
@@ -42,6 +53,11 @@ void key_free(PayloadPtr a)
 	free(a);
 }
 
+/**
+  Prints an MPI stored in an otr list
+
+  @param node the list node containing the MPI to be printed
+ */
 void key_toString(OtrlListNode *node)
 {
 	gcry_mpi_t *w = node->payload;
@@ -58,6 +74,12 @@ void key_toString(OtrlListNode *node)
     free(buf);
 }
 
+
+/**
+  Prints an MPI
+
+  @param w the MPI to be printed
+ */
 void mpi_toString(gcry_mpi_t w)
 {
 	unsigned char *buf;
@@ -78,6 +100,35 @@ struct OtrlListOpsStruct interKeyOps = {
 		key_free
 };
 
+/**
+  Destroy the data stored in a OtrlAuthGKAInfo
+
+  This function releases, deallocates, and free's any memory allocated
+  dynamically inside a OtrlAuthGKAInfo. The struct itself is not free'd
+
+  @param gka_info the OtrlAuthGKAInfo to be destroyed
+ */
+void chat_auth_gka_info_destroy(OtrlAuthGKAInfo *gka_info)
+{
+	if(gka_info->keypair)
+		otrl_dh_keypair_free(gka_info->keypair);
+
+	free(gka_info->keypair);
+}
+
+/**
+  This function returns a list containing only the generator of the DH group
+
+  This function allocates memory to hold a copy of the groups generator. It also
+  allocates and initializes a OtrlList in which the newly allocated generator
+  copy is appened. If the function returns with no error the OtrlList returned
+  needs to be destroyed >by the caller<.
+
+  @return an OtrlList containing only the generator.
+   The caller must deallocate this
+ */
+//TODO maybe refactor to get an allready initialized list as argument
+//instead of allocating in the function and returning it.
 OtrlList * initial_intermediate_key_list()
 {
 	OtrlList *key_list;
@@ -95,9 +146,10 @@ OtrlList * initial_intermediate_key_list()
 	*generator = gcry_mpi_copy(otrl_dh_get_generator());
 
 	/* Initialize a new list and check if it was actually initialized */
-	key_list = otrl_list_init(&interKeyOps, sizeof(gcry_mpi_t));
+	key_list = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
 	if(!key_list) { goto error; }
-/*		gcry_mpi_release(*generator);
+/* TODO remove this comment
+		gcry_mpi_release(*generator);
 		free(generator);
 		return NULL;
 	}
@@ -106,7 +158,8 @@ OtrlList * initial_intermediate_key_list()
 	/* Append the generator in the list and check if it was inserted correctly */
 	node = otrl_list_append(key_list, generator);
 	if(!node) { goto error_with_list; }
-/*		otrl_list_destroy(key_list);
+/* TODO remove this comment
+        otrl_list_destroy(key_list);
 		return NULL;
 	}
 */
@@ -123,7 +176,16 @@ error:
 
 }
 
+//TODO fix phrasing in this docstring
+/**
+  This function creates a new list from an old one, with each element of the
+  old raised to the private key.
 
+  @param new_key_list a pointer to an OtrlList which will hold the new values
+  @param old_key_list a pointer to an OtrlList which contains the keys which
+   holds the old values
+  @key a pointer to our DH keypair used in this GKA run
+ */
 int append_with_key(OtrlList *new_key_list, OtrlList *old_key_list, DH_keypair *key)
 {
 	OtrlListNode *cur, *node;
@@ -170,6 +232,18 @@ int append_with_key(OtrlList *new_key_list, OtrlList *old_key_list, DH_keypair *
 	return 0;
 }
 
+/**
+  This function returns the key list to be sent to the next hop
+
+  This function will allocate and initialize a new OtrlList which holds the
+  intermediate keys to be sent. The new list must be destroyed >by the caller<
+
+  @param key_list a pointer to an OtrlList containing the keys received from
+   the previous hop in this GKA run
+  @param key a pointer to our diffie hellman keypair for this GKA run
+  @return a list containing the keys to be sent to the next hop. This list
+   must be deallocated by the caller
+ */
 OtrlList * intermediate_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 {
 	OtrlList *new_list;
@@ -178,7 +252,7 @@ OtrlList * intermediate_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 	fprintf(stderr, "libotr-mpOTR: intermediate_key_list_to_send: start\n");
 
 	/* Initialize the list to be returned */
-	new_list = otrl_list_init(&interKeyOps, sizeof(gcry_mpi_t));
+	new_list = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
 
 	/* Append the last key in the key_list to the new list, as
 	 * specified by the algorithm */
@@ -209,6 +283,20 @@ OtrlList * intermediate_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 	return new_list;
 }
 
+/**
+  This function returns the final key list to be sent to every participant
+  except the last.
+
+  This function will allocate and initialize a new OtrlList which holds the
+  intermediate keys for the final downflow message. The new list must be
+  destroyed >by the caller<
+
+  @param key_list a pointer to an OtrlList containing the keys received from
+   the previous hop in this GKA run
+  @param key a pointer to our diffie hellman keypair for this GKA run
+  @return a list containing the keys to be sent to everyone else. This list
+   must be deallocated by the caller
+ */
 OtrlList * final_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 {
 	OtrlList *new_list;
@@ -216,7 +304,7 @@ OtrlList * final_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 	fprintf(stderr, "libotr-mpOTR: final_key_list_to_send: start\n");
 
 	/* Initialize the list to be returned */
-	new_list = otrl_list_init(&interKeyOps, sizeof(gcry_mpi_t));
+	new_list = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
 	fprintf(stderr, "libotr-mpOTR: final_key_list_to_send: after list init\n");
 
 	/* If there was an error destroy the new_list and return NULL */
@@ -231,6 +319,22 @@ OtrlList * final_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 	return new_list;
 }
 
+/**
+  This function checks if the usernames provided by the application
+  are properly initialized.
+
+  The application must provided the usernames of the participants in the form
+  of a an array with pointers to c-style strings that are deep copies and not
+  aliases of any string used by the application. Each string must be the
+  username of one participant. If any of usernames were not allocated properly
+  this function will deallocate any correctly allocated by the application
+  memory area.
+
+  @param usernames an array containing pointers to each username
+  @param usernames_size the length of the usernames array
+  @return 0 if the usernames are properly allocated. A non zero value
+   otherwise
+ */
 int usernames_check_or_free(char **usernames, unsigned int usernames_size){
     unsigned char error = 0;
 
@@ -261,6 +365,17 @@ int usernames_check_or_free(char **usernames, unsigned int usernames_size){
     return 0;
 }
 
+/**
+  This function concatenates and hashes the usernames of each participant.
+
+  This function will iterate over an OtrlList containing the participats
+  and hash their usernames. Then it will store the produced hash in an
+  >alread< allocated buffer passed as an argument.
+
+  @param participants an OtrlList containing each participant
+  @param hash a buffer to hold the produced hash. It must be already
+   allocated by the caller
+ */
 gcry_error_t get_participants_hash(OtrlList *participants, unsigned char* hash)
 {
 	gcry_md_hd_t md;
@@ -277,6 +392,7 @@ gcry_error_t get_participants_hash(OtrlList *participants, unsigned char* hash)
 		return err;
 	fprintf(stderr, "libotr-mpOTR: get_participants_hash: after md open\n");
 
+	/* Iterate over the list and write each username in the message digest */
 	for(cur = participants->head; cur!=NULL; cur = cur->next) {
 		participant = cur->payload;
 		len = strlen(participant->username);
@@ -316,10 +432,15 @@ gcry_error_t get_participants_list(const OtrlMessageAppOps *ops, OtrlChatContext
     	return gcry_error(GPG_ERR_ENODATA);
     fprintf(stderr, "libotr-mpOTR: get_participants_list: after check_or_free\n");
 
+
     /* Create the participants list from the usernames array */
     if(chat_participant_list_from_usernames(ctx->participants_list, usernames, usernames_size))
     	return gcry_error(GPG_ERR_INTERNAL);
     fprintf(stderr, "libotr-mpOTR: get_participants_list: after list_from_usernames\n");
+
+
+    for(unsigned int i = 0; i < usernames_size; i++)
+    	free(usernames[i]);
 
     /* Free the usernames array as it is not needed anymor */
     free(usernames);
@@ -328,7 +449,9 @@ gcry_error_t get_participants_list(const OtrlMessageAppOps *ops, OtrlChatContext
     return gcry_error(GPG_ERR_NO_ERROR);
 
 }
-
+//TODO This function does two things. First it gets the participants
+//list and calculates its hash. Then it generates a diffie hellman keypair.
+//Break this function into two seperate ones.
 gcry_error_t initialize_gka_info(const OtrlMessageAppOps *ops, OtrlChatContext *ctx)
 {
 	gcry_error_t err;
@@ -672,7 +795,7 @@ int chat_auth_is_auth_message(const OtrlChatMessage *msg)
 	fprintf(stderr, "libotr-mpOTR: chat_auth_is_auth_message: end\n");
 }
 
-int chat_auth_handle_message(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg, OtrlChatMessage **msgToSend) {
+int chat_auth_handle_message(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, const OtrlChatMessage *msg, OtrlChatMessage **msgToSend) {
 	OtrlChatMessageType msgType = msg->msgType;
 
 	fprintf(stderr, "libotr-mpOTR: chat_auth_handle_message: start\n");

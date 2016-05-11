@@ -48,6 +48,13 @@
  */
 void chat_enc_initialize_enc_info(OtrlChatEncInfo *enc_info);
 
+/**
+  Destroys an OtrlChatEncInfo struct. It does not free the enc_info struct
+  itself.
+
+  @param enc_info a pointer to the struct to be destroyed
+ */
+void chat_enc_info_destroy(OtrlChatEncInfo *enc_info);
 
 /**
   Generates the shared secret

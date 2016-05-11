@@ -22,7 +22,7 @@
 
 #include "list.h"
 
-OtrlList * otrl_list_init(struct OtrlListOpsStruct *ops, size_t payload_size)
+OtrlList * otrl_list_create(struct OtrlListOpsStruct *ops, size_t payload_size)
 {
 	OtrlList *list = malloc(sizeof *list);
 
@@ -184,48 +184,35 @@ void otrl_list_node_destroy(OtrlList *list, OtrlListNode *node)
 
 void otrl_list_clear(OtrlList *list)
 {
-	while( list->head != NULL)
+	while( list->head != NULL) {
 		otrl_list_remove_and_destroy(list, list->head);
+	}
 }
 
-// TODO Dimitris: maybe use otrl_list_clear???
+
 void otrl_list_destroy(OtrlList *list)
 {
-	/*OtrlListNode *cur;
-
-	cur = list->head;
-
-	for(cur = list->head; cur != NULL; cur = cur->next) {
-		list->ops->payload_destroy(cur->payload);
-		if(cur->prev)
-			otrl_list_node_destroy(list, cur->prev);
-	}
-
-	if(list->tail)
-		otrl_list_node_destroy(list, list->tail);*/
-
 	otrl_list_clear(list);
-
-
-	/* Destroy the ops struct */
-	// TODO Dimitris: check this out
-	//free(list->ops);
-
 	free(list);
-
+	//TODO Dimitris: what about ops?
 }
 
 OtrlListNode * otrl_list_find(OtrlList *list, PayloadPtr target)
 {
 	OtrlListNode *cur = NULL;
 	int res;
+	fprintf(stderr, "libotr-mpOTR: otrl_list_find: start\n");
+
 	cur = list->head;
 
 	// check if the list is empty
+	fprintf(stderr, "libotr-mpOTR: otrl_list_find: before if(cur == NULL)\n");
 	if(cur == NULL)
 		return NULL;
 
+	fprintf(stderr, "libotr-mpOTR: otrl_list_find: before while\n");
 	while(cur != NULL) {
+		fprintf(stderr, "libotr-mpOTR: otrl_list_find: before list->ops->compar\n");
 		res = list->ops->compar(target, cur->payload);
 		if(res == 0)
 			return cur;
@@ -234,6 +221,7 @@ OtrlListNode * otrl_list_find(OtrlList *list, PayloadPtr target)
 		cur = cur->next;
 	}
 
+	fprintf(stderr, "libotr-mpOTR: otrl_list_find: end\n");
 	return NULL;
 }
 
