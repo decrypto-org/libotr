@@ -297,6 +297,7 @@ typedef struct s_OtrlMessageAppOps {
 
     /* DIKOMAS */
     char **(*chat_get_participants)(void *opdata, const char *accountname, const char *protocol, otrl_chat_token_t chat_token, unsigned int *size);
+    void (*chat_privkey_create)(void *opdata, const char *accountname, const char *protocol);
     /***********/
 
 } OtrlMessageAppOps;

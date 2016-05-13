@@ -581,7 +581,7 @@ gcry_error_t handle_upflow_message(const OtrlMessageAppOps *ops, OtrlChatContext
 	OtrlList *inter_key_list;
 	OtrlListNode *last;
 	gcry_mpi_t *last_key;
-	OtrlChatMessagePayloadGkaUpflow *upflowMsg = msg->payload;
+	OtrlChatMessagePayloadGKAUpflow *upflowMsg = msg->payload;
 	unsigned int me_next[2];
 	unsigned int inter_key_list_length, participants_list_length;
 
@@ -714,7 +714,7 @@ err:
 gcry_error_t handle_downflow_message(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, const OtrlChatMessage *msg, OtrlChatMessage **msgToSend)
 {
 	gcry_error_t err;
-	OtrlChatMessagePayloadGkaDownflow *downflowMsg = msg->payload;
+	OtrlChatMessagePayloadGKADownflow *downflowMsg = msg->payload;
 	OtrlListNode *cur;
 	gcry_mpi_t *w;
 	unsigned int i;

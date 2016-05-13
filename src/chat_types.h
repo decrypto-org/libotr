@@ -65,16 +65,27 @@ typedef struct OtrlChatMessagePayloadQueryAckStruct {
         unsigned char magicnum[4];
 } OtrlChatMessagePayloadQueryAck;
 
-typedef struct OtrlChatMessagePayloadUpflowStruct {
+typedef struct OtrlChatMessagePayloadDAKEHandshakeStruct {
+		unsigned int recipient;
+		gcry_mpi_t eph_pub;
+		gcry_mpi_t lon_pub;
+} OtrlChatMessagePayloadDAKEHandshake;
+
+typedef struct OtrlChatMessagePayloadDAKEConfirmStruct {
+		unsigned int recipient;
+		unsigned char *data;
+} OtrlChatMessagePayloadDAKEConfirm;
+
+typedef struct OtrlChatMessagePayloadGKAUpflowStruct {
 		unsigned int recipient;
 		unsigned char partlistHash[CHAT_PARTICIPANTS_HASH_LENGTH];
 		OtrlList *interKeys;
-} OtrlChatMessagePayloadGkaUpflow;
+} OtrlChatMessagePayloadGKAUpflow;
 
-typedef struct OtrlChatMessagePayloadDownflowStruct {
+typedef struct OtrlChatMessagePayloadGKADownflowStruct {
 		unsigned char partlistHash[CHAT_PARTICIPANTS_HASH_LENGTH];
 		OtrlList *interKeys;
-} OtrlChatMessagePayloadGkaDownflow;
+} OtrlChatMessagePayloadGKADownflow;
 
 typedef struct OtrlChatMessagePayloadDataStruct {
         unsigned char ctr[8];
@@ -96,15 +107,21 @@ typedef struct ChatEncInfoStruct {
 } OtrlChatEncInfo;
 
 
+typedef enum {
+	OTRL_CHAT_DSKESTATE_NONE,
+	OTRL_CHAT_DSKESTATE_AWAITING_KEYS,
+	OTRL_CHAT_DSKESTATE_FINISHED
+} OtrlChatDSKEState;
+
 /* Chat auth type declaration */
 typedef enum {
         OTRL_CHAT_GKASTATE_NONE,
         OTRL_CHAT_GKASTATE_AWAITING_DOWNFLOW,
         OTRL_CHAT_GKASTATE_FINISHED
-} OtrlChatAuthGKAState;
+} OtrlChatGKAState;
 
 typedef struct {
-        OtrlChatAuthGKAState state;  /* the gka state */
+        OtrlChatGKAState state;  /* the gka state */
 
         unsigned int position;      /* Our position in the participants order starting from the gka initiator */
 

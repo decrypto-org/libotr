@@ -1,4 +1,4 @@
-/*/gcry_
+/*
  *  Off-the-Record Messaging library
  *  Copyright (C) 2015-2016  Dimitrios Kolotouros <dim.kolotouros@gmail.com>,
  *  						 Konstantinos Andrikopoulos <el11151@mail.ntua.gr>
