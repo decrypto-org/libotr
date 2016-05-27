@@ -317,8 +317,11 @@ char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphert
 
 	//TODO this is an ugly hack. In the future when we have a DSKE implemented we will
 	//be able to infer our position based on our public signing keys.
-	our_pos = chat_participant_get_position(ctx->participants_list, ctx->accountname);
-	their_pos = chat_participant_get_position(ctx->participants_list, sender);
+	if(chat_participant_get_position(ctx->participants_list, ctx->accountname, &our_pos))
+		return NULL;
+	if(chat_participant_get_position(ctx->participants_list, sender, &their_pos))
+		return NULL;
+
 	participants_len = otrl_list_length(ctx->participants_list);
 
 	fprintf(stderr, "our_pos: %u, their_pos: %u, our_gka_pos: %d, list len: %d\n", our_pos, their_pos, ctx->gka_info.position, participants_len);

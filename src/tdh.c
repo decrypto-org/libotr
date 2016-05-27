@@ -1,3 +1,22 @@
+/*
+ *  Off-the-Record Messaging library
+ *  Copyright (C) 2015-2016  Dimitrios Kolotouros <dim.kolotouros@gmail.com>,
+ *  						 Konstantinos Andrikopoulos <el11151@mail.ntua.gr>
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of version 2.1 of the GNU Lesser General
+ *  Public License as published by the Free Software Foundation.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <gcrypt.h>
@@ -5,53 +24,13 @@
 
 #include "chat_privkeydh.h"
 #include "dh.h"
-#include "debug.h"
-
-#define SESSID_LEN 8
-
-
-/*
- * This struct is used internally to store the cryptographic algorithms for
- * sending and receiving the confirmation message of the triple dh exchange
- */
-typedef struct {
-
-
-    gcry_cipher_hd_t sendenc;           /* Sending cipher for confirmation message */
-
-    gcry_cipher_hd_t rcvenc;            /* Receiving cipher for confirmation message */
-
-    gcry_md_hd_t sendmac;               /* Sending mac for confirmation message */
-
-    gcry_md_hd_t rcvmac;                /* Receiving mac for confirmation message */
-
-    unsigned char sessionid[SESSID_LEN];        /* Session id for this exchange */
-
-} TDH_state;
-
-
-/*
- * This struct is seen by the end users. It stores all necessary information
- * needed to perform the exchange, from computing the shared secret to the
- * crypto algorithms needed to send and receive the confirmation messages
- */
-typedef struct {
-    DH_keypair longterm;                /* Our long term DH key */
-    DH_keypair ephemeral;               /* Our ephemeral key just for this exchange */
-
-    gcry_mpi_t their_pub_long;          /* Their long term public key */
-    gcry_mpi_t their_pub_eph;           /* Their ephemeral public key */
-
-    TDH_state state;                    /* Crypto algorithms to be used */
-
-} TripleDH_handshake;
-
-
+#include "tdh.h"
+//#include "debug.h"
 
 /*
  * Initialises a triple dh handshake
  */
-void tripledh_handshake_init(TripleDH_handshake *handshake)
+void tdh_handshake_init(TripleDH_handshake *handshake)
 {
     otrl_dh_keypair_init(&handshake->longterm);
     otrl_dh_keypair_init(&handshake->ephemeral);
@@ -70,7 +49,7 @@ void tripledh_handshake_init(TripleDH_handshake *handshake)
  * Loads our long term keypair longterm in handshake to be used for computing
  * the shared secret
  */
-void tripledh_handshake_load_longterm(TripleDH_handshake *handshake,
+void tdh_handshake_load_longterm(TripleDH_handshake *handshake,
         DH_keypair *longterm)
 {
 
@@ -79,31 +58,37 @@ void tripledh_handshake_load_longterm(TripleDH_handshake *handshake,
 }
 
 /*
- * Generates an ephemeral dh key just for this handshake. This is the key
- * that will be authenticated to the other party deniably
+ * Generates an ephemeral dh key.
  */
-gcry_error_t tripledh_handshake_gen_ephemeral(TripleDH_handshake *handshake)
+gcry_error_t tdh_handshake_gen_ephemeral(DH_keypair *ephemeral)
 {
     gcry_error_t err;
-    err = otrl_dh_gen_keypair(DH1536_GROUP_ID, &handshake->ephemeral);
+    err = otrl_dh_gen_keypair(DH1536_GROUP_ID,ephemeral);
     return err;
 }
 
 /*
+ * Loads an ephemeral dh key in the handshake.
+ */
+void tdh_handshake_load_ephemeral(TripleDH_handshake *handshake,
+                                DH_keypair *ephemeral)
+{
+    otrl_dh_keypair_copy(&(handshake->ephemeral), ephemeral);
+    return;
+}
+/*
  * Loads the other party's long term (their_long) and ephemeral (their_eph)
  * public keys needed for computing the shared secret
  */
-gcry_error_t tripledh_handshake_load_their_pub(TripleDH_handshake *handshake,
+gcry_error_t tdh_handshake_load_their_pub(TripleDH_handshake *handshake,
         gcry_mpi_t their_long, gcry_mpi_t their_eph)
 {
     /* Check if both longterm and ephemeral public keys are valid */
     if ( otrl_dh_is_inrange(their_long) ||
            otrl_dh_is_inrange(their_eph) ) {
         /*one of the public keys were out of range */
-        debug_msg("pub keys out of range");
         return gcry_error(GPG_ERR_INV_VALUE);
     }
-    debug_msg("loading pub keys \n");
 
     /* Just copy the provided public keys in the handshake data */
     handshake->their_pub_long = gcry_mpi_copy(their_long);
@@ -123,13 +108,17 @@ gcry_error_t tripledh_handshake_load_their_pub(TripleDH_handshake *handshake,
  *
  * This is just a wrapper around gcry_cipher_encrypt.
  */
-gcry_error_t tripledh_handshake_encrypt(TripleDH_handshake *hs,
+gcry_error_t tdh_handshake_encrypt(TripleDH_handshake *hs,
                                         unsigned char *out, size_t outsize,
-                                        const unsigned *in, size_t inlen)
+                                        unsigned char *in, size_t inlen)
 {
     gcry_error_t err;
-    err = gcry_cipher_encrypt(hs->state.sendenc, out, outsize, in, inlen);
-    return err;
+
+    if(out) {
+        err = gcry_cipher_encrypt(hs->state.sendenc, out, outsize, in, inlen);
+        return err;
+    }
+    return 0;
 }
 
 /*
@@ -138,7 +127,7 @@ gcry_error_t tripledh_handshake_encrypt(TripleDH_handshake *hs,
  *
  * This is just a wrapper around gcry_cipher_decrypt.
  */
-gcry_error_t tripledh_handshake_decrypt(TripleDH_handshake *hs,
+gcry_error_t tdh_handshake_decrypt(TripleDH_handshake *hs,
                                         unsigned char *out, size_t outsize,
                                         const unsigned char *in, size_t inlen)
 {
@@ -154,32 +143,52 @@ gcry_error_t tripledh_handshake_decrypt(TripleDH_handshake *hs,
  * allocated buffer. Currently the size of the MAC is hardcoded to be 32
  * bytes.
  */
-gcry_error_t tripledh_handshake_mac(TripleDH_handshake *hs,
-                                    unsigned char *out, const unsigned char *in,
-                                    size_t inlen)
+gcry_error_t tdh_handshake_mac(TripleDH_handshake *hs, unsigned char *out,
+                               const unsigned char *in, size_t inlen,
+                               const unsigned char *assoc_data, size_t assoc_datalen)
 {
-    if (!in) {
-        debug_msg("inline mac'ing not yet implemented");
-        return gcry_error(GPG_ERR_NOT_IMPLEMENTED);
-    }
+	fprintf(stderr, "libotr-mpOTR: tdh_handshake_mac: start\n");
+    //if (!in) {
+    //    return gcry_error(GPG_ERR_NOT_IMPLEMENTED);
+    //}
+
+	fprintf(stderr, "libotr-mpOTR: tdh_handshake_mac: after in check\n");
+
+
     gcry_md_reset(hs->state.sendmac);
-    gcry_md_write(hs->state.sendmac, in, inlen);
+    if(inlen > 0)
+        gcry_md_write(hs->state.sendmac, in, inlen);
+
+	fprintf(stderr, "libotr-mpOTR: tdh_handshake_mac: after first write\n");
+
+    if(assoc_datalen > 0)
+        gcry_md_write(hs->state.sendmac, assoc_data, assoc_datalen);
+
+	fprintf(stderr, "libotr-mpOTR: tdh_handshake_mac: after second write\n");
+
+
     memmove(out, gcry_md_read(hs->state.sendmac, GCRY_MD_SHA256), 32);
+
+	fprintf(stderr, "libotr-mpOTR: tdh_handshake_mac: after memmove\n");
+
+    return gcry_error(GPG_ERR_NO_ERROR);
 }
 
 
 /*
  * Verify if mac is a valid MAC for msg, using receiving mac from hs
  */
-gcry_error_t tripledh_handshake_mac_verify(TripleDH_handshake *hs,
-                                           unsigned char mac[32],
-                                           unsigned char *msg, size_t msglen)
+gcry_error_t tdh_handshake_mac_verify(TripleDH_handshake *hs, unsigned char mac[32],
+                                      const unsigned char *msg, size_t msglen,
+                                      const unsigned char *assoc_data, size_t assoc_datalen)
 {
     unsigned char my_mac[32];
 
     gcry_md_reset(hs->state.rcvmac);
     gcry_md_write(hs->state.rcvmac, msg, msglen);
-    memmove(my_mac, gcry_md_read(hs->state.sendmac, GCRY_MD_SHA256), 32);
+    if(assoc_datalen > 0)
+        gcry_md_write(hs->state.rcvmac, assoc_data, assoc_datalen);
+    memmove(my_mac, gcry_md_read(hs->state.rcvmac, GCRY_MD_SHA256), 32);
 
     return memcmp(my_mac, mac, 32);
 }
@@ -190,7 +199,7 @@ gcry_error_t tripledh_handshake_mac_verify(TripleDH_handshake *hs,
  * id and sending and receiving ciphers/macs using the shared secret that can be
  * calculated by a triple dh exchange. The exchange is still NOT authenticated.
  */
-gcry_error_t tripledh_handshake_compute_keys(TripleDH_handshake *handshake)
+gcry_error_t tdh_handshake_compute_keys(TripleDH_handshake *handshake)
 {
     gcry_mpi_t gab, gAb, gaB;
     size_t gab_len, gAb_len, gaB_len;
@@ -203,28 +212,21 @@ gcry_error_t tripledh_handshake_compute_keys(TripleDH_handshake *handshake)
 
     /* Init ctr to zero */
     memset(ctr, 0, 16);
-    debug_msg("ctr set to zero\n");
     /* Alocate and calculate g^ab */
     gab = gcry_mpi_snew(700);
     if (!gab) {
-        debug_msg("gab unallocated\n");
         return gcry_error(GPG_ERR_ENOMEM);
     }
-    else {
-        debug_msg("gab allocated\n");
-    }
+
 
     if (!handshake->ephemeral.priv) {
-        debug_msg("priv is not allocated\n");
         return gpg_error(GPG_ERR_GENERAL);
     }
     if (!handshake->their_pub_eph) {
-        debug_msg("their_pub_eph is not allocated \n");
         return gpg_error(GPG_ERR_GENERAL);
     }
 
     otrl_dh_powm(gab, handshake->their_pub_eph, handshake->ephemeral.priv);
-    debug_msg("gab calculated\n");
     /* Allocate  g^Ab */
     gAb = gcry_mpi_snew(700);
 
@@ -254,14 +256,6 @@ gcry_error_t tripledh_handshake_compute_keys(TripleDH_handshake *handshake)
         otrl_dh_powm(gAb, handshake->their_pub_long, handshake->ephemeral.priv);
     }
 
-    debug_msg("gab\n");
-    debug_print_mpi(gab);
-    debug_msg("gAb\n");
-    debug_print_mpi(gAb);
-    debug_msg("gaB\n");
-    debug_print_mpi(gaB);
-    debug_msg("exponentiations done\n");
-
     /* Get their respective lengths in the right format */
     gcry_mpi_print(GCRYMPI_FMT_USG, NULL, 0, &gab_len, gab);
     gcry_mpi_print(GCRYMPI_FMT_USG, NULL, 0, &gAb_len, gAb);
@@ -277,7 +271,6 @@ gcry_error_t tripledh_handshake_compute_keys(TripleDH_handshake *handshake)
         gcry_mpi_release(gaB);
         return gcry_error(GPG_ERR_ENOMEM);
     }
-    debug_msg("sdata allocated\n");
 
     /* Disregard first byte for now, write gab_len and then gab */
     sdata[1] = (gab_len >> 24) & 0xff;
@@ -310,25 +303,14 @@ gcry_error_t tripledh_handshake_compute_keys(TripleDH_handshake *handshake)
     /* Increase base by the bytes written */
     base += 4 + gaB_len;
 
-    debug_msg("sdata\n");
-    debug_print_buffer(sdata,base+1);
     /* Calculate session id by hashing 0x00 || gab || gAb || gaB
      * and using the first 16 bytes of the hash */
     hashdata = gcry_malloc_secure(32);
-    if (!hashdata) {
-        gcry_free(sdata);
-        return gcry_error(GPG_ERR_ENOMEM);
-    }
-    sdata[0] = 0x00;
-    gcry_md_hash_buffer(GCRY_MD_SHA256, hashdata, sdata, base+1);
-    memmove(handshake->state.sessionid, hashdata, SESSID_LEN);
 
     /* Calculate sending encryption key by hashing  sendbyte || gab || gAb || gaB
      * and using the hash as the key */
     sdata[0] = sendbyte;
     gcry_md_hash_buffer(GCRY_MD_SHA256, hashdata, sdata, base+1);
-    debug_msg("send key\n");
-    debug_print_buffer(hashdata,32);
     err = gcry_cipher_open(&(handshake->state.sendenc), GCRY_CIPHER_AES256,
             GCRY_CIPHER_MODE_CTR, GCRY_CIPHER_SECURE);
     if (err) goto err;
@@ -352,8 +334,6 @@ gcry_error_t tripledh_handshake_compute_keys(TripleDH_handshake *handshake)
      * and using the hash as the key */
     sdata[0] = rcvbyte;
     gcry_md_hash_buffer(GCRY_MD_SHA256, hashdata, sdata, base+1);
-    debug_msg("receiving key\n");
-    debug_print_buffer(hashdata,32);
     err = gcry_cipher_open(&(handshake->state.rcvenc), GCRY_CIPHER_AES256,
             GCRY_CIPHER_MODE_CTR, GCRY_CIPHER_SECURE);
     if (err) goto err;
@@ -394,7 +374,7 @@ err:
 }
 
 
-
+/*
 int main(int argc, char **argv)
 {
 
@@ -421,8 +401,8 @@ int main(int argc, char **argv)
 
     otrl_dh_init();
 
-    tripledh_handshake_init(&hs_a);
-    tripledh_handshake_init(&hs_b);
+    tdh_handshake_init(&hs_a);
+    tdh_handshake_init(&hs_b);
 
 
     a_keypair = gcry_malloc_secure(sizeof(DH_keypair));
@@ -439,40 +419,41 @@ int main(int argc, char **argv)
     otrl_chat_privkeydh_read_FILEp(b_keypair, fp);
 
     fclose(fp);
-    tripledh_handshake_load_longterm(&hs_a, a_keypair);
-    tripledh_handshake_load_longterm(&hs_b, b_keypair);
+    tdh_handshake_load_longterm(&hs_a, a_keypair);
+    tdh_handshake_load_longterm(&hs_b, b_keypair);
 
-    tripledh_handshake_gen_ephemeral(&hs_a);
-    tripledh_handshake_gen_ephemeral(&hs_b);
+    tdh_handshake_gen_ephemeral(&hs_a);
+    tdh_handshake_gen_ephemeral(&hs_b);
 
 
-    tripledh_handshake_load_their_pub(&hs_a, hs_b.longterm.pub,
+    tdh_handshake_load_their_pub(&hs_a, hs_b.longterm.pub,
                                        hs_b.ephemeral.pub);
 
-    tripledh_handshake_load_their_pub(&hs_b, hs_a.longterm.pub,
+    tdh_handshake_load_their_pub(&hs_b, hs_a.longterm.pub,
                                       hs_a.ephemeral.pub);
 
-    tripledh_handshake_compute_keys(&hs_a);
-    tripledh_handshake_compute_keys(&hs_b);
+    tdh_handshake_compute_keys(&hs_a);
+    tdh_handshake_compute_keys(&hs_b);
 
-    err = tripledh_handshake_encrypt(&hs_a, message, 16, NULL, 0);
+    err = tdh_handshake_encrypt(&hs_a, message, 16, NULL, 0);
     if(err)
         fprintf(stderr, "something went wrong when encrypting\n");
     fwrite(message, sizeof(unsigned char), 16, stderr);
     fprintf(stderr, "\n");
-    tripledh_handshake_mac(&hs_a, mac, message, 16);
+    tdh_handshake_mac(&hs_a, mac, message, 16);
 
     for(i = 0; i<16; i++)
         fprintf(stderr, "%02X", mac[i]);
     fprintf(stderr,"\n");
 
 
-    if(!tripledh_handshake_mac_verify(&hs_b, mac, message,16))
+    if(!tdh_handshake_mac_verify(&hs_b, mac, message,16))
         fprintf(stderr,"message is not verified");
-    err = tripledh_handshake_decrypt(&hs_b, message, 16, NULL, 0);
+    err = tdh_handshake_decrypt(&hs_b, message, 16, NULL, 0);
     if(err)
         fprintf(stderr, "something went wrong when decrypting\n");
 
     fprintf(stderr, "%s\n", message);
 
 }
+*/

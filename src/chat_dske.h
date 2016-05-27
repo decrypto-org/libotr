@@ -17,31 +17,11 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef CHAT_IDKEY_H
-#define CHAT_IDKEY_H
+#include "chat_dake.h"
 
-#include "list.h"
+int chat_dske_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend);
 
-typedef struct {
-	DH_keypair keyp;
-	char* accountname;
-	char* protocol;
-} ChatIdKey;
+int chat_dske_is_my_message(const OtrlChatMessage *msg);
 
-typedef struct {
-	void (*init)(ChatIdKey*);
-	void (*destroy_key)(ChatIdKey*);
-	ChatIdKey * (*parse)(gcry_sexp_t);
-	gcry_error_t (*generate_key)(ChatIdKey**);
-	gcry_error_t (*serialize)(ChatIdKey*, gcry_sexp_t*);
-	ChatIdKey * (*find_key)(OtrlList *key_list, const char *accountname, const char *protocol);
-} ChatIdKeyManager;
-
-struct OtrlListOpsStruct chat_idkey_listOps;
-
-ChatIdKeyManager chat_id_key_manager;
-
-void chat_idkey_print_key(ChatIdKey *key);
-
-ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const char *protocol);
-#endif /* CHAT_IDKEY_H */
+int chat_dske_handle_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
+                             OtrlChatMessage **msgToSend, int *free_msg);

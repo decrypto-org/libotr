@@ -20,16 +20,9 @@
 #ifndef CHAT_MESSAGE_H_
 #define CHAT_MESSAGE_H_
 
-#include <stdlib.h>
-
-#include "tlv.h"
-#include "proto.h"
-#include "message.h"
-#include "instag.h"
-//#include "chat_token.h"
-//#include "chat_context.h"
-
 #include "chat_types.h"
+#include "message.h"
+
 /*
 typedef void * MessagePayloadPtr;
 
@@ -60,61 +53,29 @@ typedef struct OtrlChatMessagePayloadDataStruct {
 } OtrlChatMessagePayloadData;
 */
 
-
-int otrl_chat_message_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
-	void *opdata, const char *accountname, const char *protocol,
-	const char *sender, otrl_chat_token_t chat_token, const char *message,
-	char **newmessagep,	OtrlTLV **tlvsp);
-
-int otrl_chat_message_sending(OtrlUserState us,
-	const OtrlMessageAppOps *ops,
-	void *opdata, const char *accountname, const char *protocol,
-	const char *message, otrl_chat_token_t chat_token, OtrlTLV *tlvs,
-	char **messagep, OtrlFragmentPolicy fragPolicy);
-
-int otrl_chat_message_send_query(OtrlUserState us,
-		const OtrlMessageAppOps *ops,
-		const char *accountname, const char *protocol,
-		otrl_chat_token_t chat_token, OtrlFragmentPolicy fragPolicy);
-
-OtrlChatMessage * chat_message_parse(const char *message);
-
-int chat_message_payload_parse(OtrlChatMessage *msg, const unsigned char *message, size_t length);
-
-char * chat_message_serialize(OtrlChatMessage *msg);
-
-MessagePayloadPtr chat_message_payload_data_parse(const unsigned char *message, size_t length);
-
-void chat_message_payload_data_free(MessagePayloadPtr payload);
-
-unsigned char * chat_message_payload_data_serialize(MessagePayloadPtr payload, size_t *payload_size);
-
-OtrlMessageType chat_message_message_type_parse(unsigned char c);
-
-unsigned char chat_message_message_type_serialize(OtrlMessageType msgType);
-void chat_message_free(OtrlChatMessage * msg);
-
 int chat_message_is_otr(const char * message);
 
-int chat_message_is_fragment(const char * message);
+void chat_message_free(OtrlChatMessage * msg);
 
-OtrlChatMessage * chat_message_create(OtrlChatContext *ctx, OtrlChatMessageType msgType);
+int chat_message_type_should_be_signed(OtrlMessageType type);
 
-MessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char *message, size_t length);
+unsigned char * chat_message_serialize(OtrlChatMessage *msg, size_t *length);
 
-unsigned char * chat_message_payload_gka_upflow_serialize(MessagePayloadPtr payload, size_t *payload_size);
+int chat_message_parse_type(const char *message, const size_t messagelen, OtrlChatMessageType *type);
 
-void chat_message_payload_gka_upflow_free(MessagePayloadPtr payload);
+OtrlChatMessage * chat_message_parse(const unsigned char *message, const size_t messagelen, const char *accountname);
 
-MessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned char *message, size_t length);
+OtrlChatMessage * chat_message_offer_create(OtrlChatContext *ctx, unsigned char *sid_contribution, unsigned int position);
 
-unsigned char * chat_message_payload_gka_downflow_serialize(MessagePayloadPtr payload, size_t *payload_size);
+OtrlChatMessage * chat_message_dake_handshake_create(OtrlChatContext *ctx, DAKE_handshake_message_data *data);
 
-void chat_message_payload_gka_downflow_free(MessagePayloadPtr payload);
+OtrlChatMessage * chat_message_dake_confirm_create(OtrlChatContext *ctx, unsigned int recipient, DAKE_confirm_message_data *data);
 
-OtrlChatMessage * chat_message_gka_upflow_create(OtrlChatContext *ctx, const unsigned char *partlistHash, OtrlList *interKeys, unsigned int recipient);
+OtrlChatMessage * chat_message_dake_key_create(OtrlChatContext *ctx, unsigned int recipient, DAKE_key_message_data *data);
 
-OtrlChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, const unsigned char *partlistHash, OtrlList *interKeys);
+OtrlChatMessage * chat_message_gka_upflow_create(OtrlChatContext *ctx, OtrlList *interKeys, unsigned int recipient);
+
+OtrlChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, OtrlList *interKeys);
 
 OtrlChatMessage * chat_message_data_create(OtrlChatContext *ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
 
