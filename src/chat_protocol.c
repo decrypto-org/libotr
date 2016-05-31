@@ -34,6 +34,108 @@
 #include "chat_fingerprint.h"
 #include "b64.h"
 
+
+
+int chat_protocol_add_sign(OtrlChatContext *ctx, unsigned char **msg, size_t *msglen)
+{
+	Signature *aSign;
+	unsigned char *sig = NULL, *tmpbuf;
+	size_t siglen;
+	int err;
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: start\n");
+
+	aSign = chat_sign_sign(ctx->signing_key, *msg, *msglen);
+	if(!aSign) { goto error; }
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: before chat_sign_signature_serialize\n");
+
+	err = chat_sign_signature_serialize(aSign, &sig, &siglen);
+	if(err) { goto error_with_aSign; }
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: sig: %p\n", sig);
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: before malloc\n");
+	tmpbuf = malloc((*msglen+siglen) * sizeof *tmpbuf);
+	if(!tmpbuf) { goto error_with_sig; }
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: before memcpy\n");
+	memcpy(tmpbuf, *msg, *msglen);
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: before memcpy\n");
+	memcpy(&tmpbuf[*msglen], sig, siglen);
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: before free\n");
+	free(*msg);
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: before free\n");
+	free(sig);
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: before chat_sign_destroy_signature\n");
+	chat_sign_destroy_signature(aSign);
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: before *msg = tmpbuf;\n");
+	*msg = tmpbuf;
+	*msglen = *msglen+siglen;
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_add_sign: end\n");
+
+	return 0;
+
+error_with_sig:
+	free(sig);
+error_with_aSign:
+	chat_sign_destroy_signature(aSign);
+error:
+	return 1;
+}
+
+int chat_protocol_send_message(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg)
+{
+	char *message, *token;
+	unsigned char *buf;
+	size_t buflen;
+	int chat_flag = 1;
+	int err;
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: start\n");
+
+	buf = chat_message_serialize(msg, &buflen);
+	if(!buf) { goto error; }
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: before chat_message_type_should_be_signed\n");
+	if(chat_message_type_should_be_signed(msg->msgType) && ctx->sign_state == OTRL_CHAT_SINGSTATE_SINGED) {
+		err = chat_protocol_add_sign(ctx, &buf, &buflen);
+		if(err) { goto error_with_buf; }
+	}
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: before otrl_base64_otr_encode\n");
+	message = otrl_base64_otr_encode(buf, buflen);
+	if(!message) { goto error_with_buf; }
+
+	// TODO Dimtiris: this is a work-around to pass the token as a recipient string. We should change that ASAP
+	// 				  maybe define another callback with this prototype:
+	//				  inject_chat_message(const char * accountname, const char *protocol, otrl_chat_token_t token, const char *message)
+	token = malloc(sizeof(int));
+	if(!token) { goto error_with_message; }
+
+	memcpy(token, (char*)ctx->the_chat_token, sizeof(int));
+	ops->inject_message(&chat_flag, ctx->accountname, ctx->protocol, token, message);
+
+	free(token);
+	free(buf);
+	free(message);
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: end\n");
+
+	return 0;
+
+error_with_message:
+	free(message);
+error_with_buf:
+	free(buf);
+error:
+	return 1;
+
+}
+
 int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 	void *opdata, const char *accountname, const char *protocol,
 	const char *sender, otrl_chat_token_t chat_token, const char *message,
@@ -59,7 +161,52 @@ int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 		fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_receiving: in if chat_message_is_otr(message)\n");
 		err = otrl_base64_otr_decode(message, &buf, &buflen);
 		if(err) { goto error; }
+
+		// signature verification
+		OtrlChatMessageType type;
+		fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_receiving: before chat_message_parse_type\n");
+		err = chat_message_parse_type(buf, buflen, &type);
+		if(err) {
+			free(buf);
+			goto error;
+		}
+
+		if(chat_message_type_should_be_signed(type) && ctx->sign_state == OTRL_CHAT_SINGSTATE_SINGED ){
+			fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_receiving: in if(chat_message_type_should_be_signed(type)...\n");
+			Signature *sign;
+			OtrlChatParticipant *theSender;
+			unsigned int their_pos;
+			fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_receiving: before chat_sign_signature_parse\n");
+			err = chat_sign_signature_parse(&buf[buflen-CHAT_SIGN_SIGNATURE_LENGTH], &sign);
+			if(err) {
+				free(buf);
+				goto error;
+			}
+
+			fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_receiving: before chat_participant_find\n");
+			theSender = chat_participant_find(ctx, sender, &their_pos);
+			if(!theSender) {
+				free(buf);
+				chat_sign_destroy_signature(sign);
+				goto error;
+			}
+
+			fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_receiving: before chat_sign_verify\n");
+			err = chat_sign_verify(theSender->sign_key, buf, buflen - CHAT_SIGN_SIGNATURE_LENGTH, sign);
+			fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_receiving: verify returned: %d\n", err);
+			if(err) {
+				free(buf);
+				chat_sign_destroy_signature(sign);
+				goto error;
+			}
+
+			chat_sign_destroy_signature(sign);
+			buflen -= CHAT_SIGN_SIGNATURE_LENGTH;
+		}
+
+		fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_receiving: before chat_message_parse\n");
 		msg = chat_message_parse(buf, buflen, sender);
+		fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_receiving: after chat_message_parse\n");
 		free(buf);
 		if(!msg) { goto error; }
 	} else {
@@ -97,7 +244,7 @@ int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 		if(err) { goto error_with_msg; }
 
 		if(msgToSend) {
-			err = chat_message_send(ops, ctx, msgToSend);
+			err = chat_protocol_send_message(ops, ctx, msgToSend);
 			if(err) { goto error_with_msgToSend; }
 			chat_message_free(msgToSend);
 		}
@@ -118,7 +265,7 @@ int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 
 			err = chat_dske_init(ctx, &msgToSend);
 			if(err) { goto error_with_msg; }
-			err = chat_message_send(ops, ctx, msgToSend);
+			err = chat_protocol_send_message(ops, ctx, msgToSend);
 			if(err) { goto error_with_msgToSend; }
 			chat_message_free(msgToSend);
 		}
@@ -131,7 +278,7 @@ int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 		if(err) { goto error_with_msg; }
 
 		if(msgToSend) {
-			err = chat_message_send(ops, ctx, msgToSend);
+			err = chat_protocol_send_message(ops, ctx, msgToSend);
 			if(err) { goto error_with_msgToSend; }
 		}
 
@@ -142,7 +289,7 @@ int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 			if(our_pos == 0 ) {
 				err = chat_auth_init(ctx, &msgToSend);
 				if(err) { goto error_with_msg; }
-				err = chat_message_send(ops, ctx, msgToSend);
+				err = chat_protocol_send_message(ops, ctx, msgToSend);
 				if(err) { goto error_with_msgToSend; }
 				chat_message_free(msgToSend);
 			} else {
@@ -159,7 +306,7 @@ int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 							if(err) { goto error_with_msgToSend; }
 
 							if(msgToSend) {
-								err = chat_message_send(ops, ctx, msgToSend);
+								err = chat_protocol_send_message(ops, ctx, msgToSend);
 								if(err) { goto error_with_msgToSend; }
 								chat_message_free(msgToSend);
 							}
@@ -181,7 +328,7 @@ int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 		if(err) { goto error_with_msg; }
 
 		if(msgToSend) {
-			err = chat_message_send(ops, ctx, msgToSend);
+			err = chat_protocol_send_message(ops, ctx, msgToSend);
 			if(err) { goto error_with_msgToSend; }
 		}
 
@@ -237,6 +384,7 @@ int otrl_chat_protocol_sending(OtrlUserState us,
 	unsigned char *ciphertext, *buf;
 	OtrlChatMessage *msg;
 	size_t datalen, buflen;
+	int err;
 
 	fprintf(stderr, "libotr-mpOTR: otrl_chat_message_sending: start\n");
 
@@ -264,13 +412,15 @@ int otrl_chat_protocol_sending(OtrlUserState us,
 			buf = chat_message_serialize(msg, &buflen);
 			if(!buf) { goto error_with_msg; }
 
-
 			if(chat_message_type_should_be_signed(msg->msgType) && ctx->sign_state == OTRL_CHAT_SINGSTATE_SINGED) {
-				// TODO attach the sign to the serialized message and save it to *messagep
-				//Signature *signature = chat_sign_sign(ctx->signing_key, buf, buflen);
+				err = chat_protocol_add_sign(ctx, &buf, &buflen);
+				if(err) { goto error_with_buf; }
 			}
+
 			*messagep = otrl_base64_otr_encode(buf, buflen);
 			if(!*messagep) { goto error_with_buf; }
+
+			free(buf);
 
 			chat_message_free(msg);
 
@@ -318,7 +468,7 @@ int otrl_chat_protocol_send_query(OtrlUserState us,
 	err = chat_offer_init(ops, ctx, &msg);
 	if(err) { goto error; }
 
-	err = chat_message_send(ops, ctx, msg);
+	err = chat_protocol_send_message(ops, ctx, msg);
 	if(err) { goto error_with_msg; }
 
 	chat_message_free(msg);
@@ -330,6 +480,3 @@ error_with_msg:
 error:
 	return 1;
 }
-
-
-
