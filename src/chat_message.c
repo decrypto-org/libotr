@@ -805,7 +805,7 @@ error:
 	return 1;
 }
 
-int chat_message_parse_type(const char *message, const size_t messagelen, OtrlChatMessageType *type)
+int chat_message_parse_type(const unsigned char *message, const size_t messagelen, OtrlChatMessageType *type)
 {
 	if(messagelen < 3) { goto error; }
 	//TODO maybe define a value for the position of message type
@@ -1089,6 +1089,8 @@ error:
 	return NULL;
 }
 
+
+/*
 int chat_message_send(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg)
 {
 	char *message, *token;
@@ -1102,10 +1104,10 @@ int chat_message_send(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlCh
 	if(!buf) { goto error; }
 
 	fprintf(stderr, "libotr-mpOTR: chat_message_send: before chat_message_type_should_be_signed\n");
-	/*if(chat_message_type_should_be_signed(msg->msgType) && ctx->sign_state == OTRL_CHAT_SINGSTATE_SINGED) {
+	//if(chat_message_type_should_be_signed(msg->msgType) && ctx->sign_state == OTRL_CHAT_SINGSTATE_SINGED) {
 		// TODO attach the sign to the serialized message and save it to *messagep
 		//Signature *signature = chat_sign_sign(ctx->signing_key, buf, buflen);
-	}*/
+	//}
 	fprintf(stderr, "libotr-mpOTR: chat_message_send: before otrl_base64_otr_encode\n");
 	message = otrl_base64_otr_encode(buf, buflen);
 	if(!message) { goto error_with_buf; }
@@ -1134,4 +1136,4 @@ error_with_buf:
 error:
 	return 1;
 }
-
+*/

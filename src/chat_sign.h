@@ -23,15 +23,17 @@
 #include <gcrypt.h>
 #include <stdlib.h>
 
+#define CHAT_SIGN_SIGNATURE_LENGTH 72
+
 typedef struct {
 	gcry_sexp_t priv_key;
 	gcry_sexp_t pub_key;
 } SignKey;
 
 typedef struct {
-	char *r;
+	unsigned char *r;
 	size_t rlen;
-	char *s;
+	unsigned char *s;
 	size_t slen;
 } Signature;
 
@@ -39,9 +41,9 @@ void chat_sign_print_pubkey(SignKey *key);
 
 SignKey * chat_sign_genkey();
 
-Signature * chat_sign_sign(SignKey *key, const char *data, size_t datalen);
+Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datalen);
 
-int chat_sign_verify(SignKey *key, const char *data, size_t datalen, Signature *signature);
+int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Signature *signature);
 
 const char* chat_sign_get_pubkey(SignKey *key);
 
@@ -55,7 +57,7 @@ void chat_sign_destroy_signature(Signature *sign);
 
 unsigned int chat_sign_signature_get_length(Signature *sig);
 
-int chat_sign_signature_serialize(Signature *sig, unsigned char **buf);
+int chat_sign_signature_serialize(Signature *sig, unsigned char **buf, size_t *len);
 
 int chat_sign_signature_parse(unsigned char *buf, Signature **sig);
 #endif /* CHAT_SIGN_H */

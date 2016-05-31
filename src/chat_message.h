@@ -61,7 +61,7 @@ int chat_message_type_should_be_signed(OtrlMessageType type);
 
 unsigned char * chat_message_serialize(OtrlChatMessage *msg, size_t *length);
 
-int chat_message_parse_type(const char *message, const size_t messagelen, OtrlChatMessageType *type);
+int chat_message_parse_type(const unsigned char *message, const size_t messagelen, OtrlChatMessageType *type);
 
 OtrlChatMessage * chat_message_parse(const unsigned char *message, const size_t messagelen, const char *accountname);
 
@@ -79,6 +79,6 @@ OtrlChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, OtrlLis
 
 OtrlChatMessage * chat_message_data_create(OtrlChatContext *ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
 
-int chat_message_send(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg);
+/*int chat_message_send(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg);*/
 
 #endif /* CHAT_MESSAGE_H_ */
