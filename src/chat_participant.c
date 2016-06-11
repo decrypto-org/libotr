@@ -21,6 +21,7 @@
 #include <stdio.h>
 
 #include "chat_types.h"
+#include "chat_message.h"
 #include "chat_dake.h"
 #include "chat_sign.h"
 #include "list.h"
@@ -38,12 +39,20 @@ void chat_participant_free(OtrlChatParticipant *a)
 {
     OtrlChatParticipant *a1 = a;
 
+    fprintf(stderr, "libotr-mpOTR: chat_participant_free: start\n");
+
     free(a1->username);
 
-    free(a1->pending_message);
+    fprintf(stderr, "libotr-mpOTR: chat_participant_free: before chat_message_free\n");
+    chat_message_free(a1->pending_message);
 
     //gcry_mpi_release(a1->signing_pub_key);
+    fprintf(stderr, "libotr-mpOTR: chat_participant_free: before chat_sign_destroy_key\n");
     chat_sign_destroy_key(a1->sign_key);
+
+    chat_dake_destroy(a->dake);
+
+    fprintf(stderr, "libotr-mpOTR: chat_participant_free: end\n");
 
     free(a1);
 }
@@ -74,6 +83,11 @@ OtrlChatParticipant * chat_participant_create(const char *username, SignKey *pub
 
     participant->pending_message = NULL;
 
+    participant->dake = NULL;
+
+    participant->fingerprint = NULL;
+
+    participant->shutdown = NULL;
     return participant;
 }
 
@@ -81,18 +95,39 @@ OtrlChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *use
 {
     unsigned int i;
     OtrlListNode *cur;
+    OtrlChatParticipant *res = NULL;
+
+    fprintf(stderr,"chat_participant_find: start\n");
 
     if(!ctx) { goto error; }
     if(!ctx->participants_list) { goto error; }
 
+	//TODO Dimitris: this is a workaround, should be removed as soon as we find how to get the participant's account identifier instead of chat name
+	char *splitposition = strchr(username, '@');
+	char *name;
+	if(splitposition) {
+		name = malloc( (splitposition - username + 1) * sizeof *name);
+		if(!name) { goto error;	}
+		memcpy(name, username, splitposition - username);
+		name[splitposition - username] = '\0';
+	} else {
+		name = malloc( (strlen(username) + 1) * sizeof *name);
+		if(!name) { goto error; }
+		strcpy(name, username);
+	}
     // TODO for loop should be stopped if we have gone too far in the ordered list
-    for(cur=ctx->participants_list->head,i=0; cur!=NULL && strcmp(username,((OtrlChatParticipant *)cur->payload)->username)!=0; cur=cur->next,i++);
+    for(cur=ctx->participants_list->head,i=0; cur!=NULL && strcmp(name,((OtrlChatParticipant *)cur->payload)->username)!=0; cur=cur->next,i++);
+
+    free(name);
 
     if(cur) {
     	*position = i;
+    	res = cur->payload;
     }
 
-    return cur->payload;
+    fprintf(stderr,"chat_participant_find: end\n");
+
+    return res;
 
 error:
     return NULL;
@@ -152,11 +187,11 @@ int chat_participant_list_from_usernames(OtrlList *participants, char **username
 
 int chat_participant_get_position(const OtrlList *participants, const char *accountname, unsigned int *position)
 {
-	char *splitposition, *name;
+	char *splitposition, *name = NULL;
 	unsigned int i;
 	OtrlListNode *cur;
 
-	name = NULL;
+	fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: start\n");
 
 	//TODO Dimitris: this is a workaround, should be removed as soon as we find how to get the participant's account identifier instead of chat name
 	splitposition = strchr(accountname, '@');
@@ -171,14 +206,19 @@ int chat_participant_get_position(const OtrlList *participants, const char *acco
 		strcpy(name, accountname);
 	}
 
-	if(participants) {
-		// TODO for loop should be stopped if we have gone too far in the ordered list
-		for(cur = participants->head, i = 0; cur != NULL && strcmp(name, ((OtrlChatParticipant *)cur->payload)->username) != 0;  cur = cur->next, i++);
-		if(!cur) { goto error; }
-		*position = i;
-	}
+	fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: before if(!participants)\n");
+	if(!participants) { goto error; }
+
+	fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: before for\n");
+	// TODO for loop should be stopped if we have gone too far in the ordered list
+	for(cur = participants->head, i = 0; cur != NULL && strcmp(name, ((OtrlChatParticipant *)cur->payload)->username) != 0;  cur = cur->next, i++);
+	fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: after for\n");
+	if(!cur) { goto error; }
+	*position = i;
 
 	free(name);
+
+	fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: end\n");
 
 	return 0;
 

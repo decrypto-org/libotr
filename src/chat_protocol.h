@@ -20,6 +20,8 @@
 #ifndef CHAT_PROTOCOL_H_
 #define CHAT_PROTOCOL_H_
 
+void chat_protocol_reset(OtrlChatContext *ctx);
+
  int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
  	void *opdata, const char *accountname, const char *protocol,
  	const char *sender, otrl_chat_token_t chat_token, const char *message,
@@ -36,5 +38,7 @@
  		const char *accountname, const char *protocol,
  		otrl_chat_token_t chat_token, OtrlFragmentPolicy fragPolicy);
 
+ int otrl_chat_protocol_shutdown(OtrlUserState us, const OtrlMessageAppOps *ops,
+ 		const char *accountname, const char *protocol, otrl_chat_token_t chat_token);
 
 #endif /* CHAT_PROTOCOL_H_ */

@@ -224,6 +224,7 @@ void chat_fingerprint_destroy(ChatFingerprint *fingerprint){
     free(fingerprint->username);
     free(fingerprint->accountname);
     free(fingerprint->protocol);
+    free(fingerprint);
 }
 
 void chat_fingerprint_destroyOp(PayloadPtr a) {

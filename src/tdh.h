@@ -67,6 +67,10 @@ typedef struct {
 */
 void tdh_handshake_init(TripleDH_handshake *handshake);
 
+
+void tdh_handshake_destroy(TripleDH_handshake *handshake);
+
+
 /**
   Loads a long term keypair in the handshake to be used for computing
   the shared secret

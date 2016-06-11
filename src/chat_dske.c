@@ -33,9 +33,20 @@ enum {
 	DSKE_KEY_UNVERIFIED
 };
 
+void chat_dske_destroy_info(OtrlAuthDSKEInfo **dske_info)
+{
+	if(!*dske_info)
+		return;
+
+    chat_dake_destroy_info(&(*dske_info)->dake_info);
+    free(*dske_info);
+    *dske_info = NULL;
+}
 
 int chat_dske_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
 {
+    unsigned int my_pos;
+    OtrlChatParticipant *me;
     OtrlListNode *cur;
     OtrlChatParticipant *participant;
     DAKE_handshake_message_data *dataToSend;
@@ -43,18 +54,48 @@ int chat_dske_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
 
     fprintf(stderr,"chat_dske_init: start\n");
 
+    ctx->dske_info = malloc(sizeof(*ctx->dske_info));
+
+    chat_idkey_print_key(ctx->identity_key);
     /* Generate a singing key */
+    //TODO check if signing key is actually generated
+
+    me = chat_participant_find(ctx, ctx->accountname, &my_pos);
+    if(!me) {
+        return DSKE_ERROR;
+    }
+
+    //chat_idkey_print_key(ctx->identity_key);
+    fprintf(stderr,"chat_dske_init: before genkey\n");
+    //TODO make sure to destroy the key in the event of an error
     ctx->signing_key = chat_sign_genkey();
 
-    fprintf(stderr,"chat_dske_init: after genkey\n");
+    //chat_idkey_print_key(ctx->identity_key);
+    fprintf(stderr,"chat_dske_init: after my keygen\n");
+    //TODO encapsulate this in a chat_sign function
+    me->sign_key = malloc(sizeof(SignKey));
+    if(!me->sign_key) {
+        chat_sign_destroy_key(ctx->signing_key);
+            return DSKE_ERROR;
+    }
+
+    //chat_idkey_print_key(ctx->identity_key);
+    //fprintf(stderr,"chat_dske_init: after my key alloc\n");
+    me->sign_key->pub_key = gcry_sexp_find_token(ctx->signing_key->pub_key, "public-key", 0);
+    me->sign_key->priv_key = NULL;
+
+    //gcry_sexp_dump(ctx->signing_key->pub_key);
+    //gcry_sexp_dump(me->sign_key->pub_key);
+
+    //fprintf(stderr,"chat_dske_init: after genkey\n");
     /* Get what values we should broadcast to every other user */
-    chat_idkey_print_key(ctx->identity_key);
-    error = chat_dake_init_keys(&ctx->dske_info.dake_info, ctx->identity_key, ctx->accountname,
+    //chat_idkey_print_key(ctx->identity_key);
+    error = chat_dake_init_keys(&ctx->dske_info->dake_info, ctx->identity_key, ctx->accountname,
                         ctx->protocol, &dataToSend);
     if(error) {
         return DSKE_ERROR;
     }
-    fprintf(stderr,"chat_dske_init: after init_keys\n");
+    //fprintf(stderr,"chat_dske_init: after init_keys\n");
 
     /* Initiate a dake for each participant */
     for(cur = ctx->participants_list->head; cur != NULL; cur = cur->next)
@@ -66,25 +107,31 @@ int chat_dske_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
             break;
         }
 
-        chat_dake_init(participant->dake,&ctx->dske_info.dake_info, participant->fingerprint);
+        chat_dake_init(participant->dake,&ctx->dske_info->dake_info, participant->fingerprint);
     }
     if(error) {
     	//TODO de-initialize every participant that was init'ed before the error
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"chat_dske_init: after handhsake_init\n");
+    //fprintf(stderr,"chat_dske_init: after handhsake_init\n");
     /* Create the message we should send */
     *msgToSend = chat_message_dake_handshake_create(ctx, dataToSend);
+
+    //fprintf(stderr,"chat_dske_init: destroying data\n");
+    //chat_dake_destroy_handshake_data(dataToSend);
+    //free(dataToSend);
+    //fprintf(stderr,"chat_dske_init: after destroying data\n");
     if(!msgToSend) {
+    	chat_dake_destroy_handshake_data(dataToSend);
         free(dataToSend);
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"chat_dske_init: after handshake_create\n");
+    //fprintf(stderr,"chat_dske_init: after handshake_create\n");
     /* Change the protocol state */
-    ctx->dske_info.remaining = otrl_list_length(ctx->participants_list) - 1;
-    ctx->dske_info.state = OTRL_CHAT_DSKESTATE_AWAITING_KEYS;
+    ctx->dske_info->remaining = otrl_list_length(ctx->participants_list) - 1;
+    ctx->dske_info->state = OTRL_CHAT_DSKESTATE_AWAITING_KEYS;
 
 
     fprintf(stderr,"chat_dske_init: end\n");
@@ -112,7 +159,7 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, OtrlChatMessage *ms
 
     /* If this message arrived before it should have, store it
      * and return */
-    if(ctx->dske_info.state == OTRL_CHAT_DSKESTATE_NONE){
+    if(ctx->dske_info->state == OTRL_CHAT_DSKESTATE_NONE){
         sender->pending_message = msg;
         *free_msg = 0;
         return DSKE_NO_ERROR;
@@ -124,7 +171,7 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, OtrlChatMessage *ms
     }
 
     /* Load the keys they sent us and determine what data we should send them */
-    error = chat_dake_load_their_part(sender->dake, &handshake_msg->handshake_data, &dataToSend);
+    error = chat_dake_load_their_part(sender->dake, handshake_msg->handshake_data, &dataToSend);
     if(error == DAKE_ERROR) {
         return DSKE_ERROR;
     }
@@ -136,8 +183,13 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, OtrlChatMessage *ms
 
     /* Create the message we should send */
     *msgToSend = chat_message_dake_confirm_create(ctx, pos, dataToSend);
+    //fprintf(stderr,"chat_dske_handle_handshake_message: destroying data\n");
+    //chat_dake_destroy_confirm_data(dataToSend);
+    //free(dataToSend);
+    //fprintf(stderr,"chat_dske_handle_handshake_message: after destroying data\n");
     if(!*msgToSend) {
-        free(dataToSend);
+    	chat_dake_destroy_confirm_data(dataToSend);
+    	free(dataToSend);
         return DSKE_ERROR;
     }
 
@@ -170,7 +222,7 @@ int chat_dske_handle_confirm_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after find recipient: %u, their_pos: %u\n", confirm_msg->recipient, their_pos);
+    //fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after find recipient: %u, their_pos: %u\n", confirm_msg->recipient, their_pos);
 
     if(chat_participant_get_position(ctx->participants_list, ctx->accountname, &our_pos)) {
     	return DSKE_ERROR;
@@ -180,41 +232,42 @@ int chat_dske_handle_confirm_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
     	return DSKE_NO_ERROR;
     }
 
-    fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after position check\n");
+    //fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after position check\n");
 
     /* Check if we shouldnt have received this message */
-    if(ctx->dske_info.state != OTRL_CHAT_DSKESTATE_AWAITING_KEYS)
+    if(ctx->dske_info->state != OTRL_CHAT_DSKESTATE_AWAITING_KEYS)
         return DSKE_ERROR;
 
-    fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after state check\n");
+    //fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after state check\n");
 
     if(sender->dake->state != DAKE_STATE_WAITING_CONFIRM){
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after after dake state check\n");
+    //fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after after dake state check\n");
 
     /* Verify that we have computed the same shared secret */
-    error = chat_dake_verify_confirm(sender->dake, confirm_msg->data.mac);
+    error = chat_dake_verify_confirm(sender->dake, confirm_msg->data->mac);
     if(error) {
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after verify\n");
+    //fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after verify\n");
 
     /* Get the serialized pubkey */
     chat_sign_serialize_pubkey(ctx->signing_key, &key_bytes, &key_len);
 
-    fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after serialize\n");
+    fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after serialize keylen: %lu\n", key_len);
 
     /* Encrypt and authenticate our pubkey to send the to the other party */
     //
     error = chat_dake_send_key(sender->dake, key_bytes, key_len, &dataToSend);
+    free(key_bytes);
     if(error) {
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after send_key\n");
+    //fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after send_key\n");
 
     /* Create the message to send */
     *msgToSend = chat_message_dake_key_create(ctx, their_pos, dataToSend);
@@ -222,7 +275,7 @@ int chat_dske_handle_confirm_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after message create\n");
+    //fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after message create\n");
 
     fprintf(stderr,"chat_dske_handle_confirm_message: end\n");
     return DSKE_NO_ERROR;
@@ -246,57 +299,57 @@ int chat_dske_handle_key_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"chat_dske_handle_key_message: after find\n");
+    //fprintf(stderr,"chat_dske_handle_key_message: after find\n");
 
     if(chat_participant_get_position(ctx->participants_list,ctx->accountname, &our_pos)) {
     	return DSKE_ERROR;
     }
 
-    fprintf(stderr,"chat_dske_handle_key_message: after get_position\n");
+    //fprintf(stderr,"chat_dske_handle_key_message: after get_position\n");
 
     if(key_msg->recipient !=  our_pos) {
     	return DSKE_NO_ERROR;
     }
 
-    fprintf(stderr,"chat_dske_handle_key_message: after our_pos check\n");
+    //fprintf(stderr,"chat_dske_handle_key_message: after our_pos check\n");
 
-    if(ctx->dske_info.state != OTRL_CHAT_DSKESTATE_AWAITING_KEYS) {
+    if(ctx->dske_info->state != OTRL_CHAT_DSKESTATE_AWAITING_KEYS) {
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"chat_dske_handle_key_message: after dske state check\n");
+    //fprintf(stderr,"chat_dske_handle_key_message: after dske state check\n");
 
     if(sender->dake->state != DAKE_STATE_WAITING_KEY) {
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"chat_dske_handle_key_message: after dake state check\n");
+    //fprintf(stderr,"chat_dske_handle_key_message: after dake state check\n");
 
     //error = chat_dake_auth_decrypt(sender->dake, key_msg->data.key, key_msg->data.keylen, plain_key,
     //                               key_msg->data.mac);
-    error = chat_dake_receive_key(sender->dake, &key_msg->data, &plain_key, &keylen);
+    error = chat_dake_receive_key(sender->dake, key_msg->data, &plain_key, &keylen);
     if(error) {
         return DSKE_ERROR;
     }
 
-    fprintf(stderr,"chat_dske_handle_key_message: after dake_key_receive\n");
+    //fprintf(stderr,"chat_dske_handle_key_message: after dake_key_receive\n");
 
     sender->sign_key = chat_sign_parse_pubkey(plain_key, keylen);
     free(plain_key);
     if(!sender->sign_key) {
     	return DSKE_ERROR;
     }
-    fprintf(stderr,"chat_dske_handle_key_message: after key parse\n");
+    //fprintf(stderr,"chat_dske_handle_key_message: after key parse\n");
     chat_sign_print_pubkey(sender->sign_key);
 
     sender->dake->state = DAKE_STATE_DONE;
-    ctx->dske_info.remaining -= 1;
-    if(ctx->dske_info.remaining == 0) {
+    ctx->dske_info->remaining -= 1;
+    if(ctx->dske_info->remaining == 0) {
     	fprintf(stderr,"chat_dske_handle_key_message: dske finished\n");
-    	ctx->dske_info.state = OTRL_CHAT_DSKESTATE_FINISHED;
+    	ctx->dske_info->state = OTRL_CHAT_DSKESTATE_FINISHED;
     }
 
-    fprintf(stderr,"chat_dske_handle_key_message: start\n");
+    fprintf(stderr,"chat_dske_handle_key_message: end\n");
     return DSKE_NO_ERROR;
 
 }

@@ -72,6 +72,14 @@ typedef struct {
 //	char mac[TDH_MAC_LENGTH];
 //} DAKE_key_message_data;
 
+void chat_dake_destroy(DAKE *dake);
+
+void chat_dake_destroy_handshake_data(DAKE_handshake_message_data *data);
+
+void chat_dake_destroy_confirm_data(DAKE_confirm_message_data *data);
+
+void chat_dake_destroy_info(DAKEInfo *dake_info);
+
 int chat_dake_init_keys(DAKEInfo *dake_info, ChatIdKey *key,
                         const char* accountname, const char *protocol,
                         DAKE_handshake_message_data **dataToSend);

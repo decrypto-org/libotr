@@ -70,6 +70,7 @@ int chat_serial_mpi_to_string(gcry_mpi_t w, unsigned char** output, size_t *size
     return 0;
 }
 
+//TODO what does size do?
 int chat_serial_string_to_mpi(const unsigned char* input, gcry_mpi_t *output, size_t size)
 {
 	gcry_error_t err;

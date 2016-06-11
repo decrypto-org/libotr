@@ -57,7 +57,7 @@ int chat_message_is_otr(const char * message);
 
 void chat_message_free(OtrlChatMessage * msg);
 
-int chat_message_type_should_be_signed(OtrlMessageType type);
+int chat_message_type_should_be_signed(OtrlChatMessageType type);
 
 unsigned char * chat_message_serialize(OtrlChatMessage *msg, size_t *length);
 
@@ -77,8 +77,12 @@ OtrlChatMessage * chat_message_gka_upflow_create(OtrlChatContext *ctx, OtrlList 
 
 OtrlChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, OtrlList *interKeys);
 
+OtrlChatMessage * chat_message_attest_create(OtrlChatContext *ctx, unsigned char *sid, unsigned char *assoctable_hash);
+
 OtrlChatMessage * chat_message_data_create(OtrlChatContext *ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
 
-/*int chat_message_send(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg);*/
+OtrlChatMessage * chat_message_shutdown_end_create(OtrlChatContext *ctx);
+
+OtrlChatMessage * chat_message_shutdown_keyrelease_create(OtrlChatContext *ctx, unsigned char *key, size_t keylen);
 
 #endif /* CHAT_MESSAGE_H_ */

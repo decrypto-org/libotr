@@ -27,6 +27,15 @@
 #include "tdh.h"
 //#include "debug.h"
 
+void tdh_handshake_destroy(TripleDH_handshake *handshake)
+{
+	gcry_mpi_release(handshake->their_pub_eph);
+	gcry_mpi_release(handshake->their_pub_long);
+
+	otrl_dh_keypair_free(&handshake->ephemeral);
+	otrl_dh_keypair_free(&handshake->longterm);
+}
+
 /*
  * Initialises a triple dh handshake
  */
