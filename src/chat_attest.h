@@ -22,10 +22,10 @@
 
 void chat_attest_info_destroy(OtrlChatContext *ctx);
 
-int chat_attest_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend);
+int chat_attest_init(OtrlChatContext *ctx, ChatMessage **msgToSend);
 
-int chat_attest_handle_message(OtrlChatContext *ctx, const OtrlChatMessage *msg, OtrlChatMessage **msgToSend);
+int chat_attest_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, ChatMessage **msgToSend);
 
-int chat_attest_is_my_message(OtrlChatMessage *msg);
+int chat_attest_is_my_message(ChatMessage *msg);
 
 #endif /* CHAT_ATTEST_H_ */

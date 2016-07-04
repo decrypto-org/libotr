@@ -156,29 +156,19 @@ gcry_error_t tdh_handshake_mac(TripleDH_handshake *hs, unsigned char *out,
                                const unsigned char *in, size_t inlen,
                                const unsigned char *assoc_data, size_t assoc_datalen)
 {
-	fprintf(stderr, "libotr-mpOTR: tdh_handshake_mac: start\n");
     //if (!in) {
     //    return gcry_error(GPG_ERR_NOT_IMPLEMENTED);
     //}
-
-	fprintf(stderr, "libotr-mpOTR: tdh_handshake_mac: after in check\n");
 
 
     gcry_md_reset(hs->state.sendmac);
     if(inlen > 0)
         gcry_md_write(hs->state.sendmac, in, inlen);
 
-	fprintf(stderr, "libotr-mpOTR: tdh_handshake_mac: after first write\n");
-
     if(assoc_datalen > 0)
         gcry_md_write(hs->state.sendmac, assoc_data, assoc_datalen);
 
-	fprintf(stderr, "libotr-mpOTR: tdh_handshake_mac: after second write\n");
-
-
     memmove(out, gcry_md_read(hs->state.sendmac, GCRY_MD_SHA256), 32);
-
-	fprintf(stderr, "libotr-mpOTR: tdh_handshake_mac: after memmove\n");
 
     return gcry_error(GPG_ERR_NO_ERROR);
 }

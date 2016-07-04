@@ -19,11 +19,11 @@
 
 #include "chat_dake.h"
 
-int chat_dske_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend);
+int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend);
 
 void chat_dske_destroy_info(OtrlAuthDSKEInfo **dske_info);
 
-int chat_dske_is_my_message(const OtrlChatMessage *msg);
+int chat_dske_is_my_message(const ChatMessage *msg);
 
-int chat_dske_handle_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
-                             OtrlChatMessage **msgToSend, int *free_msg);
+int chat_dske_handle_message(OtrlChatContext *ctx, ChatMessage *msg,
+                             ChatMessage **msgToSend);

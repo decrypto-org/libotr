@@ -17,20 +17,12 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "message.h"
-#include "chat_types.h"
+#ifndef CHAT_COMMUNICATION_H_
+#define CHAT_COMMUNICATION_H_
 
-#ifndef CHAT_OFFER_H_
-#define CHAT_OFFER_H_
+int chat_communication_broadcast(OtrlChatContext *ctx, const char *message, ChatMessage **msgToSend);
+int chat_communication_is_my_message(ChatMessage *msg);
+int chat_communication_handle_msg(OtrlChatContext *ctx, ChatMessage *msg, ChatMessage **msgToSend, char **plaintext);
 
-void chat_offer_info_destroy(ChatOfferInfo **info);
 
-int chat_offer_info_init(OtrlChatContext *ctx, size_t size);
-
-int chat_offer_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, ChatMessage **msgToSend);
-
-int chat_offer_start(OtrlChatContext *ctx, ChatMessage **msgToSend);
-
-int chat_offer_is_my_message(const ChatMessage *msg);
-
-#endif /* CHAT_OFFER_H_ */
+#endif /* CHAT_COMMUNICATION_H_ */

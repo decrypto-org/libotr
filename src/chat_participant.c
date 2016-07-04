@@ -26,52 +26,37 @@
 #include "chat_sign.h"
 #include "list.h"
 
-
-int chat_participant_compare(PayloadPtr a, PayloadPtr b)
+int chat_participant_compare(ChatParticipant *a, ChatParticipant *b)
 {
-    OtrlChatParticipant *a1 = a;
-    OtrlChatParticipant *b1 = b;
-
-    return strcmp(a1->username, b1->username);
+	return strcmp(a->username, b->username);
 }
 
-void chat_participant_free(OtrlChatParticipant *a)
+void chat_participant_destroy(ChatParticipant *a)
 {
-    OtrlChatParticipant *a1 = a;
+    ChatParticipant *a1 = a;
 
     fprintf(stderr, "libotr-mpOTR: chat_participant_free: start\n");
 
     free(a1->username);
 
-    fprintf(stderr, "libotr-mpOTR: chat_participant_free: before chat_message_free\n");
-    chat_message_free(a1->pending_message);
-
     //gcry_mpi_release(a1->signing_pub_key);
-    fprintf(stderr, "libotr-mpOTR: chat_participant_free: before chat_sign_destroy_key\n");
+    //fprintf(stderr, "libotr-mpOTR: chat_participant_free: before chat_sign_destroy_key\n");
     chat_sign_destroy_key(a1->sign_key);
 
     chat_dake_destroy(a->dake);
+
+    otrl_list_destroy(a->trusted_fingerprints);
 
     fprintf(stderr, "libotr-mpOTR: chat_participant_free: end\n");
 
     free(a1);
 }
 
-void chat_participant_free_payload(PayloadPtr a)
+ChatParticipant * chat_participant_create(const char *username, SignKey *pub_key)
 {
-    chat_participant_free(a);
-}
+    ChatParticipant *participant;
 
-void chat_participant_free_foreach(OtrlListNode *a)
-{
-    chat_participant_free(a->payload);
-}
-
-OtrlChatParticipant * chat_participant_create(const char *username, SignKey *pub_key)
-{
-    OtrlChatParticipant *participant;
-
-    participant = malloc(sizeof(OtrlChatParticipant));
+    participant = malloc(sizeof(ChatParticipant));
     if(!participant)
 	return NULL;
 
@@ -81,21 +66,21 @@ OtrlChatParticipant * chat_participant_create(const char *username, SignKey *pub
     else
 	    participant->sign_key = NULL;
 
-    participant->pending_message = NULL;
-
     participant->dake = NULL;
 
     participant->fingerprint = NULL;
+
+    participant->trusted_fingerprints = otrl_list_create(&chat_fingerprint_listOps, sizeof(ChatFingerprint));
 
     participant->shutdown = NULL;
     return participant;
 }
 
-OtrlChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username, unsigned int *position)
+ChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username, unsigned int *position)
 {
     unsigned int i;
     OtrlListNode *cur;
-    OtrlChatParticipant *res = NULL;
+    ChatParticipant *res = NULL;
 
     fprintf(stderr,"chat_participant_find: start\n");
 
@@ -116,7 +101,7 @@ OtrlChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *use
 		strcpy(name, username);
 	}
     // TODO for loop should be stopped if we have gone too far in the ordered list
-    for(cur=ctx->participants_list->head,i=0; cur!=NULL && strcmp(name,((OtrlChatParticipant *)cur->payload)->username)!=0; cur=cur->next,i++);
+    for(cur=ctx->participants_list->head,i=0; cur!=NULL && strcmp(name,((ChatParticipant *)cur->payload)->username)!=0; cur=cur->next,i++);
 
     free(name);
 
@@ -133,7 +118,7 @@ error:
     return NULL;
 }
 
-int chat_participant_add(OtrlList *list, const OtrlChatParticipant *participant)
+int chat_participant_add(OtrlList *list, const ChatParticipant *participant)
 {
     OtrlListNode *aNode;
 
@@ -145,15 +130,10 @@ int chat_participant_add(OtrlList *list, const OtrlChatParticipant *participant)
 	return 0;
 }
 
-void chat_participant_list_destroy(OtrlList *list)
-{
-	otrl_list_foreach(list,chat_participant_free_foreach);
-}
-
 int chat_participant_list_from_usernames(OtrlList *participants, char **usernames, unsigned int usernames_size)
 {
 		char error = 0;
-		OtrlChatParticipant *a_participant;
+		ChatParticipant *a_participant;
 	    //OtrlChatMessage msg;
 
 		fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: start\n");
@@ -161,23 +141,23 @@ int chat_participant_list_from_usernames(OtrlList *participants, char **username
 
 	    error = 0;
 
-	    fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: size: %d\n", usernames_size);
+	    //fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: size: %d\n", usernames_size);
 	    for(size_t i = 0; i < usernames_size; i++) {
-	    	fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: adding %s\n", usernames[i]);
+	    	//fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: adding %s\n", usernames[i]);
 	    	a_participant = chat_participant_create(usernames[i],NULL);
 	    	if(!a_participant){
-	    		fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: username was not allocated\n");
+	    		//fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: username was not allocated\n");
 	    		error = 1;
 	    		break;
 	    	}
 	    	if(chat_participant_add(participants,a_participant)) {
-	    		fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: participant not added\n");
+	    		//fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: participant not added\n");
 	    		error = 1;
 	    		break;
 	    	}
 	    }
 	    if(error) {
-	    	chat_participant_list_destroy(participants);
+	    	otrl_list_clear(participants);
 	    	return 1;
 	    }
 
@@ -191,7 +171,7 @@ int chat_participant_get_position(const OtrlList *participants, const char *acco
 	unsigned int i;
 	OtrlListNode *cur;
 
-	fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: start\n");
+	//fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: start\n");
 
 	//TODO Dimitris: this is a workaround, should be removed as soon as we find how to get the participant's account identifier instead of chat name
 	splitposition = strchr(accountname, '@');
@@ -206,19 +186,19 @@ int chat_participant_get_position(const OtrlList *participants, const char *acco
 		strcpy(name, accountname);
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: before if(!participants)\n");
+	//fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: before if(!participants)\n");
 	if(!participants) { goto error; }
 
-	fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: before for\n");
+	//fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: before for\n");
 	// TODO for loop should be stopped if we have gone too far in the ordered list
-	for(cur = participants->head, i = 0; cur != NULL && strcmp(name, ((OtrlChatParticipant *)cur->payload)->username) != 0;  cur = cur->next, i++);
-	fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: after for\n");
+	for(cur = participants->head, i = 0; cur != NULL && strcmp(name, ((ChatParticipant *)cur->payload)->username) != 0;  cur = cur->next, i++);
+	//fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: after for\n");
 	if(!cur) { goto error; }
 	*position = i;
 
 	free(name);
 
-	fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: end\n");
+	//fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: end\n");
 
 	return 0;
 
@@ -247,9 +227,8 @@ error:
 	return 1;
 }
 
-void chat_participant_toString(OtrlListNode *node)
+void chat_participant_print(ChatParticipant *participant)
 {
-    OtrlChatParticipant *participant = node->payload;
     //unsigned char *buf;
     //size_t s;
 
@@ -263,8 +242,28 @@ void chat_participant_toString(OtrlListNode *node)
     //free(buf);
 }
 
+int chat_participant_compareOp(PayloadPtr a, PayloadPtr b)
+{
+    ChatParticipant *a1 = a;
+    ChatParticipant *b1 = b;
+
+    return chat_participant_compare(a1, b1);
+}
+
+void chat_participant_printOp(OtrlListNode *node)
+{
+	ChatParticipant *participant = node->payload;
+	chat_participant_print(participant);
+}
+
+void chat_participant_destroyOp(PayloadPtr a)
+{
+	ChatParticipant *participant = a;
+    chat_participant_destroy(participant);
+}
+
 struct OtrlListOpsStruct chat_participant_listOps = {
-    chat_participant_compare,
-    chat_participant_toString,
-    chat_participant_free_payload
+	chat_participant_compareOp,
+	chat_participant_printOp,
+    chat_participant_destroyOp
 };

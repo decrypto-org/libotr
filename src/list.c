@@ -192,7 +192,9 @@ void otrl_list_clear(OtrlList *list)
 
 void otrl_list_destroy(OtrlList *list)
 {
-	otrl_list_clear(list);
+	if(list) {
+		otrl_list_clear(list);
+	}
 	free(list);
 	//TODO Dimitris: what about ops?
 }
@@ -201,18 +203,14 @@ OtrlListNode * otrl_list_find(OtrlList *list, PayloadPtr target)
 {
 	OtrlListNode *cur = NULL;
 	int res;
-	fprintf(stderr, "libotr-mpOTR: otrl_list_find: start\n");
 
 	cur = list->head;
 
 	// check if the list is empty
-	fprintf(stderr, "libotr-mpOTR: otrl_list_find: before if(cur == NULL)\n");
 	if(cur == NULL)
 		return NULL;
 
-	fprintf(stderr, "libotr-mpOTR: otrl_list_find: before while\n");
 	while(cur != NULL) {
-		fprintf(stderr, "libotr-mpOTR: otrl_list_find: before list->ops->compar\n");
 		res = list->ops->compar(target, cur->payload);
 		if(res == 0)
 			return cur;
@@ -221,7 +219,6 @@ OtrlListNode * otrl_list_find(OtrlList *list, PayloadPtr target)
 		cur = cur->next;
 	}
 
-	fprintf(stderr, "libotr-mpOTR: otrl_list_find: end\n");
 	return NULL;
 }
 

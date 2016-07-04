@@ -43,7 +43,7 @@ int chat_participant_compare(PayloadPtr a, PayloadPtr b);
 
   @return void
  */
-void chat_participant_free(OtrlChatParticipant a);
+void chat_participant_destroy(ChatParticipant a);
 
 /**
   Create a new participant
@@ -56,7 +56,7 @@ void chat_participant_free(OtrlChatParticipant a);
 
   @return A pointer to the newly created participant
  */
-OtrlChatParticipant* chat_participant_create(const char *username, gcry_mpi_t pub_key);
+ChatParticipant* chat_participant_create(const char *username, gcry_mpi_t pub_key);
 
 /**
   Find a participant in the ctx context's participants list
@@ -70,7 +70,7 @@ OtrlChatParticipant* chat_participant_create(const char *username, gcry_mpi_t pu
 
   @return If the user is found a pointer to it will be returned. Otherwise NULL
  */
-OtrlChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username, unsigned int *position);
+ChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username, unsigned int *position);
 
 /**
   Add a user to the ctx's participants list
@@ -82,7 +82,7 @@ OtrlChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *use
 
   @return 1 if the user was sucessfully added. 0 otherwise.
  */
-int chat_participant_add(OtrlChatContext ctx,const OtrlChatParticipant *participant);
+int chat_participant_add(OtrlChatContext ctx,const ChatParticipant *participant);
 
 /**
  Add a group of usernames in a list

@@ -25,6 +25,8 @@
 #include "chat_message.h"
 #include "chat_participant.h"
 #include "chat_sign.h"
+#include "chat_privkeydh.h"
+#include "chat_fingerprint.h"
 
 
 enum {
@@ -43,12 +45,12 @@ void chat_dske_destroy_info(OtrlAuthDSKEInfo **dske_info)
     *dske_info = NULL;
 }
 
-int chat_dske_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
+int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 {
     unsigned int my_pos;
-    OtrlChatParticipant *me;
+    ChatParticipant *me;
     OtrlListNode *cur;
-    OtrlChatParticipant *participant;
+    ChatParticipant *participant;
     DAKE_handshake_message_data *dataToSend;
     char error;
 
@@ -107,7 +109,7 @@ int chat_dske_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
             break;
         }
 
-        chat_dake_init(participant->dake,&ctx->dske_info->dake_info, participant->fingerprint);
+        chat_dake_init(participant->dake,&ctx->dske_info->dake_info);//, participant->fingerprint);
     }
     if(error) {
     	//TODO de-initialize every participant that was init'ed before the error
@@ -131,20 +133,23 @@ int chat_dske_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
     //fprintf(stderr,"chat_dske_init: after handshake_create\n");
     /* Change the protocol state */
     ctx->dske_info->remaining = otrl_list_length(ctx->participants_list) - 1;
-    ctx->dske_info->state = OTRL_CHAT_DSKESTATE_AWAITING_KEYS;
+    ctx->dske_info->state = CHAT_DSKESTATE_AWAITING_KEYS;
 
 
     fprintf(stderr,"chat_dske_init: end\n");
     return DSKE_NO_ERROR;
 }
 
-int chat_dske_handle_handshake_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
-                                       OtrlChatMessage **msgToSend, int *free_msg)
+int chat_dske_handle_handshake_message(OtrlChatContext *ctx, ChatMessage *msg,
+                                       ChatMessage **msgToSend, int *free_msg)
 {
-    OtrlChatMessagePayloadDAKEHandshake *handshake_msg = msg->payload;
-    OtrlChatParticipant *sender;
+    ChatMessagePayloadDAKEHandshake *handshake_msg = msg->payload;
+    ChatParticipant *sender;
     DAKE_confirm_message_data *dataToSend;
     unsigned int pos;
+    unsigned char *fingerprint;
+    ChatFingerprint *cur_finger;
+    OtrlListNode *cur = NULL;
     int error = DSKE_NO_ERROR;
 
     fprintf(stderr,"chat_dske_handle_handshake_message: start\n");
@@ -159,10 +164,9 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, OtrlChatMessage *ms
 
     /* If this message arrived before it should have, store it
      * and return */
-    if(ctx->dske_info->state == OTRL_CHAT_DSKESTATE_NONE){
-        sender->pending_message = msg;
-        *free_msg = 0;
-        return DSKE_NO_ERROR;
+    if(ctx->dske_info->state == CHAT_DSKESTATE_NONE){
+    	fprintf(stderr, "libotr-mpOTR: chat_dske_handle_handshake_message: dske state is none\n");
+        return DSKE_ERROR;
     }
 
     /* If we were not expecting a handshake from this user return error */
@@ -171,15 +175,50 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, OtrlChatMessage *ms
     }
 
     /* Load the keys they sent us and determine what data we should send them */
-    error = chat_dake_load_their_part(sender->dake, handshake_msg->handshake_data, &dataToSend);
+    error = chat_dake_load_their_part(sender->dake,
+    								  handshake_msg->handshake_data,
+									  &dataToSend,
+									  &fingerprint);
     if(error == DAKE_ERROR) {
         return DSKE_ERROR;
     }
-    else if(error == DAKE_UNVERIFIED) {
-    	fprintf(stderr,"chat_dske_handle_handshake_message: a longetrm public key was not verified\n");
-    	error = DSKE_ERROR;
-    }
+    //else if(error == DAKE_UNVERIFIED) {
+    //	fprintf(stderr,"chat_dske_handle_handshake_message: a longetrm public key was not verified\n");
+    //	error = DSKE_ERROR;
+    //}
 
+    /* Check if the fingerprint calculated during the dake exists in the list of
+     * this users trusted fingerprints */
+    fprintf(stderr,"chat_dske_handle_handshake_message: looking for:\n");
+    for(int i=0; i< CHAT_FINGERPRINT_SIZE; i++)
+    	fprintf(stderr,"%02X", fingerprint[i]);
+    fprintf(stderr,"\n");
+
+    for(cur = sender->trusted_fingerprints->head; cur != NULL; cur = cur->next){
+    	cur_finger = cur->payload;
+
+        fprintf(stderr,"chat_dske_handle_handshake_message: currently at:\n");
+        for(int i=0; i< CHAT_FINGERPRINT_SIZE; i++)
+        	fprintf(stderr,"%02X", cur_finger->fingerprint[i]);
+        fprintf(stderr,"\n");
+    	if(!memcmp(fingerprint, cur_finger->fingerprint, CHAT_FINGERPRINT_SIZE))
+    		break;
+    }
+    fprintf(stderr,"chat_dske_handle_handshake_message: after for\n");
+    if(!cur){
+    	/* If not found, generate a temporary fingerprint object so that we can inform
+    	 * the user that a public key needs to be verified. */
+    	sender->fingerprint = chat_fingerprint_new(ctx->accountname, ctx->protocol, sender->username, fingerprint);
+    	free(fingerprint);
+    	chat_dake_destroy_confirm_data(dataToSend);
+    	free(dataToSend);
+    	return DSKE_ERROR;
+    }
+    fprintf(stderr,"chat_dske_handle_handshake_message: after !cur\n");
+    sender->fingerprint = cur->payload;
+    fprintf(stderr,"chat_dske_handle_handshake_message: after fingerprint = cur->payload\n");
+    free(fingerprint);
+    fprintf(stderr,"chat_dske_handle_handshake_message: after free\n");
 
     /* Create the message we should send */
     *msgToSend = chat_message_dake_confirm_create(ctx, pos, dataToSend);
@@ -197,14 +236,14 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, OtrlChatMessage *ms
     return error;
 }
 
-int chat_dske_handle_confirm_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
-                                     OtrlChatMessage **msgToSend, int *free_msg)
+int chat_dske_handle_confirm_message(OtrlChatContext *ctx, ChatMessage *msg,
+                                     ChatMessage **msgToSend, int *free_msg)
 {
-    OtrlChatMessagePayloadDAKEConfirm *confirm_msg = msg->payload;
+    ChatMessagePayloadDAKEConfirm *confirm_msg = msg->payload;
     DAKE_key_message_data *dataToSend;
     unsigned char *key_bytes;
     size_t key_len;
-    OtrlChatParticipant *sender;
+    ChatParticipant *sender;
     unsigned int their_pos;
     unsigned int our_pos;
     int error;
@@ -235,7 +274,7 @@ int chat_dske_handle_confirm_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
     //fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after position check\n");
 
     /* Check if we shouldnt have received this message */
-    if(ctx->dske_info->state != OTRL_CHAT_DSKESTATE_AWAITING_KEYS)
+    if(ctx->dske_info->state != CHAT_DSKESTATE_AWAITING_KEYS)
         return DSKE_ERROR;
 
     //fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after state check\n");
@@ -281,15 +320,15 @@ int chat_dske_handle_confirm_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
     return DSKE_NO_ERROR;
 }
 
-int chat_dske_handle_key_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
-                                 OtrlChatMessage **msgToSend, int *free_msg)
+int chat_dske_handle_key_message(OtrlChatContext *ctx, ChatMessage *msg,
+                                 ChatMessage **msgToSend, int *free_msg)
 {
-    OtrlChatMessagePayloadDAKEKey *key_msg = msg->payload;
+    ChatMessagePayloadDAKEKey *key_msg = msg->payload;
     unsigned char *plain_key;
     size_t keylen;
     unsigned int their_pos;
     unsigned int our_pos;
-    OtrlChatParticipant *sender;
+    ChatParticipant *sender;
     int error;
 
     fprintf(stderr,"chat_dske_handle_key_message: start\n");
@@ -313,7 +352,7 @@ int chat_dske_handle_key_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
 
     //fprintf(stderr,"chat_dske_handle_key_message: after our_pos check\n");
 
-    if(ctx->dske_info->state != OTRL_CHAT_DSKESTATE_AWAITING_KEYS) {
+    if(ctx->dske_info->state != CHAT_DSKESTATE_AWAITING_KEYS) {
         return DSKE_ERROR;
     }
 
@@ -340,13 +379,13 @@ int chat_dske_handle_key_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
     	return DSKE_ERROR;
     }
     //fprintf(stderr,"chat_dske_handle_key_message: after key parse\n");
-    chat_sign_print_pubkey(sender->sign_key);
+    //chat_sign_print_pubkey(sender->sign_key);
 
     sender->dake->state = DAKE_STATE_DONE;
     ctx->dske_info->remaining -= 1;
     if(ctx->dske_info->remaining == 0) {
     	fprintf(stderr,"chat_dske_handle_key_message: dske finished\n");
-    	ctx->dske_info->state = OTRL_CHAT_DSKESTATE_FINISHED;
+    	ctx->dske_info->state = CHAT_DSKESTATE_FINISHED;
     }
 
     fprintf(stderr,"chat_dske_handle_key_message: end\n");
@@ -354,41 +393,42 @@ int chat_dske_handle_key_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
 
 }
 
-int chat_dske_is_my_message(const OtrlChatMessage *msg)
+int chat_dske_is_my_message(const ChatMessage *msg)
 {
-	OtrlChatMessageType msg_type = msg->msgType;
+	ChatMessageType msg_type = msg->msgType;
 
 	fprintf(stderr, "libotr-mpOTR: chat_auth_is_dske_message: start\n");
 
 	switch(msg_type) {
-	case OTRL_MSGTYPE_CHAT_DAKE_HANDSHAKE:
-	case OTRL_MSGTYPE_CHAT_DAKE_CONFIRM:
-	case OTRL_MSGTYPE_CHAT_DAKE_KEY:
-			fprintf(stderr, "libotr-mpOTR: chat_dske_is_auth_message: it is\n");
+	case CHAT_MSGTYPE_DAKE_HANDSHAKE:
+	case CHAT_MSGTYPE_DAKE_CONFIRM:
+	case CHAT_MSGTYPE_DAKE_KEY:
+			//fprintf(stderr, "libotr-mpOTR: chat_dske_is_auth_message: it is\n");
 			return 1;
 		default:
-			fprintf(stderr, "libotr-mpOTR: chat_dske_is_auth_message: it is not\n");
+			//fprintf(stderr, "libotr-mpOTR: chat_dske_is_auth_message: it is not\n");
 			return 0;
 	}
 	fprintf(stderr, "libotr-mpOTR: chat_auth_is_dske_message: end\n");
 }
 
-int chat_dske_handle_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
-                             OtrlChatMessage **msgToSend, int *free_msg) {
-	OtrlChatMessageType msgType = msg->msgType;
+int chat_dske_handle_message(OtrlChatContext *ctx, ChatMessage *msg,
+                             ChatMessage **msgToSend) {
+	ChatMessageType msgType = msg->msgType;
+	int free_msg;
 
 	fprintf(stderr, "libotr-mpOTR: chat_dske_handle_message: start\n");
 
 	switch(msgType) {
-		case OTRL_MSGTYPE_CHAT_DAKE_HANDSHAKE:
+		case CHAT_MSGTYPE_DAKE_HANDSHAKE:
 			fprintf(stderr, "libotr-mpOTR: chat_dske_handle_message: handshake\n");
-			return chat_dske_handle_handshake_message(ctx, msg, msgToSend, free_msg);
-		case OTRL_MSGTYPE_CHAT_DAKE_CONFIRM:
+			return chat_dske_handle_handshake_message(ctx, msg, msgToSend, &free_msg);
+		case CHAT_MSGTYPE_DAKE_CONFIRM:
 			fprintf(stderr, "libotr-mpOTR: chat_dske_handle_message: confirm\n");
-			return chat_dske_handle_confirm_message(ctx, msg, msgToSend, free_msg);
-		case OTRL_MSGTYPE_CHAT_DAKE_KEY:
+			return chat_dske_handle_confirm_message(ctx, msg, msgToSend, &free_msg);
+		case CHAT_MSGTYPE_DAKE_KEY:
 			fprintf(stderr, "libotr-mpOTR: chat_dske_handle_message: key\n");
-			return chat_dske_handle_key_message(ctx, msg, msgToSend, free_msg);
+			return chat_dske_handle_key_message(ctx, msg, msgToSend, &free_msg);
 		default:
 			return 1;
 	}

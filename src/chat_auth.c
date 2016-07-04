@@ -310,52 +310,6 @@ OtrlList * final_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 }
 
 /**
-  This function checks if the usernames provided by the application
-  are properly initialized.
-
-  The application must provided the usernames of the participants in the form
-  of a an array with pointers to c-style strings that are deep copies and not
-  aliases of any string used by the application. Each string must be the
-  username of one participant. If any of usernames were not allocated properly
-  this function will deallocate any correctly allocated by the application
-  memory area.
-
-  @param usernames an array containing pointers to each username
-  @param usernames_size the length of the usernames array
-  @return 0 if the usernames are properly allocated. A non zero value
-   otherwise
- */
-int usernames_check_or_free(char **usernames, unsigned int usernames_size){
-    unsigned char error = 0;
-
-    fprintf(stderr, "libotr-mpOTR: usernames_check_or_free: start\n");
-
-    if(!usernames)
-    	return 1;
-    fprintf(stderr, "libotr-mpOTR: usernames_check_or_free: after usernames array check\n");
-
-    /* Check if every username is allocated */
-    for(size_t i = 0; i < usernames_size; i++)
-    	if(!usernames[i]) {
-    		error = 1;
-    		break;
-    	}
-    fprintf(stderr, "libotr-mpOTR: usernames_check_or_free: after each username check\n");
-    /* If a username was not allocated then we must deallocate every username
-       and the usernames array itself */
-    if(error){
-    	fprintf(stderr, "libotr-mpOTR: usernames_check_or_free: in error handling\n");
-    	for(size_t i = 0; i < usernames_size; i++)
-    		free(usernames[i]);
-    	free(usernames);
-    	return 1;
-    }
-    fprintf(stderr, "libotr-mpOTR: usernames_check_or_free: after error handling\n");
-
-    return 0;
-}
-
-/**
   This function concatenates and hashes the usernames of each participant.
 
   This function will iterate over an OtrlList containing the participats
@@ -371,7 +325,7 @@ gcry_error_t get_participants_hash(OtrlList *participants, unsigned char* hash)
 	gcry_md_hd_t md;
 	gcry_error_t err;
 	OtrlListNode *cur;
-	OtrlChatParticipant *participant;
+	ChatParticipant *participant;
 	size_t len;
 	unsigned char *hash_result;
 
@@ -405,39 +359,6 @@ gcry_error_t get_participants_hash(OtrlList *participants, unsigned char* hash)
 	return gcry_error(GPG_ERR_NO_ERROR);
 }
 
-gcry_error_t get_participants_list(const OtrlMessageAppOps *ops, OtrlChatContext *ctx)
-{
-    char **usernames;
-    unsigned int usernames_size;
-
-    fprintf(stderr, "libotr-mpOTR: get_participants_list: start\n");
-
-    /* Get the usernames of the participants from the application */
-    usernames = ops->chat_get_participants(NULL, ctx->accountname, ctx->protocol, ctx->the_chat_token, &usernames_size);
-    fprintf(stderr, "libotr-mpOTR: get_participants_list: after callback\n");
-
-    /* Check if the usernames array is allocated, and every username in it is also allocate */
-    if(usernames_check_or_free(usernames,usernames_size))
-    	return gcry_error(GPG_ERR_ENODATA);
-    fprintf(stderr, "libotr-mpOTR: get_participants_list: after check_or_free\n");
-
-
-    /* Create the participants list from the usernames array */
-    if(chat_participant_list_from_usernames(ctx->participants_list, usernames, usernames_size))
-    	return gcry_error(GPG_ERR_INTERNAL);
-    fprintf(stderr, "libotr-mpOTR: get_participants_list: after list_from_usernames\n");
-
-
-    for(unsigned int i = 0; i < usernames_size; i++)
-    	free(usernames[i]);
-
-    /* Free the usernames array as it is not needed anymor */
-    free(usernames);
-    fprintf(stderr, "libotr-mpOTR: get_participants_list: end\n");
-
-    return gcry_error(GPG_ERR_NO_ERROR);
-
-}
 //TODO This function does two things. First it gets the participants
 //list and calculates its hash. Then it generates a diffie hellman keypair.
 //Break this function into two seperate ones.
@@ -454,26 +375,23 @@ gcry_error_t initialize_gka_info(OtrlAuthGKAInfo *gka_info) //OtrlChatContext *c
     if(!gka_info->keypair) {
     	return gcry_error(GPG_ERR_ENOMEM);
     }
-    fprintf(stderr, "libotr-mpOTR: initialize_gka_info: after keypair allocation\n");
 
     /* Initialize it */
     otrl_dh_keypair_init(gka_info->keypair);
-    fprintf(stderr, "libotr-mpOTR: initialize_gka_info: after keypair init\n");
 
     /* Generate a key */
     err = otrl_dh_gen_keypair(DH1536_GROUP_ID, gka_info->keypair);
-    fprintf(stderr, "libotr-mpOTR: initialize_gka_info: after keypair gen\n");
     if(err) {
     	fprintf(stderr, "libotr-mpOTR: initialize_gka_info: keypair gen error\n");
     	//otrl_list_clear(ctx->participants_list);
     	return err;
     }
-    mpi_toString(gka_info->keypair->priv);
+    //mpi_toString(gka_info->keypair->priv);
 
 	return gcry_error(GPG_ERR_NO_ERROR);
 }
 
-int chat_auth_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
+int chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 {
     unsigned int me_next[2];
     gcry_error_t err;
@@ -490,7 +408,7 @@ int chat_auth_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
 
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after initialization\n");
     /* Print the list for debugging purposes TODO remove this in release */
-    otrl_list_dump(ctx->participants_list);
+    //otrl_list_dump(ctx->participants_list);
 
     /* Get our position in the upflow stream */
     //TODO handle possible errors
@@ -506,12 +424,12 @@ int chat_auth_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
     	return 1;
     }
 
-    otrl_list_dump(initial_key_list);
+    //otrl_list_dump(initial_key_list);
     fprintf(stderr, "libotr-mpOTR: chat_auth_init: after ini list dump\n");
 
     /* Create the intermediate key list to send */
     inter_key_list = intermediate_key_list_to_send(initial_key_list, ctx->gka_info.keypair);
-    otrl_list_dump(inter_key_list);
+    //otrl_list_dump(inter_key_list);
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after list to send\n");
 
     /* We don't need the initial list anymore */
@@ -535,7 +453,7 @@ int chat_auth_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
     }
 
     /* Set the gka_info state to await downflow message */
-    ctx->gka_info.state = OTRL_CHAT_GKASTATE_AWAITING_DOWNFLOW;
+    ctx->gka_info.state = CHAT_GKASTATE_AWAITING_DOWNFLOW;
     ctx->gka_info.position = 0;
 
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: end\n");
@@ -545,8 +463,8 @@ int chat_auth_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
 
 
 gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
-                                   OtrlChatMessage *msg,
-                                   OtrlChatMessage **msgToSend,
+                                   ChatMessage *msg,
+                                   ChatMessage **msgToSend,
                                    int *free_msg)
 {
 	gcry_error_t err;
@@ -554,38 +472,31 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
 	OtrlList *inter_key_list;
 	OtrlListNode *last;
 	gcry_mpi_t *last_key;
-	OtrlChatMessagePayloadGKAUpflow *upflowMsg = msg->payload;
-    OtrlChatParticipant *sender;
-    unsigned int pos;
+	ChatMessagePayloadGKAUpflow *upflowMsg = msg->payload;
 	unsigned int me_next[2];
 	unsigned int inter_key_list_length, participants_list_length;
 
-	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: start\n");
+	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: start\n");
 
-	if(ctx->gka_info.state == OTRL_CHAT_GKASTATE_AWAITING_DOWNFLOW) {
+	if(ctx->gka_info.state == CHAT_GKASTATE_AWAITING_DOWNFLOW) {
 		return gcry_error(GPG_ERR_INV_PACKET);
 	}
 
-    /* Should we store the message for future use? */
-    if(ctx->gka_info.state == OTRL_CHAT_GKASTATE_NONE) {
-    	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: storing\n");
-        sender = chat_participant_find(ctx, msg->senderName, &pos);
-        if(!sender)
-            return 1;
-        sender->pending_message = msg;
-        *free_msg = 0;
-        return 0;
+    if(ctx->gka_info.state == CHAT_GKASTATE_NONE) {
+    	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: storing\n");
+        return 1;
     }
 
     /* Do any initializations needed */
     err = initialize_gka_info(&ctx->gka_info);
     if(err) goto err;
-	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after gka_info init\n");
+	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after gka_info init\n");
 
 	/* Get our position in the participants list */
+    //TODO shouldn't i return if there was an error?
 	if(chat_participant_get_me_next_position(ctx->accountname, ctx->participants_list, me_next))
         fprintf(stderr, "libotr-mpOTR: handle_upflow_message: get position error\n");
-	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after get position\n");
+	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after get position\n");
 
     /* Check if the message is intended for the same users */
     if(memcmp(ctx->sid, msg->sid, CHAT_OFFER_SID_LENGTH)
@@ -593,11 +504,11 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
     	err = gcry_error(GPG_ERR_BAD_DATA);
     	goto err_with_gka_init;
     }
-	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after hash check\n");
+	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after hash check\n");
 
     /* Get the length of the intermediate keys */
     inter_key_list_length = otrl_list_length(upflowMsg->interKeys);
-	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: keys length: %u \n", inter_key_list_length);
+	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: keys length: %u \n", inter_key_list_length);
 
 
     //TODO Infering our position in the upflow stream may be dangerous
@@ -608,11 +519,11 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
 
     /* Get the participants list length */
     participants_list_length = otrl_list_length(ctx->participants_list);
-	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: participants length: %u \n", participants_list_length);
+	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: participants length: %u \n", participants_list_length);
 
 
-	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: dumping participants\n");
-	otrl_list_dump(ctx->participants_list);
+	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: dumping participants\n");
+	//otrl_list_dump(ctx->participants_list);
 
     if(inter_key_list_length < participants_list_length ) {
     	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: in upflow generation\n");
@@ -620,26 +531,26 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
     	/* Generate the intermediate key list that we will send */
     	inter_key_list = intermediate_key_list_to_send(upflowMsg->interKeys, ctx->gka_info.keypair);
     	if(!inter_key_list) {
-    		fprintf(stderr, "libotr-mpOTR: handle_upflow_message: inter_key_list error\n");
+    		//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: inter_key_list error\n");
         	err = gcry_error(GPG_ERR_INTERNAL);
         	goto err_with_gka_init;
     	}
-    	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after list to send\n");
+    	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after list to send\n");
 
     	*msgToSend = chat_message_gka_upflow_create(ctx, inter_key_list, me_next[1]);
     	if(!*msgToSend) {
-    		fprintf(stderr, "libotr-mpOTR: handle_upflow_message: msgToSend error\n");
+    		//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: msgToSend error\n");
         	err = gcry_error(GPG_ERR_INTERNAL);
         	goto err_with_inter_keys;
     	}
-    	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after upflow_create\n");
+    	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after upflow_create\n");
     	/* Set the gka_info state to await downflow message */
-    	ctx->gka_info.state = OTRL_CHAT_GKASTATE_AWAITING_DOWNFLOW;
+    	ctx->gka_info.state = CHAT_GKASTATE_AWAITING_DOWNFLOW;
     }
     else {
-    	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: in downflow generation\n");
+    	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: in downflow generation\n");
 
-    	otrl_list_dump(upflowMsg->interKeys);
+    	//otrl_list_dump(upflowMsg->interKeys);
     	/* Get last intermediate key */
     	last = otrl_list_get_last(upflowMsg->interKeys);
     	last_key = last->payload;
@@ -652,33 +563,33 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
     	if(err) {
     		goto err_with_gka_init;
     	}
-    	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after create secret\n");
+    	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after create secret\n");
 
     	/* Drop the last element */
     	otrl_list_remove_and_destroy(upflowMsg->interKeys, last);
-    	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after drop last elem\n");
+    	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after drop last elem\n");
 
     	/* Get the final intermediate key list to send in the downflow message */
     	inter_key_list = final_key_list_to_send(upflowMsg->interKeys, ctx->gka_info.keypair);
     	if(!inter_key_list) {
-    		fprintf(stderr, "libotr-mpOTR: handle_upflow_message: inter_key_list error\n");
+    		//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: inter_key_list error\n");
         	err = gcry_error(GPG_ERR_INTERNAL);
         	goto err_with_gka_init;
     	}
-    	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after  list to send\n");
-    	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: dumping inter_key_list:\n");
+    	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after  list to send\n");
+    	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: dumping inter_key_list:\n");
     	     otrl_list_dump(inter_key_list);
     	/* Generate the downflow message */
     	*msgToSend = chat_message_gka_downflow_create(ctx, inter_key_list);
     	if(!*msgToSend) {
-    		fprintf(stderr, "libotr-mpOTR: handle_upflow_message: msgToSend error\n");
+    		//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: msgToSend error\n");
         	err = gcry_error(GPG_ERR_INTERNAL);
         	goto err_with_inter_keys;
     	}
-    	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after downflow create\n");
+    	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after downflow create\n");
 
     	/* Set the gka_info state to finished */
-    	ctx->gka_info.state = OTRL_CHAT_GKASTATE_FINISHED;
+    	ctx->gka_info.state = CHAT_GKASTATE_FINISHED;
     	//ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
     	ctx->id = ctx->gka_info.position;
     }
@@ -698,12 +609,12 @@ err:
 }
 
 gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
-                                     OtrlChatMessage *msg,
-                                     OtrlChatMessage **msgToSend,
+                                     ChatMessage *msg,
+                                     ChatMessage **msgToSend,
                                      int *free_msg)
 {
 	gcry_error_t err;
-	OtrlChatMessagePayloadGKADownflow *downflowMsg = msg->payload;
+	ChatMessagePayloadGKADownflow *downflowMsg = msg->payload;
 	OtrlListNode *cur;
 	gcry_mpi_t *w;
 	unsigned int i;
@@ -756,7 +667,7 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
 
     *msgToSend = NULL;
 
-    ctx->gka_info.state = OTRL_CHAT_GKASTATE_FINISHED;
+    ctx->gka_info.state = CHAT_GKASTATE_FINISHED;
     //ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
     ctx->id = ctx->gka_info.position;
 
@@ -765,37 +676,37 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
     return gcry_error(GPG_ERR_NO_ERROR);
 }
 
-int chat_auth_is_auth_message(const OtrlChatMessage *msg)
+int chat_auth_is_my_message(ChatMessage *msg)
 {
-	OtrlChatMessageType msg_type = msg->msgType;
+	ChatMessageType msg_type = msg->msgType;
 
 	fprintf(stderr, "libotr-mpOTR: chat_auth_is_auth_message: start\n");
 
 	switch(msg_type) {
-		case OTRL_MSGTYPE_CHAT_GKA_UPFLOW:
-		case OTRL_MSGTYPE_CHAT_GKA_DOWNFLOW:
-			fprintf(stderr, "libotr-mpOTR: chat_auth_is_auth_message: it is\n");
+		case CHAT_MSGTYPE_GKA_UPFLOW:
+		case CHAT_MSGTYPE_GKA_DOWNFLOW:
+			//fprintf(stderr, "libotr-mpOTR: chat_auth_is_auth_message: it is\n");
 			return 1;
 		default:
-			fprintf(stderr, "libotr-mpOTR: chat_auth_is_auth_message: it is not\n");
+			//fprintf(stderr, "libotr-mpOTR: chat_auth_is_auth_message: it is not\n");
 			return 0;
 	}
 	fprintf(stderr, "libotr-mpOTR: chat_auth_is_auth_message: end\n");
 }
 
-int chat_auth_handle_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
-                             OtrlChatMessage **msgToSend, int *free_msg) {
-	OtrlChatMessageType msgType = msg->msgType;
-
+int chat_auth_handle_message(OtrlChatContext *ctx, ChatMessage *msg,
+                             ChatMessage **msgToSend) {
+	ChatMessageType msgType = msg->msgType;
+	int free_msg;
 	fprintf(stderr, "libotr-mpOTR: chat_auth_handle_message: start\n");
 
 	switch(msgType) {
-		case OTRL_MSGTYPE_CHAT_GKA_UPFLOW:
+		case CHAT_MSGTYPE_GKA_UPFLOW:
 			fprintf(stderr, "libotr-mpOTR: chat_auth_handle_message: upflow\n");
-			return handle_upflow_message(ctx, msg, msgToSend, free_msg);
-		case OTRL_MSGTYPE_CHAT_GKA_DOWNFLOW:
+			return handle_upflow_message(ctx, msg, msgToSend, &free_msg);
+		case CHAT_MSGTYPE_GKA_DOWNFLOW:
 			fprintf(stderr, "libotr-mpOTR: chat_auth_handle_message: downflow\n");
-			return handle_downflow_message(ctx, msg, msgToSend, free_msg);
+			return handle_downflow_message(ctx, msg, msgToSend, &free_msg);
 		default:
 			return 1;
 	}

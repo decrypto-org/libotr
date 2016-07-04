@@ -85,13 +85,14 @@ int chat_dake_init_keys(DAKEInfo *dake_info, ChatIdKey *key,
                         DAKE_handshake_message_data **dataToSend);
 
 
-int chat_dake_init(DAKE *dake, DAKEInfo *dake_info, ChatFingerprint *fingerprint);
+int chat_dake_init(DAKE *dake, DAKEInfo *dake_info);//, ChatFingerprint *fingerprint);
 
 //int chat_dake_init(DAKE *dake, ChatIdKey *longterm,
 //			DAKE_handshake_message_data **dataToSend);
 
 int chat_dake_load_their_part(DAKE *dake, DAKE_handshake_message_data *data,
-                               DAKE_confirm_message_data **dataToSend);
+                               DAKE_confirm_message_data **dataToSend,
+							   unsigned char** received_key_fingerprint);
 
 /*int chat_dake_auth_encrypt(DAKE *dake, const char *msg,
                         size_t msglen, const char *ciphertext,
