@@ -66,14 +66,14 @@ OtrlListNode * otrl_list_insert(OtrlList *list, const PayloadPtr payload) {
 			list->tail = node;
 
 		//if it should be the first node
-		} else if (list->ops->compar(node->payload, list->head->payload) > 0) {
+		} else if (list->ops->compar(node->payload, list->head->payload) < 0) {
 			node->next = list->head;
 			node->prev = NULL;
 			list->head->prev = node;
 			list->head = node;
 
 		} else {
-			for(cur = list->head; cur->next!=NULL && list->ops->compar(node->payload, cur->next->payload) < 0; cur = cur->next);
+			for(cur = list->head; cur->next!=NULL && list->ops->compar(node->payload, cur->next->payload) > 0; cur = cur->next);
 			node->next = cur->next;
 			node->prev = cur;
 			cur->next = node;
@@ -214,8 +214,10 @@ OtrlListNode * otrl_list_find(OtrlList *list, PayloadPtr target)
 		res = list->ops->compar(target, cur->payload);
 		if(res == 0)
 			return cur;
-		if(res > 0)
+		/*
+		if(res < 0)
 			break;
+		*/
 		cur = cur->next;
 	}
 
