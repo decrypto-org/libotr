@@ -278,4 +278,18 @@ typedef  struct ChatParticipantStruct {
 
 } ChatParticipant;
 
+typedef enum {
+	LEVEL_NONE,
+	LEVEL_IN_PROGRESS,
+	LEVEL_PRIVATE,
+	LEVEL_FINISHED
+} OtrlChatInfoPrivacyLevel;
+
+typedef struct OtrlChatInfoStruct {
+	char *accountname;
+	char *protocol;
+	otrl_chat_token_t chat_token;
+	OtrlChatInfoPrivacyLevel level;
+} OtrlChatInfo;
+
 #endif /* CHAT_TYPES_H */

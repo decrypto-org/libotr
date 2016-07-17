@@ -438,6 +438,15 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 				}
 
 				if(ctx->attest_info && ctx->attest_info->state == CHAT_ATTESTSTATE_FINISHED) {
+					OtrlChatInfo *info;
+					info = malloc(sizeof *info);
+					info->accountname = ctx->accountname;
+					info->protocol = ctx->protocol;
+					info->chat_token = ctx->the_chat_token;
+					info->level = LEVEL_PRIVATE;
+					ops->chat_info_refresh(NULL, info);
+					free(info);
+
 					chat_shutdown_init(ctx);
 				}
 			}
@@ -491,6 +500,15 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 					if(err) { goto error_with_msgToSend; }
 					chat_message_free(msgToSend);
 					msgToSend = NULL;
+
+					OtrlChatInfo *info;
+					info = malloc(sizeof *info);
+					info->accountname = ctx->accountname;
+					info->protocol = ctx->protocol;
+					info->chat_token = ctx->the_chat_token;
+					info->level = LEVEL_FINISHED;
+					ops->chat_info_refresh(NULL, info);
+					free(info);
 
 					chat_protocol_reset(us, ctx);
 				}
