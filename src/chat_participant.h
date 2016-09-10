@@ -20,6 +20,8 @@
 #ifndef CHAT_PARTICIPANT_H
 #define CHAT_PARTICIPANT_H
 
+#define MESSAGES_HASH_LEN 64
+
 /**
  Compare two participants
 
@@ -122,6 +124,17 @@ int chat_participant_get_me_next_position(const char *accountname, const OtrlLis
  @return void
  */
 void chat_participant_list_destroy(OtrlListNode ctx);
+
+/**
+ Calculates the hash of all the messages sent by a participant
+
+ @param participant The participant whose messages will be hashed
+ @param result A pointer pointing to an already allocated buffer that the hash
+  result will be copied to
+
+ @return 0 if no error occured. Non zero otherwise.
+ */
+int chat_participant_get_messages_hash(ChatParticipant *participant, unsigned char* result);
 
 struct OtrlListOpsStruct chat_participant_listOps;
 

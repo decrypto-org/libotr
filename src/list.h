@@ -41,7 +41,7 @@ struct OtrlListOpsStruct {
 	 * node and not a payload like the rest? Maybe
 	 * refactor?
 	 */
-	void (*toString)(OtrlListNode*);             /* String representation of elements */
+	void (*print)(OtrlListNode*);             /* String representation of elements */
 	void (*payload_destroy)(PayloadPtr);
 };
 
@@ -160,6 +160,18 @@ OtrlListNode * otrl_list_get(OtrlList *list, unsigned int i);
  * 			returns NULL if the list is empty
  */
 OtrlListNode * otrl_list_get_last(OtrlList *list);
+
+/*
+ * Function: otrl_list_get_last
+ * ------------------------
+ * returns a pointer to the tail node
+ *
+ * list: a pointer to the list
+ *
+ * returns: a pointer to the the tail node
+ * 			returns NULL if the list is empty
+ */
+OtrlListNode * otrl_list_get_first(OtrlList *list);
 
 /*
  * Function: otrl_list_dump

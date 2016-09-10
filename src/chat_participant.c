@@ -24,6 +24,7 @@
 #include "chat_message.h"
 #include "chat_dake.h"
 #include "chat_sign.h"
+#include "chat_fingerprint.h"
 #include "list.h"
 
 int chat_participant_compare(ChatParticipant *a, ChatParticipant *b)
@@ -38,14 +39,10 @@ void chat_participant_destroy(ChatParticipant *a)
     fprintf(stderr, "libotr-mpOTR: chat_participant_free: start\n");
 
     free(a1->username);
-
-    //gcry_mpi_release(a1->signing_pub_key);
-    //fprintf(stderr, "libotr-mpOTR: chat_participant_free: before chat_sign_destroy_key\n");
     chat_sign_destroy_key(a1->sign_key);
-
     chat_dake_destroy(a->dake);
-
-    otrl_list_destroy(a->trusted_fingerprints);
+    otrl_list_destroy(a->fingerprints);
+    otrl_list_destroy(a->messages);
 
     fprintf(stderr, "libotr-mpOTR: chat_participant_free: end\n");
 
@@ -54,26 +51,38 @@ void chat_participant_destroy(ChatParticipant *a)
 
 ChatParticipant * chat_participant_create(const char *username, SignKey *pub_key)
 {
-    ChatParticipant *participant;
+    ChatParticipant *participant = NULL;
 
     participant = malloc(sizeof(ChatParticipant));
-    if(!participant)
-	return NULL;
+    if(!participant) { goto error; }
 
     participant->username = strdup(username);
-    if(pub_key)
-	    participant->sign_key = pub_key;
-    else
-	    participant->sign_key = NULL;
+    if(!participant->username) { goto error_with_participant; }
+
+    participant->sign_key = (pub_key) ? pub_key : NULL;
 
     participant->dake = NULL;
 
     participant->fingerprint = NULL;
 
-    participant->trusted_fingerprints = otrl_list_create(&chat_fingerprint_listOps, sizeof(ChatFingerprint));
+    participant->fingerprints = otrl_list_create(&chat_fingerprint_listOps, sizeof(ChatFingerprint));
+    if(!participant->fingerprints) { goto error_with_username; }
 
     participant->shutdown = NULL;
+
+    participant->messages = otrl_list_create(&chat_message_listOps, sizeof(char*));
+    if(!participant->messages) { goto error_with_fingerprints; }
+
     return participant;
+
+error_with_fingerprints:
+	otrl_list_destroy(participant->fingerprints);
+error_with_username:
+	free(participant->username);
+error_with_participant:
+	free(participant);
+error:
+	return NULL;
 }
 
 ChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username, unsigned int *position)
@@ -120,14 +129,15 @@ error:
 
 int chat_participant_add(OtrlList *list, const ChatParticipant *participant)
 {
-    OtrlListNode *aNode;
+    OtrlListNode *node;
 
-    aNode = otrl_list_insert(list, (PayloadPtr)participant);
+    node = otrl_list_insert(list, (PayloadPtr)participant);
+    if(!node) { goto error; }
 
-    if(!aNode)
-	return 1;
-    else
 	return 0;
+
+error:
+	return 1;
 }
 
 int chat_participant_list_from_usernames(OtrlList *participants, char **usernames, unsigned int usernames_size)
@@ -225,6 +235,49 @@ int chat_participant_get_me_next_position(const char *accountname, const OtrlLis
 
 error:
 	return 1;
+}
+
+/* TODO improve docstring
+   This function hashes all the messages from a participant. The messages are
+   stored in lexicographic ordering. */
+int chat_participant_get_messages_hash(ChatParticipant *participant, unsigned char* result)
+{
+    gcry_md_hd_t md;
+    gcry_error_t err;
+    OtrlListNode *cur;
+    char *msg;
+    size_t len;
+    unsigned char *hash_result = NULL;
+
+    fprintf(stderr,"libotr-mpOTR: chat_participant_get_messages_hash: start\n");
+
+    err = gcry_md_open(&md, GCRY_MD_SHA512, 0);
+    if(err) {
+        return err;
+    }
+
+    for(cur = participant->messages->head; cur != NULL; cur = cur->next)
+    {
+        msg = cur->payload;
+        len = strlen(msg);
+
+        gcry_md_write(md, msg, len);
+    }
+
+    gcry_md_final(md);
+    hash_result = gcry_md_read(md, GCRY_MD_SHA512);
+    if(!hash_result) {
+        gcry_md_close(md);
+        return 1;
+    }
+
+    memcpy(result, hash_result, gcry_md_get_algo_dlen(GCRY_MD_SHA512));
+
+    gcry_md_close(md);
+
+    fprintf(stderr,"libotr-mpOTR: chat_participant_get_messages_hash: end\n");
+
+    return 0;
 }
 
 void chat_participant_print(ChatParticipant *participant)

@@ -40,52 +40,58 @@ OtrlList * otrl_list_create(struct OtrlListOpsStruct *ops, size_t payload_size)
 }
 
 OtrlListNode * otrl_list_node_create(const PayloadPtr payload) {
-	OtrlListNode *node;
+	OtrlListNode *node = NULL;
 
 	node = malloc(sizeof *node);
-	if(node) {
-		node->payload = payload;
-		node->next = NULL;
-		node->prev = NULL;
-	}
+	if(!node) { goto error; }
+
+	node->payload = payload;
+	node->next = NULL;
+	node->prev = NULL;
 
 	return node;
+
+error:
+	return NULL;
 }
 
-//TODO Kostis: maybe add const qualifier in payload?
 OtrlListNode * otrl_list_insert(OtrlList *list, const PayloadPtr payload) {
-	OtrlListNode *node, *cur;
+	OtrlListNode *node = NULL;
+	OtrlListNode *cur = NULL;
 
 	node = otrl_list_node_create(payload);
-	if(node) {
-		// if list is empty
-		if(list->head == NULL) {
-			node->prev = NULL;
-			node->next = NULL;
-			list->head = node;
+	if(!node) { goto error; }
+
+	// if list is empty
+	if(list->head == NULL) {
+		node->prev = NULL;
+		node->next = NULL;
+		list->head = node;
+		list->tail = node;
+
+	//if it should be the first node
+	} else if (list->ops->compar(node->payload, list->head->payload) < 0) {
+		node->next = list->head;
+		node->prev = NULL;
+		list->head->prev = node;
+		list->head = node;
+
+	} else {
+		for(cur = list->head; cur->next!=NULL && list->ops->compar(node->payload, cur->next->payload) > 0; cur = cur->next);
+		node->next = cur->next;
+		node->prev = cur;
+		cur->next = node;
+		if(node->next == NULL) {
 			list->tail = node;
-
-		//if it should be the first node
-		} else if (list->ops->compar(node->payload, list->head->payload) < 0) {
-			node->next = list->head;
-			node->prev = NULL;
-			list->head->prev = node;
-			list->head = node;
-
-		} else {
-			for(cur = list->head; cur->next!=NULL && list->ops->compar(node->payload, cur->next->payload) > 0; cur = cur->next);
-			node->next = cur->next;
-			node->prev = cur;
-			cur->next = node;
-			if(node->next == NULL) {
-				list->tail = node;
-			}
 		}
-
-		list->size++;
 	}
 
+	list->size++;
+
 	return node;
+
+error:
+	return NULL;
 }
 
 OtrlListNode * otrl_list_prepend(OtrlList *list, PayloadPtr payload) {
@@ -113,6 +119,8 @@ OtrlListNode * otrl_list_append(OtrlList *list, PayloadPtr payload) {
 	OtrlListNode *node;
 
 	node = otrl_list_node_create(payload);
+	if(!node) { goto error;}
+
 	node->prev = list->tail;
 	node->next = NULL;
 
@@ -128,6 +136,9 @@ OtrlListNode * otrl_list_append(OtrlList *list, PayloadPtr payload) {
 	list->size++;
 
 	return node;
+
+error:
+	return NULL;
 }
 
 void otrl_list_remove(OtrlList *list, OtrlListNode *node)
@@ -168,11 +179,11 @@ void otrl_list_foreach(OtrlList *list, void (*fun)(OtrlListNode *) )
 
 void otrl_list_dump(OtrlList *list)
 {
-	if(list->ops == NULL || list->ops->toString == NULL) {
+	if(list->ops == NULL || list->ops->print == NULL) {
 		return;
 	}
 
-	otrl_list_foreach(list, list->ops->toString);
+	otrl_list_foreach(list, list->ops->print);
 }
 
 
@@ -196,7 +207,6 @@ void otrl_list_destroy(OtrlList *list)
 		otrl_list_clear(list);
 	}
 	free(list);
-	//TODO Dimitris: what about ops?
 }
 
 OtrlListNode * otrl_list_find(OtrlList *list, PayloadPtr target)
@@ -245,6 +255,15 @@ OtrlListNode * otrl_list_get_last(OtrlList *list)
 {
 	if(list) {
 		return list->tail;
+	} else {
+		return NULL;
+	}
+}
+
+OtrlListNode * otrl_list_get_first(OtrlList *list)
+{
+	if(list) {
+		return list->head;
 	} else {
 		return NULL;
 	}

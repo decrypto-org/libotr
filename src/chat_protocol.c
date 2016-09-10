@@ -40,6 +40,71 @@
 
 //TODO Check every list find function to be optimized based on the sort
 
+
+int chat_protocol_app_info_refresh(const OtrlMessageAppOps *ops, OtrlChatContext *ctx)
+{
+	OtrlChatInfo *info;
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: start\n");
+
+	unsigned int pos;
+	ChatParticipant *me = chat_participant_find(ctx, ctx->accountname, &pos);
+
+	info = malloc(sizeof *info);
+	if(!info) { goto error; }
+
+	info->accountname = ctx->accountname;
+	info->protocol = ctx->protocol;
+	info->chat_token = ctx->the_chat_token;
+
+	unsigned char untrusted = 0;
+	OtrlListNode *cur;
+	switch(ctx->msg_state) {
+
+		case OTRL_MSGSTATE_PLAINTEXT:
+			fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: case OTRL_MSGSTATE_PLAINTEXT\n");
+			info->level = LEVEL_NONE;
+			break;
+
+		case OTRL_MSGSTATE_ENCRYPTED:
+			fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: case OTRL_MSGSTATE_ENCRYPTED\n");
+			for(cur = ctx->participants_list->head; cur != NULL && !untrusted; cur = cur->next) {
+				ChatParticipant *part = cur->payload;
+
+				fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: loop for participant: %s\n", part->username);
+
+				if(part != me) {
+					ChatFingerprint *finger = part->fingerprint;
+
+					fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: is trusted: %d\n", finger->isTrusted);
+					if (finger != NULL && !finger->isTrusted) {
+						untrusted = 1;
+					}
+				}
+			}
+
+			fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: untrusted: %d\n", untrusted);
+			info->level = (untrusted) ? LEVEL_UNVERIFIED : LEVEL_PRIVATE;
+
+			fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: info->level: %d\n", info->level);
+			break;
+
+		case OTRL_MSGSTATE_FINISHED:
+			fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: case OTRL_MSGSTATE_FINISHED\n");
+			info->level = LEVEL_FINISHED;
+	}
+
+	ops->chat_info_refresh(NULL, info);
+	free(info);
+
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: end\n");
+
+	return 0;
+
+error:
+	return 1;
+}
+
 int chat_protocol_usernames_check_or_free(char **usernames, unsigned int usernames_size){
     unsigned char error = 0;
 
@@ -70,6 +135,8 @@ int chat_protocol_participants_list_init(OtrlUserState us, const OtrlMessageAppO
 	int err;
 	char **usernames;
 	unsigned int usernames_size;
+	OtrlListNode *cur = NULL;
+	OtrlListNode *node = NULL, *node2 = NULL;
 
 	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_init: start\n");
 
@@ -85,19 +152,25 @@ int chat_protocol_participants_list_init(OtrlUserState us, const OtrlMessageAppO
 	free(usernames);
 
 	// TODO better implementation to load trusted fingerprints
-	OtrlListNode *cur;
+
 	for (cur = ctx->participants_list->head; cur != NULL; cur = cur->next) {
 		ChatParticipant *participant = cur->payload;
 
-		OtrlListNode *node;
-		for(node = us->chat_trusted_fingerprints->head; node != NULL; node = node->next) {
+		for(node = us->chat_fingerprints->head; node != NULL; node = node->next) {
 			ChatFingerprint *fngrprnt = node->payload;
+
 			if(strcmp(fngrprnt->username, participant->username) == 0 &&
-					strcmp(fngrprnt->accountname, ctx->accountname) == 0 &&
-					strcmp(fngrprnt->protocol, ctx->protocol) == 0) {
-				ChatFingerprint *newfinger = chat_fingerprint_new(fngrprnt->accountname, fngrprnt->protocol, fngrprnt->username, fngrprnt->fingerprint);
+				strcmp(fngrprnt->accountname, ctx->accountname) == 0 &&
+				strcmp(fngrprnt->protocol, ctx->protocol) == 0) {
+
+				ChatFingerprint *newfinger = chat_fingerprint_new(fngrprnt->accountname, fngrprnt->protocol, fngrprnt->username, fngrprnt->fingerprint, fngrprnt->isTrusted);
 				if(!newfinger) { goto error; }
-				otrl_list_insert(participant->trusted_fingerprints, newfinger);
+
+				node2 = otrl_list_insert(participant->fingerprints, newfinger);
+				if(!node2) {
+					chat_fingerprint_destroy(newfinger);
+					goto error;
+				}
 			}
 
 		}
@@ -195,10 +268,13 @@ int chat_protocol_send_message(const OtrlMessageAppOps *ops, OtrlChatContext *ct
 	return 0;
 
 error_with_message:
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: error_with_message\n");
 	free(message);
 error_with_buf:
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: error_with_buf\n");
 	free(buf);
 error:
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: error\n");
 	return 1;
 
 }
@@ -295,10 +371,12 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 		}
 	}
 
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_handle_message: ispending: %d, isrejected: %d \n", ispending, isrejected);
 	if(!ispending && !isrejected) {
+		fprintf(stderr, "libotr-mpOTR: chat_protocol_handle_message: before message parse\n");
 		msg = chat_message_parse(message, messagelen, sender);
 		if(!msg) { goto error; }
-
+	    fprintf(stderr, "libotr-mpOTR: chat_protocol_handle_message: after message parse\n");
 		// handle offer messages
 		if(chat_offer_is_my_message(msg)) {
 			// TODO Dimtiris: Check if we have this already and free it
@@ -329,14 +407,6 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 					ChatIdKey *idkey = chat_privkeydh_find_or_generate(us, ops, ctx->accountname, ctx->protocol);
 					if(!idkey) { goto error_with_msg; }
 					ctx->identity_key = idkey;
-
-					// Load participants' fingerprints
-					OtrlListNode *cur;
-					for(cur=ctx->participants_list->head; cur!=NULL; cur=cur->next) {
-						ChatParticipant *participant = cur->payload;
-						ChatFingerprint *fnprnt = chat_fingerprint_find(us, ctx->accountname, ctx->protocol, participant->username);
-						participant->fingerprint = fnprnt;
-					}
 
 					// Initiate dske
 					err = chat_dske_init(ctx, &msgToSend);
@@ -369,6 +439,56 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 
 				// TODO maybe reject messages intended to other recipients before handling them :)
 				if(ctx->dske_info && ctx->dske_info->state == CHAT_DSKESTATE_FINISHED && ctx->gka_info.state == CHAT_GKASTATE_NONE) {
+
+					fprintf(stderr,"chat_protocol_handle_message: before looping participants\n");
+
+					unsigned int pos;
+					ChatParticipant *me = chat_participant_find(ctx, ctx->accountname, &pos);
+
+					// Check for unverified participants
+					OtrlListNode *cur;
+					for(cur = ctx->participants_list->head; cur != NULL; cur=cur->next) {
+						ChatParticipant *part = cur->payload;
+
+						if(part != me) {
+
+						ChatFingerprint *finger = part->fingerprint;
+
+							if(finger == NULL) { fprintf(stderr,"chat_protocol_handle_message: finger == NULL!!!!\n"); }
+
+							// TODO Dimitris: info to the user
+							fprintf(stderr,"chat_protocol_handle_message: before if(!finger->isTrusted)\n");
+							if(!finger->isTrusted) {
+								fprintf(stderr,"chat_protocol_handle_message: before otrl_chat_fingerprint_bytes_to_hex\n");
+								char *finger_hex = otrl_chat_fingerprint_bytes_to_hex(finger->fingerprint);
+								if(finger_hex) {
+									fprintf(stderr,"chat_protocol_handle_message: NOT TRUSTED FINGERPRINT: %s, %s, %s, %s\n", finger->accountname, finger->protocol, finger->username, finger_hex);
+									free(finger_hex);
+								}
+							}
+
+							fprintf(stderr,"chat_protocol_handle_message: before otrl_list_find\n");
+							OtrlListNode *node = otrl_list_find(us->chat_fingerprints, finger);
+							if(!node) {
+								fprintf(stderr,"chat_protocol_handle_message: before chat_fingerprint_new\n");
+								ChatFingerprint *newFinger = chat_fingerprint_new(finger->accountname, finger->protocol, finger->username, finger->fingerprint, finger->isTrusted);
+								//TODO error handling
+								fprintf(stderr,"chat_protocol_handle_message: before chat_fingerprint_add\n");
+								chat_fingerprint_add(us, newFinger);
+								fprintf(stderr,"chat_protocol_handle_message: before chat_fingerprints_write\n");
+								ops->chat_fingerprints_write(NULL);
+
+								fprintf(stderr,"chat_protocol_handle_message: before otrl_chat_fingerprint_bytes_to_hex\n");
+								char *finger_hex = otrl_chat_fingerprint_bytes_to_hex(newFinger->fingerprint);
+								if(finger_hex) {
+									fprintf(stderr,"chat_protocol_handle_message: Adding fingerprint: %s, %s, %s, %s\n", newFinger->accountname, newFinger->protocol, newFinger->username, finger_hex);
+									free(finger_hex);
+								}
+							}
+						}
+					}
+
+
 					ctx->sign_state = CHAT_SINGSTATE_SINGED;
 					err = chat_participant_get_position(ctx->participants_list, ctx->accountname, &our_pos);
 					if(err) { goto error_with_msg;  }
@@ -438,15 +558,7 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 				}
 
 				if(ctx->attest_info && ctx->attest_info->state == CHAT_ATTESTSTATE_FINISHED) {
-					OtrlChatInfo *info;
-					info = malloc(sizeof *info);
-					info->accountname = ctx->accountname;
-					info->protocol = ctx->protocol;
-					info->chat_token = ctx->the_chat_token;
-					info->level = LEVEL_PRIVATE;
-					ops->chat_info_refresh(NULL, info);
-					free(info);
-
+					chat_protocol_app_info_refresh(ops, ctx);
 					chat_shutdown_init(ctx);
 				}
 			}
@@ -479,9 +591,13 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 
 		// handle shutdown messages
 		} else if (chat_shutdown_is_my_message(msg)) {
+	        fprintf(stderr, "libotr-mpOTR: chat_protocol_handle_message: is shutdown\n");
 			if(!ctx->attest_info || ctx->attest_info->state != CHAT_ATTESTSTATE_FINISHED) {
 				// reject
 			} else {
+
+				ChatShutdownState prevState = ctx->shutdown_info.state;
+
 				err = chat_shutdown_handle_message(ctx, msg, &msgToSend);
 				if(err) { goto error_with_msg; }
 
@@ -492,7 +608,32 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 					msgToSend = NULL;
 				}
 
+				if(ctx->shutdown_info.state == CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS && prevState == CHAT_SHUTDOWNSTATE_AWAITING_SHUTDOWNS) {
+					err = chat_shutdown_send_digest(ctx, &msgToSend);
+					if(err) { goto error_with_msgToSend;}
+
+					err = chat_protocol_send_message(ops, ctx, msgToSend);
+					if(err) { goto error_with_msgToSend; }
+
+					chat_message_free(msgToSend);
+					msgToSend = NULL;
+				}
+
+				if(ctx->shutdown_info.state == CHAT_SHUTDOWNSTATE_AWAITING_ENDS && prevState == CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS) {
+	                fprintf(stderr, "libotr-mpOTR: chat_protocol_handle_message: should send end\n");
+					err = chat_shutdown_send_end(ctx, &msgToSend);
+					if(err) { goto error_with_msgToSend;}
+
+					err = chat_protocol_send_message(ops, ctx, msgToSend);
+					if(err) { goto error_with_msgToSend; }
+
+					chat_message_free(msgToSend);
+					msgToSend = NULL;
+				}
+
 				if(ctx->shutdown_info.state == CHAT_SHUTDOWNSTATE_FINISHED) {
+					ctx->msg_state = OTRL_MSGSTATE_FINISHED;
+
 					err = chat_shutdown_release_secrets(ctx, &msgToSend);
 					if(err) { goto error_with_msgToSend;}
 
@@ -501,14 +642,7 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 					chat_message_free(msgToSend);
 					msgToSend = NULL;
 
-					OtrlChatInfo *info;
-					info = malloc(sizeof *info);
-					info->accountname = ctx->accountname;
-					info->protocol = ctx->protocol;
-					info->chat_token = ctx->the_chat_token;
-					info->level = LEVEL_FINISHED;
-					ops->chat_info_refresh(NULL, info);
-					free(info);
+					chat_protocol_app_info_refresh(ops, ctx);
 
 					chat_protocol_reset(us, ctx);
 				}
@@ -517,6 +651,7 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 			ignore_message = 1;
 		}
 	}
+	fprintf(stderr, "libotr-mpOTR: chat_protocol_handle_message: after my_message if\n");
 
 	fprintf(stderr, "libotr-mpOTR: chat_protocol_handle_message: almost end\n");
 
@@ -599,7 +734,7 @@ int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 
 	if( !accountname || !protocol || !sender || !message || !newmessagep) { goto error; }
 
-	ctx = chat_context_find_or_add(us, accountname, protocol, chat_token);
+	ctx = chat_context_find_or_add(us, ops, accountname, protocol, chat_token);
 	if(!ctx) { goto error; }
 
 	if(!chat_message_is_otr(message)) {
@@ -618,7 +753,7 @@ int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 			err = chat_protocol_pending_queue_add(ctx, sender, buf, buflen);
 			if(err) { goto error_with_buf; }
 		} else {
-			ctx = chat_context_find_or_add(us, accountname, protocol, chat_token);
+			ctx = chat_context_find_or_add(us, ops, accountname, protocol, chat_token);
 			if(!ctx) { goto error_with_buf; }
 			err = chat_protocol_handle_pending(us, ops, ctx);
 			if(err) { goto error_with_buf; }
@@ -652,7 +787,7 @@ int otrl_chat_protocol_sending(OtrlUserState us,
 
 	if( !accountname || !protocol || !message) { goto error; }
 
-	ctx = chat_context_find_or_add(us, accountname, protocol, chat_token);
+	ctx = chat_context_find_or_add(us, ops, accountname, protocol, chat_token);
 	if(!ctx) { goto error; }
 
 	switch(ctx->msg_state) {
@@ -717,7 +852,7 @@ int otrl_chat_protocol_send_query(OtrlUserState us,
 
 	fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_send_query: start\n");
 
-	ctx = chat_context_find_or_add(us, accountname, protocol, chat_token);
+	ctx = chat_context_find_or_add(us, ops, accountname, protocol, chat_token);
 	if(!ctx) { goto error; }
 
 	// TODO Dimtiris: Check if we have this already and free it
@@ -749,15 +884,15 @@ int otrl_chat_protocol_shutdown(OtrlUserState us, const OtrlMessageAppOps *ops,
 	OtrlChatContext *ctx;
 	int err;
 
-	fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_showtdown: start\n");
+	fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_shutdown: start\n");
 
 	// TODO only find not add
-	ctx = chat_context_find(us, accountname, protocol, chat_token);
+	ctx = chat_context_find(us, ops, accountname, protocol, chat_token);
 	if(!ctx) { goto error; }
 
-	if(ctx->shutdown_info.state != CHAT_SHUTDOWNSTATE_AWAITING_ENDS) { goto error; }
+	if(ctx->shutdown_info.state != CHAT_SHUTDOWNSTATE_AWAITING_SHUTDOWNS) { goto error; }
 
-	err = chat_shutdown_send_end(ctx, &msgToSend);
+	err = chat_shutdown_send_shutdown(ctx, &msgToSend);
 	if(err) { goto error; }
 
 	err = chat_protocol_send_message(ops, ctx, msgToSend);

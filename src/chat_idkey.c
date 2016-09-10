@@ -88,6 +88,7 @@ gcry_error_t chat_idkey_generate_key(ChatIdKey **newkey)
     if(err) {
     	fprintf(stderr,"libotr-mpOTR: chat_idkey_generate_key: error\n");
         free(newkey);
+        *newkey = NULL;
     }
 
     fprintf(stderr,"libotr-mpOTR: chat_idkey_generate_key: end\n");
@@ -289,9 +290,13 @@ ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const c
     ChatIdKey target;
     OtrlListNode *found;
     fprintf(stderr,"libotr-mpOTR: chat_idkey_find: start\n");
+
     target.accountname = strdup(accountname);
+    if(!target.accountname) { goto error; }
     fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after accountname dup, it is: %s\n", accountname);
+
     target.protocol = strdup(protocol);
+    if(!target.protocol) { goto error_with_accountname; }
     fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after protocol dup, it is: %s\n", protocol);
 
     found = otrl_list_find(key_list, &target);
@@ -309,6 +314,11 @@ ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const c
     fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after protocol free\n");
 
     return (ChatIdKey *)found->payload;
+
+error_with_accountname:
+    free(target.accountname);
+error:
+    return NULL;
 }
 
 //ChatIdKey * chat_idkey_find_or_add(OtrlList *key_list, const char *accountname, const char *protocol)

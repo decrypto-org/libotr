@@ -23,6 +23,7 @@
 #include "instag.h"
 #include "context.h"
 #include "dh.h"
+#include "message.h"
 //#include "chat_token.h"
 //#include "chat_auth.h"
 //#include "chat_enc.h"
@@ -71,15 +72,15 @@ void chat_context_free(PayloadPtr a);
 
 int chat_context_remove(OtrlUserState us, OtrlChatContext *ctx);
 
-OtrlChatContext* chat_context_find(OtrlUserState us,
+OtrlChatContext* chat_context_find(OtrlUserState us, const OtrlMessageAppOps *ops,
 		const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token);
 
 int chat_context_add(OtrlUserState us, OtrlChatContext* ctx);
 
-OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname, const char *protocol,
+OtrlChatContext * chat_context_create(OtrlUserState us, const OtrlMessageAppOps *ops, const char *accountname, const char *protocol,
 		otrl_chat_token_t the_chat_token);
 
-OtrlChatContext* chat_context_find_or_add(OtrlUserState us,
+OtrlChatContext* chat_context_find_or_add(OtrlUserState us, const OtrlMessageAppOps *ops,
 		const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token);
 
 struct OtrlListOpsStruct chat_context_listOps;

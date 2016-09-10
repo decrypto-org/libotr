@@ -44,7 +44,7 @@ OtrlUserState otrl_userstate_create(void)
     us->context_root = NULL;
     us->chat_context_list = otrl_list_create(&chat_context_listOps, sizeof(OtrlChatContext)); /* DIKOMAS */
     us->chat_privkey_list = otrl_list_create(&chat_idkey_listOps, sizeof(ChatIdKey)); 		  /* DIKOMAS */
-    us->chat_trusted_fingerprints = otrl_list_create(&chat_fingerprint_listOps, sizeof(ChatFingerprint)); /* DIKOMAS */
+    us->chat_fingerprints = otrl_list_create(&chat_fingerprint_listOps, sizeof(ChatFingerprint)); /* DIKOMAS */
     us->privkey_root = NULL;
     us->instag_root = NULL;
     us->pending_root = NULL;
@@ -61,8 +61,8 @@ void otrl_userstate_free(OtrlUserState us)
     otrl_list_destroy(us->chat_context_list);			/* DIKOMAS */
     fprintf(stderr, "libotr-mpOTR: otrl_userstate_free: destroying chat_privkey_list\n");
     otrl_list_destroy(us->chat_privkey_list);			/* DIKOMAS */
-    fprintf(stderr, "libotr-mpOTR: otrl_userstate_free: destroying chat_trusted_fingerprints\n");
-    otrl_list_destroy(us->chat_trusted_fingerprints); 	/* DIKOMAS */
+    fprintf(stderr, "libotr-mpOTR: otrl_userstate_free: destroying chat_fingerprints\n");
+    otrl_list_destroy(us->chat_fingerprints); 	/* DIKOMAS */
     otrl_privkey_forget_all(us);
     otrl_privkey_pending_forget_all(us);
     otrl_instag_forget_all(us);

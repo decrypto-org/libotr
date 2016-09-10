@@ -22,7 +22,7 @@
 
 #include "tdh.h"
 #include "chat_idkey.h"
-#include "chat_fingerprint.h"
+//#include "chat_fingerprint.h"
 
 #define DAKE_MAC_LEN 32 //TDH_MAC_LENGTH
 

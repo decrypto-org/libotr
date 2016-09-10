@@ -59,8 +59,6 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     ctx->dske_info = malloc(sizeof(*ctx->dske_info));
 
     chat_idkey_print_key(ctx->identity_key);
-    /* Generate a singing key */
-    //TODO check if signing key is actually generated
 
     me = chat_participant_find(ctx, ctx->accountname, &my_pos);
     if(!me) {
@@ -90,11 +88,13 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     //gcry_sexp_dump(me->sign_key->pub_key);
 
     //fprintf(stderr,"chat_dske_init: after genkey\n");
+
     /* Get what values we should broadcast to every other user */
     //chat_idkey_print_key(ctx->identity_key);
     error = chat_dake_init_keys(&ctx->dske_info->dake_info, ctx->identity_key, ctx->accountname,
                         ctx->protocol, &dataToSend);
     if(error) {
+        chat_sign_destroy_key(ctx->signing_key);
         return DSKE_ERROR;
     }
     //fprintf(stderr,"chat_dske_init: after init_keys\n");
@@ -113,6 +113,7 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     }
     if(error) {
     	//TODO de-initialize every participant that was init'ed before the error
+        chat_sign_destroy_key(ctx->signing_key);
         return DSKE_ERROR;
     }
 
@@ -125,6 +126,7 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     //free(dataToSend);
     //fprintf(stderr,"chat_dske_init: after destroying data\n");
     if(!msgToSend) {
+        chat_sign_destroy_key(ctx->signing_key);
     	chat_dake_destroy_handshake_data(dataToSend);
         free(dataToSend);
         return DSKE_ERROR;
@@ -150,6 +152,7 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, ChatMessage *msg,
     unsigned char *fingerprint;
     ChatFingerprint *cur_finger;
     OtrlListNode *cur = NULL;
+    OtrlListNode *node = NULL;
     int error = DSKE_NO_ERROR;
 
     fprintf(stderr,"chat_dske_handle_handshake_message: start\n");
@@ -194,7 +197,7 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, ChatMessage *msg,
     	fprintf(stderr,"%02X", fingerprint[i]);
     fprintf(stderr,"\n");
 
-    for(cur = sender->trusted_fingerprints->head; cur != NULL; cur = cur->next){
+    for(cur = sender->fingerprints->head; cur != NULL; cur = cur->next){
     	cur_finger = cur->payload;
 
         fprintf(stderr,"chat_dske_handle_handshake_message: currently at:\n");
@@ -208,18 +211,28 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, ChatMessage *msg,
     if(!cur){
     	/* If not found, generate a temporary fingerprint object so that we can inform
     	 * the user that a public key needs to be verified. */
-    	sender->fingerprint = chat_fingerprint_new(ctx->accountname, ctx->protocol, sender->username, fingerprint);
-    	free(fingerprint);
-    	chat_dake_destroy_confirm_data(dataToSend);
-    	free(dataToSend);
-    	fprintf(stderr,"chat_dske_handle_handshake_message: fingerprint not found\n");
-    	return DSKE_ERROR;
+    	sender->fingerprint = chat_fingerprint_new(ctx->accountname, ctx->protocol,
+                                                   sender->username, fingerprint, 0);
+        if(!sender->fingerprint){
+            fprintf(stderr,"chat_dske_handle_handshake_message: fingerpint was not created\n");
+            return DSKE_ERROR;
+        }
+        node = otrl_list_insert(sender->fingerprints, sender->fingerprint);
+        if(!node) {
+            free(fingerprint);
+            chat_dake_destroy_confirm_data(dataToSend);
+            free(dataToSend);
+            fprintf(stderr,"chat_dske_handle_handshake_message: fingerprint not found\n");
+            return DSKE_ERROR;
+        }
     }
-    fprintf(stderr,"chat_dske_handle_handshake_message: after !cur\n");
-    sender->fingerprint = cur->payload;
-    fprintf(stderr,"chat_dske_handle_handshake_message: after fingerprint = cur->payload\n");
+    else {
+        fprintf(stderr,"chat_dske_handle_handshake_message: after !cur\n");
+        sender->fingerprint = cur->payload;
+        fprintf(stderr,"chat_dske_handle_handshake_message: after fingerprint = cur->payload\n");
+        fprintf(stderr,"chat_dske_handle_handshake_message: after free\n");
+    }
     free(fingerprint);
-    fprintf(stderr,"chat_dske_handle_handshake_message: after free\n");
 
     /* Create the message we should send */
     *msgToSend = chat_message_dake_confirm_create(ctx, pos, dataToSend);
@@ -295,7 +308,10 @@ int chat_dske_handle_confirm_message(OtrlChatContext *ctx, ChatMessage *msg,
     //fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after verify\n");
 
     /* Get the serialized pubkey */
-    chat_sign_serialize_pubkey(ctx->signing_key, &key_bytes, &key_len);
+    error = chat_sign_serialize_pubkey(ctx->signing_key, &key_bytes, &key_len);
+    if(error) {
+        return DSKE_ERROR;
+    }
 
     fprintf(stderr,"libotr-mpOTR: chat_dske_handle_confirm_message: after serialize keylen: %lu\n", key_len);
 

@@ -237,9 +237,18 @@ int append_with_key(OtrlList *new_key_list, OtrlList *old_key_list, DH_keypair *
 OtrlList * intermediate_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 {
 	OtrlList *new_list;
-	gcry_mpi_t *w, *last;
+	OtrlListNode *node;
+	gcry_mpi_t *w, *last, *first;
 
 	fprintf(stderr, "libotr-mpOTR: intermediate_key_list_to_send: start\n");
+
+    /* If the intermediate key_list we received is from the first upflow message
+     * we should check that the sender is using the correct generator */
+    first = otrl_list_get_first(key_list)->payload;
+    if(2 == otrl_list_length(key_list) && gcry_mpi_cmp(otrl_dh_get_generator(),*first)){
+        otrl_list_dump(key_list);
+        return NULL;
+      }
 
 	/* Initialize the list to be returned */
 	new_list = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
@@ -251,7 +260,8 @@ OtrlList * intermediate_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 	w = malloc( sizeof(*w));
 	*w = gcry_mpi_copy(*last);
 
-	if(!otrl_list_append(new_list, w)) {
+	node = otrl_list_append(new_list, w);
+	if(!node) {
 		gcry_mpi_release(*w);
 		free(w);
 		fprintf(stderr, "libotr-mpOTR: intermediate_key_list_to_send: end error\n");
@@ -349,7 +359,6 @@ gcry_error_t get_participants_hash(OtrlList *participants, unsigned char* hash)
 
 	fprintf(stderr, "libotr-mpOTR: get_participants_hash: after result\n");
 
-	//TODO Dimitris: we should free hash_result
 	memcpy(hash, hash_result, CHAT_PARTICIPANTS_HASH_LENGTH);
 	fprintf(stderr, "libotr-mpOTR: get_participants_hash: after memcopy\n");
 
@@ -359,10 +368,7 @@ gcry_error_t get_participants_hash(OtrlList *participants, unsigned char* hash)
 	return gcry_error(GPG_ERR_NO_ERROR);
 }
 
-//TODO This function does two things. First it gets the participants
-//list and calculates its hash. Then it generates a diffie hellman keypair.
-//Break this function into two seperate ones.
-gcry_error_t initialize_gka_info(OtrlAuthGKAInfo *gka_info) //OtrlChatContext *ctx)
+gcry_error_t initialize_gka_info(OtrlAuthGKAInfo *gka_info)
 {
 	gcry_error_t err;
 
@@ -383,10 +389,8 @@ gcry_error_t initialize_gka_info(OtrlAuthGKAInfo *gka_info) //OtrlChatContext *c
     err = otrl_dh_gen_keypair(DH1536_GROUP_ID, gka_info->keypair);
     if(err) {
     	fprintf(stderr, "libotr-mpOTR: initialize_gka_info: keypair gen error\n");
-    	//otrl_list_clear(ctx->participants_list);
     	return err;
     }
-    //mpi_toString(gka_info->keypair->priv);
 
 	return gcry_error(GPG_ERR_NO_ERROR);
 }
@@ -394,38 +398,33 @@ gcry_error_t initialize_gka_info(OtrlAuthGKAInfo *gka_info) //OtrlChatContext *c
 int chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 {
     unsigned int me_next[2];
-    gcry_error_t err;
+    gcry_error_t g_err;
+    int err;
     OtrlList *inter_key_list;
     OtrlList *initial_key_list;
 
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: start\n");
 
     /* Do any initializations needed */
-    err = initialize_gka_info(&ctx->gka_info);
-    if(err) {
+    g_err = initialize_gka_info(&ctx->gka_info);
+    if(g_err) {
     	return 1;
     }
 
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after initialization\n");
-    /* Print the list for debugging purposes TODO remove this in release */
-    //otrl_list_dump(ctx->participants_list);
 
     /* Get our position in the upflow stream */
-    //TODO handle possible errors
-    chat_participant_get_me_next_position(ctx->accountname, ctx->participants_list, me_next);
+    err = chat_participant_get_me_next_position(ctx->accountname, ctx->participants_list, me_next);
+    if(err) { goto error_with_init_info; }
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after get pos\n");
 
     /* Get a intermediate key list with only the generator inside */
     initial_key_list = initial_intermediate_key_list();
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after initial_intermediate_key_list\n");
-    if(!initial_key_list) {
-    	fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: initial list error\n");
-    	otrl_dh_keypair_free(ctx->gka_info.keypair);
-    	return 1;
-    }
+    if(!initial_key_list) { goto error_with_init_info; }
 
     //otrl_list_dump(initial_key_list);
-    fprintf(stderr, "libotr-mpOTR: chat_auth_init: after ini list dump\n");
+    fprintf(stderr, "libotr-mpOTR: chat_auth_init: after init list dump\n");
 
     /* Create the intermediate key list to send */
     inter_key_list = intermediate_key_list_to_send(initial_key_list, ctx->gka_info.keypair);
@@ -436,20 +435,14 @@ int chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     otrl_list_destroy(initial_key_list);
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after init list destroy\n");
 
-    if(!inter_key_list) {
-    	fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: inter list error\n");
-    	otrl_dh_keypair_free(ctx->gka_info.keypair);
-    	return 1;
-    }
+    if(!inter_key_list) { goto error_with_init_info; }
 
     /* Generate the message that will be sent */
     *msgToSend = chat_message_gka_upflow_create(ctx, inter_key_list, me_next[1]);
-    fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: start\n");
+    fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after msg create\n");
     if(!*msgToSend) {
     	fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: msgToSend error\n");
-    	otrl_list_destroy(inter_key_list);
-    	otrl_dh_keypair_free(ctx->gka_info.keypair);
-    	return 1;
+        goto error_with_inter_list;
     }
 
     /* Set the gka_info state to await downflow message */
@@ -459,6 +452,13 @@ int chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: end\n");
 
     return 0;
+
+error_with_inter_list:
+    otrl_list_destroy(inter_key_list);
+error_with_init_info:
+    otrl_dh_keypair_free(ctx->gka_info.keypair);
+    return 1;
+
 }
 
 
@@ -468,7 +468,6 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
                                    int *free_msg)
 {
 	gcry_error_t err;
-	//int hashOk = 1;
 	OtrlList *inter_key_list;
 	OtrlListNode *last;
 	gcry_mpi_t *last_key;
@@ -493,14 +492,15 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
 	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after gka_info init\n");
 
 	/* Get our position in the participants list */
-    //TODO shouldn't i return if there was an error?
-	if(chat_participant_get_me_next_position(ctx->accountname, ctx->participants_list, me_next))
+    err = chat_participant_get_me_next_position(ctx->accountname, ctx->participants_list, me_next);
+    if(err){
         fprintf(stderr, "libotr-mpOTR: handle_upflow_message: get position error\n");
+        goto err_with_gka_init;
+    }
 	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after get position\n");
 
     /* Check if the message is intended for the same users */
-    if(memcmp(ctx->sid, msg->sid, CHAT_OFFER_SID_LENGTH)
-       || upflowMsg->recipient != me_next[0]) {
+    if(upflowMsg->recipient != me_next[0]) {
     	err = gcry_error(GPG_ERR_BAD_DATA);
     	goto err_with_gka_init;
     }
@@ -622,9 +622,9 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
 
 	fprintf(stderr, "libotr-mpOTR: handle_downflow_message: start\n");
 
-    //TODO check if we are in the correct state before processing downflow
+    //DONE? TODO check if we are in the correct state before processing downflow
     /* Check if the message is intended for the same users */
-    if(memcmp(ctx->sid, msg->sid, CHAT_PARTICIPANTS_HASH_LENGTH)) {
+    /*if(memcmp(ctx->sid, msg->sid, CHAT_PARTICIPANTS_HASH_LENGTH)) {
     	fprintf(stderr,"libotr-mpOTR: handle_downflow_message: hashes are not equal");
     	fprintf(stderr,"libotr-mpOTR: handle_downflow_message: stored hash is: ");
     	for(size_t i = 0; i < CHAT_OFFER_SID_LENGTH; i++)
@@ -639,7 +639,7 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
     	return gcry_error(GPG_ERR_BAD_DATA);
     }
     fprintf(stderr, "libotr-mpOTR: handle_downflow_message: after hash check\n");
-
+    */
     key_list_length = otrl_list_length(downflowMsg->interKeys);
 
     /* The key list is reversed so we need the i-th element from the end

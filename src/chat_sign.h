@@ -49,10 +49,9 @@ const char* chat_sign_get_pubkey(SignKey *key);
 
 SignKey * chat_sign_parse_pubkey(const unsigned char *serialized, size_t serlen);
 
-//TODO make the serialize functions return a possible error value
-void chat_sign_serialize_pubkey(SignKey *key, unsigned char **serialized, size_t *serlen);
+int chat_sign_serialize_pubkey(SignKey *key, unsigned char **serialized, size_t *serlen);
 
-void chat_sign_serialize_privkey(SignKey *key, unsigned char **serialized, size_t *serlen);
+int chat_sign_serialize_privkey(SignKey *key, unsigned char **serialized, size_t *serlen);
 
 void chat_sign_destroy_key(SignKey *key);
 

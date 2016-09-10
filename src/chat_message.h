@@ -23,35 +23,9 @@
 #include "chat_types.h"
 #include "message.h"
 
-/*
-typedef void * MessagePayloadPtr;
+int chat_message_payload_compare (const char *msg_a, const char *msg_b);
 
-typedef struct OtrlChatMessageStruct {
-	int16_t protoVersion;
-	OtrlMessageType msgType;
-	otrl_instag_t senderInsTag;
-	otrl_instag_t chatInsTag;
-	MessagePayloadPtr payload;
-	void (*payload_free)(MessagePayloadPtr);
-	void (*payload_serialize)(MessagePayloadPtr);
-} OtrlChatMessage;
-
-typedef struct OtrlChatMessagePayloadQueryStruct {
-	//TODO this is to change
-	unsigned char key[32];
-} OtrlChatMessagePayloadQuery;
-
-typedef struct OtrlChatMessagePayloadQueryAckStruct {
-	//TODO this is to change
-	unsigned char magicnum[4];
-} OtrlChatMessagePayloadQueryAck;
-
-typedef struct OtrlChatMessagePayloadDataStruct {
-	unsigned char ctr[8];
-	int32_t datalen;
-	unsigned char *ciphertext;
-} OtrlChatMessagePayloadData;
-*/
+struct OtrlListOpsStruct chat_message_listOps;
 
 int chat_message_is_otr(const char * message);
 
@@ -84,6 +58,10 @@ ChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, OtrlList *i
 ChatMessage * chat_message_attest_create(OtrlChatContext *ctx, unsigned char *sid, unsigned char *assoctable_hash);
 
 ChatMessage * chat_message_data_create(OtrlChatContext *ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
+
+ChatMessage * chat_message_shutdown_shutdown_create(OtrlChatContext *ctx, unsigned char *shutdown_hash);
+
+ChatMessage * chat_message_shutdown_digest_create(OtrlChatContext *ctx, unsigned char *digest);
 
 ChatMessage * chat_message_shutdown_end_create(OtrlChatContext *ctx);
 

@@ -31,7 +31,7 @@
 #include "chat_attest.h"
 #include "chat_pending.h"
 
-OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname, const char *protocol,
+OtrlChatContext * chat_context_create(OtrlUserState us, const OtrlMessageAppOps *ops, const char *accountname, const char *protocol,
 		otrl_chat_token_t the_chat_token)
 {
 	OtrlChatContext *ctx;
@@ -39,7 +39,6 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname,
 
 	//fprintf(stderr, "libotr-mpOTR: chat_context_create: start\n");
 
-	//TODO initialize other Context elements
 	ctx = (OtrlChatContext *)malloc(sizeof(OtrlChatContext));
 	if(!ctx) { goto error; }
 
@@ -49,13 +48,20 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname,
 	ctx->protocol = strdup(protocol);
 	if(!ctx->protocol) { goto error_with_accountname; }
 
-	// TODO: Dimitris: Important! We should handle the case of not found instag, and create a new one!!!!
 	ourInstanceTag = otrl_instag_find(us, accountname, protocol);
-	if(!ourInstanceTag) {
-		fprintf(stderr, "libotr-mpOTR: chat_context_create: ourInstanceTag not found!\n");
-	}
-	ctx->our_instance = ourInstanceTag->instag;
+    if ((!ourInstanceTag) && ops->create_instag) {
+    	ops->create_instag(NULL, accountname, protocol);
+    	ourInstanceTag = otrl_instag_find(us, accountname, protocol);
+    }
+
+    if (ourInstanceTag && ourInstanceTag->instag >= OTRL_MIN_VALID_INSTAG) {
+    	ctx->our_instance = ourInstanceTag->instag;
+    } else {
+    	ctx->our_instance = otrl_instag_get_new();
+    }
+
 	ctx->the_chat_token = the_chat_token;
+
 	ctx->participants_list = otrl_list_create(&chat_participant_listOps, sizeof(ChatParticipant));
 	if(!ctx->participants_list) { goto error_with_protocol; }
 
@@ -93,14 +99,15 @@ error:
 
 int chat_context_add(OtrlUserState us, OtrlChatContext* ctx)
 {
-	OtrlListNode * aNode;
+	OtrlListNode *node = NULL;
 
-	aNode = otrl_list_insert(us->chat_context_list, (PayloadPtr)ctx);
+	node = otrl_list_insert(us->chat_context_list, (PayloadPtr)ctx);
+	if(!node) {goto error; }
 
-	if(!aNode)
-		return 1;
-	else
-		return 0;
+	return 0;
+
+error:
+	return 1;
 }
 
 int chat_context_remove(OtrlUserState us, OtrlChatContext *ctx) {
@@ -118,13 +125,13 @@ error:
 
 }
 
-OtrlChatContext* chat_context_find(OtrlUserState us,
+OtrlChatContext* chat_context_find(OtrlUserState us, const OtrlMessageAppOps *ops,
 		const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token)
 {
 	OtrlListNode *foundListNode;
 	OtrlChatContext *target;
 
-	target = chat_context_create(us, accountname, protocol, the_chat_token);
+	target = chat_context_create(us, ops, accountname, protocol, the_chat_token);
 	if(!target) { goto error; }
 
 	otrl_list_dump(us->chat_context_list);
@@ -142,7 +149,7 @@ error:
 	return NULL;
 }
 
-OtrlChatContext* chat_context_find_or_add(OtrlUserState us,
+OtrlChatContext* chat_context_find_or_add(OtrlUserState us, const OtrlMessageAppOps *ops,
 		const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token)
 {
 	OtrlChatContext *ctx;
@@ -150,10 +157,10 @@ OtrlChatContext* chat_context_find_or_add(OtrlUserState us,
 
 	fprintf(stderr, "libotr-mpOTR: chat_context_find_or_add: start\n");
 
-	ctx = chat_context_find(us, accountname, protocol, the_chat_token);
+	ctx = chat_context_find(us, ops, accountname, protocol, the_chat_token);
 
 	if(!ctx) {
-		ctx = chat_context_create(us, accountname, protocol, the_chat_token);
+		ctx = chat_context_create(us, ops, accountname, protocol, the_chat_token);
 		if(!ctx) { goto error; }
 		err = chat_context_add(us, ctx);
 		if(err) { goto error_with_ctx; }
