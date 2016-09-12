@@ -24,10 +24,12 @@
 
 OtrlList * otrl_list_create(struct OtrlListOpsStruct *ops, size_t payload_size)
 {
-	OtrlList *list = malloc(sizeof *list);
+	OtrlList *list = NULL;
 
-	if(!list || !ops || !ops->compar)
-		return NULL;
+	if(!ops || !ops->compar) { goto error; }
+
+	list = malloc(sizeof *list);
+	if(!list) { goto error; }
 
 	list->ops = ops;
 	list->size = 0;
@@ -37,6 +39,9 @@ OtrlList * otrl_list_create(struct OtrlListOpsStruct *ops, size_t payload_size)
 	list->tail = NULL;
 
 	return list;
+
+error:
+	return NULL;
 }
 
 OtrlListNode * otrl_list_node_create(const PayloadPtr payload) {
@@ -95,9 +100,11 @@ error:
 }
 
 OtrlListNode * otrl_list_prepend(OtrlList *list, PayloadPtr payload) {
-	OtrlListNode *node;
+	OtrlListNode *node = NULL;
 
 	node = otrl_list_node_create(payload);
+	if(!node) { goto error; }
+
 	node->prev = NULL;
 	node->next = list->head;
 
@@ -113,10 +120,13 @@ OtrlListNode * otrl_list_prepend(OtrlList *list, PayloadPtr payload) {
 	list->size++;
 
 	return node;
+
+error:
+	return NULL;
 }
 
 OtrlListNode * otrl_list_append(OtrlList *list, PayloadPtr payload) {
-	OtrlListNode *node;
+	OtrlListNode *node = NULL;
 
 	node = otrl_list_node_create(payload);
 	if(!node) { goto error;}
@@ -158,10 +168,10 @@ void otrl_list_remove(OtrlList *list, OtrlListNode *node)
 	list->size--;
 }
 
-void otrl_list_remove_and_destroy(OtrlList *list, OtrlListNode *node)
+void otrl_list_remove_and_free(OtrlList *list, OtrlListNode *node)
 {
 	otrl_list_remove(list, node);
-	otrl_list_node_destroy(list, node);
+	otrl_list_node_free(list, node);
 }
 
 void otrl_list_foreach(OtrlList *list, void (*fun)(OtrlListNode *) )
@@ -187,21 +197,21 @@ void otrl_list_dump(OtrlList *list)
 }
 
 
-void otrl_list_node_destroy(OtrlList *list, OtrlListNode *node)
+void otrl_list_node_free(OtrlList *list, OtrlListNode *node)
 {
-	list->ops->payload_destroy(node->payload);
+	list->ops->payload_free(node->payload);
 	free(node);
 }
 
 void otrl_list_clear(OtrlList *list)
 {
 	while( list->head != NULL) {
-		otrl_list_remove_and_destroy(list, list->head);
+		otrl_list_remove_and_free(list, list->head);
 	}
 }
 
 
-void otrl_list_destroy(OtrlList *list)
+void otrl_list_free(OtrlList *list)
 {
 	if(list) {
 		otrl_list_clear(list);
@@ -217,20 +227,18 @@ OtrlListNode * otrl_list_find(OtrlList *list, PayloadPtr target)
 	cur = list->head;
 
 	// check if the list is empty
-	if(cur == NULL)
-		return NULL;
+	if(cur == NULL) { goto error; }
 
 	while(cur != NULL) {
 		res = list->ops->compar(target, cur->payload);
 		if(res == 0)
 			return cur;
-		/*
-		if(res < 0)
-			break;
-		*/
 		cur = cur->next;
 	}
 
+	return NULL;
+
+error:
 	return NULL;
 }
 
@@ -239,9 +247,7 @@ OtrlListNode * otrl_list_get(OtrlList *list, unsigned int i)
 	unsigned int j;
 	OtrlListNode *cur;
 
-	if(!list || i >= list->size) {
-		return NULL;
-	}
+	if(!list || i >= list->size) { goto error; }
 
 	cur = list->head;
 	for(j=0; j<i; j++) {
@@ -249,6 +255,9 @@ OtrlListNode * otrl_list_get(OtrlList *list, unsigned int i)
 	}
 
 	return cur;
+
+error:
+	return NULL;
 }
 
 OtrlListNode * otrl_list_get_last(OtrlList *list)

@@ -24,7 +24,7 @@ typedef struct ChatPending* ChatPendingPtr;
 
 size_t chat_pending_size();
 ChatPendingPtr chat_pending_create(const char *sender, const unsigned char *msg, size_t msglen);
-void chat_pending_destroy(ChatPendingPtr pending);
+void chat_pending_free(ChatPendingPtr pending);
 char *chat_pending_get_sender(ChatPendingPtr pending);
 unsigned char *chat_pending_get_msg(ChatPendingPtr pending);
 size_t chat_pending_get_msglen(ChatPendingPtr pending);

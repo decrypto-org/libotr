@@ -28,17 +28,17 @@
 
 char *otrl_chat_fingerprint_bytes_to_hex(const unsigned char *fingerprint);
 
-ChatFingerprint *chat_fingerprint_find(OtrlUserState us, char *accountname , char *protocol, char *username, unsigned char *fingerprint);
+OtrlChatFingerprint *chat_fingerprint_find(OtrlUserState us, char *accountname , char *protocol, char *username, unsigned char *fingerprint);
 
-ChatFingerprint *chat_fingerprint_new(char *accountname, char *protocol, char *username, unsigned char *fingerprint, unsigned char isTrusted);
+OtrlChatFingerprint *chat_fingerprint_new(char *accountname, char *protocol, char *username, unsigned char *fingerprint, unsigned char isTrusted);
 
-void chat_fingerprint_destroy(ChatFingerprint *fingerprint);
+void chat_fingerprint_free(OtrlChatFingerprint *fingerprint);
 
-int chat_fingerprint_add(OtrlUserState us, ChatFingerprint *finger);
+int chat_fingerprint_add(OtrlUserState us, OtrlChatFingerprint *finger);
 
-int otrl_chat_fingerprint_verify(OtrlUserState us, const OtrlMessageAppOps *ops, ChatFingerprint *finger);
+int otrl_chat_fingerprint_verify(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint *finger);
 
-int otrl_chat_fingerprint_forget(OtrlUserState us, const OtrlMessageAppOps *ops, ChatFingerprint *finger);
+int otrl_chat_fingerprint_forget(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint *finger);
 
 int otrl_chat_fingerprint_read_FILEp(OtrlUserState us, FILE *fingerfile);
 

@@ -27,16 +27,29 @@
 
 #define OTRL_ENC_KEY_SIZE 16
 
-void chat_enc_initialize_enc_info(OtrlChatEncInfo *enc_info) {
+OtrlChatEncInfo* chat_enc_info_new()
+{
+    OtrlChatEncInfo *tmp;
 
-	memset(enc_info->ctr, 0, 16);
-	enc_info->key = NULL;
+    tmp = malloc(sizeof *tmp);
+    if(!tmp) {
+        return NULL;
+    }
+
+	memset(tmp->ctr, 0, 16);
+	tmp->key = NULL;
+
+    return tmp;
 
 }
 
-void chat_enc_info_destroy(OtrlChatEncInfo *enc_info)
+void chat_enc_info_free(OtrlChatEncInfo *enc_info)
 {
-	gcry_free(enc_info->key);
+    if(enc_info) {
+    	gcry_free(enc_info->key);
+    }
+
+    free(enc_info);
 }
 
 unsigned char * mpi_serial_secure(gcry_mpi_t w, size_t *size)
@@ -45,7 +58,7 @@ unsigned char * mpi_serial_secure(gcry_mpi_t w, size_t *size)
     size_t s;
 
     gcry_mpi_print(GCRYMPI_FMT_HEX,NULL,0,&s,w);
-    buf = gcry_malloc_secure(s * sizeof(*buf));
+    buf = gcry_malloc_secure(s * sizeof *buf);
 
     gcry_mpi_print(GCRYMPI_FMT_HEX,buf,s,NULL,w);
 
@@ -258,7 +271,7 @@ char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphert
 	//fprintf(stderr, "our_pos: %u, their_pos: %u, our_gka_pos: %d, list len: %d\n", our_pos, their_pos, ctx->gka_info.position, participants_len);
 	//TODO % operation is implementation defined. We want mod to only return positive
 	//numbers
-	sender_id = their_pos + ctx->gka_info.position - our_pos;
+	sender_id = their_pos + ctx->gka_info->position - our_pos;
 	if(sender_id >= (int) participants_len) {
 		sender_id -= participants_len;
 	}
@@ -270,7 +283,7 @@ char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphert
         //it is possible that one of its bytes may well be zero. So we should
         //somehow return the length of the plaintext explicitely and not rely
         //on it being null terminated.
-	plaintext = malloc(datalen*sizeof(char) + 1);
+	plaintext = malloc((datalen +1 ) * sizeof *plaintext);
 	plaintext[datalen] = '\0';
 
 	if(!plaintext) {
@@ -281,7 +294,7 @@ char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphert
 	memset(ctr, 0, 16);
 	memmove(ctr, top_ctr, 8);
 	//fprintf(stderr,"libotr-mpOTR: chat_enc_decrypt: before get_personal_cipher\n");
-	err = chat_enc_get_personal_cipher(&(ctx->enc_info), sender_id, &dcipher);
+	err = chat_enc_get_personal_cipher(ctx->enc_info, sender_id, &dcipher);
 	if (err) {
 	    //fprintf(stderr, "libotr-mpOTR: chat_enc_decrypt: personal cipher failed\n");
 	    free(plaintext);
@@ -316,7 +329,7 @@ unsigned char * chat_enc_encrypt(OtrlChatContext *ctx, const char *plaintext) {
 	//TODO msglen should be passed as an argument, plaintext is not always text data
 	msglen = strlen(plaintext);
 
-	ciphertext = malloc(msglen*sizeof(char));
+	ciphertext = malloc(msglen * sizeof *ciphertext);
 
 	if(!ciphertext) {
 	    fprintf(stderr, "libotr-mpOTR: chat_enc_encrypt: !ciphertext\n");
@@ -324,14 +337,14 @@ unsigned char * chat_enc_encrypt(OtrlChatContext *ctx, const char *plaintext) {
 	}
 
 
-	err = chat_enc_get_personal_cipher(&(ctx->enc_info), ctx->id, &ecipher);
+	err = chat_enc_get_personal_cipher(ctx->enc_info, ctx->id, &ecipher);
 	if (err) {
 	    //fprintf(stderr, "libotr-mpOTR: chat_enc_encrypt: personal cipher failed\n");
 	    free(ciphertext);
 	    return NULL;
 	}
 
-	err = chat_enc_encrypt_data(ecipher, &(ctx->enc_info), plaintext, msglen, ciphertext, msglen);
+	err = chat_enc_encrypt_data(ecipher, ctx->enc_info, plaintext, msglen, ciphertext, msglen);
 
 	if(err) {
 	    //fprintf(stderr, "libotr-mpOTR: chat_enc_encrypt: error\n");

@@ -42,7 +42,7 @@ struct OtrlListOpsStruct {
 	 * refactor?
 	 */
 	void (*print)(OtrlListNode*);             /* String representation of elements */
-	void (*payload_destroy)(PayloadPtr);
+	void (*payload_free)(PayloadPtr);
 };
 
 typedef struct OtrlListStruct {
@@ -120,7 +120,7 @@ OtrlListNode * otrl_list_prepend(OtrlList *list, PayloadPtr payload);
 OtrlListNode * otrl_list_append(OtrlList *list, PayloadPtr payload);
 
 void otrl_list_remove(OtrlList *list, OtrlListNode *node);
-void otrl_list_remove_and_destroy(OtrlList *list, OtrlListNode *node);
+void otrl_list_remove_and_free(OtrlList *list, OtrlListNode *node);
 
 
 /*
@@ -186,24 +186,24 @@ void otrl_list_dump(OtrlList *list);
 void otrl_list_clear(OtrlList *list);
 
 /*
- * Function: otrl_list_destroy
+ * Function: otrl_list_free
  * ------------------------
  * deletes a list
  *
- * list: a pointer to the list to be destroyed
+ * list: a pointer to the list to be free'd
  */
-void otrl_list_destroy(OtrlList *list);
+void otrl_list_free(OtrlList *list);
 
 
 /*
- * Function: otrl_node_destroy
+ * Function: otrl_list_node_free
  * ------------------------
  * deletes a list node
  *
  * list: the list
- * node: a pointer to the node to be destroyed
+ * node: a pointer to the node to be free'd
  */
-void otrl_list_node_destroy(OtrlList *list, OtrlListNode *node);
+void otrl_list_node_free(OtrlList *list, OtrlListNode *node);
 
 unsigned int otrl_list_length(OtrlList *list);
 

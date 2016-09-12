@@ -37,30 +37,26 @@ SignKey * chat_sign_genkey()
     static const char *parmstr = "(genkey (ecc (curve Ed25519 (flags eddsa))))";
 
     err = gcry_sexp_new(&params, parmstr, strlen(parmstr), 0);
-    if(err) {
-        return NULL;
-    }
+    if(err) { goto error; }
 
     err = gcry_pk_genkey(&key, params);
     gcry_sexp_release(params);
-    if(err) {
-        return NULL;
-    }
+    if(err) { goto error; }
 
-
-    sign_key = malloc(sizeof(*sign_key));
-    if(!key) {
-        gcry_sexp_release(key);
-        return NULL;
-    }
+    sign_key = malloc(sizeof *sign_key);
+    if(!sign_key) { goto error_with_key; }
 
     sign_key->priv_key = gcry_sexp_find_token(key, "private-key", 0);
     sign_key->pub_key  = gcry_sexp_find_token(key, "public-key", 0);
 
     gcry_sexp_release(key);
-    //chat_sign_print_pubkey(sign_key);
 
     return sign_key;
+
+error_with_key:
+    gcry_sexp_release(key);
+error:
+    return NULL;
 }
 
 int chat_sign_get_data_hash(const unsigned char *data, size_t datalen, unsigned char *hash)
@@ -102,7 +98,7 @@ Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datal
 
     fprintf(stderr,"libotr-mpOTR: chat_sign_sign: start\n");
 
-    signature = malloc(sizeof(*signature));
+    signature = malloc(sizeof *signature);
     if(!signature){
         return NULL;
     }
@@ -159,7 +155,7 @@ Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datal
     }
 
     //fprintf(stderr,"libotr-mpOTR: chat_sign_sign: after getting r\n");
-    signature->r = malloc(tokenlen * sizeof(*signature->r));
+    signature->r = malloc(tokenlen * sizeof *(signature->r));
     if(!signature->r){
         gcry_sexp_release(r);
         gcry_sexp_release(s);
@@ -184,7 +180,7 @@ Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datal
 
     //fprintf(stderr,"libotr-mpOTR: chat_sign_sign: after getting s\n");
 
-    signature->s = malloc(tokenlen * sizeof(*signature->s));
+    signature->s = malloc(tokenlen * sizeof *(signature->s));
     if(!signature->s) {
         gcry_sexp_release(s);
         free(signature->r);
@@ -219,47 +215,37 @@ int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Si
 
     fprintf(stderr,"libotr-mpOTR: chat_sign_verify: start\n");
 
-    //fprintf(stderr,"libotr-mpOTR: chat_sign_verify: r is:");
-    //for(unsigned int i = 0; i < signature->rlen; i++)
-    //    fprintf(stderr,"%02X",signature->r[i]);
-
-    //fprintf(stderr,"\nlibotr-mpOTR: chat_sign_verify: s is:");
-    //for(unsigned int i = 0; i < signature->slen; i++)
-    //    fprintf(stderr,"%02X",signature->s[i]);
-
-    //fprintf(stderr,"\nlibotr-mpOTR: chat_sign_verify: after get_data_hash\n");
-
+    /* Check if there are data to be verified */
     if (datalen) {
-        fprintf(stderr,"libotr-mpOTR: chat_sign_verify: datalen is not zero\n");
-        if(chat_sign_get_data_hash(data, datalen, hash)) {
-            fprintf(stderr,"libotr-mpOTR: chat_sign_verify: hash errored\n");
-            return 1;
-        }
+        /* If there are, hash the data */
+        if(chat_sign_get_data_hash(data, datalen, hash)) { goto error; }
+
+        /* And store the hash in an mpi to build an s-expression later */
     	gcry_mpi_scan(&datampi, GCRYMPI_FMT_USG, hash, SIGN_HASH_SIZE, NULL);
     } else {
+        /* If there are no data then store zero in the mpi */
     	datampi = gcry_mpi_set_ui(NULL, 0);
     }
 
-    fprintf(stderr,"libotr-mpOTR: chat_sign_verify: hash is:");
-    for(unsigned int i = 0; i < SIGN_HASH_SIZE ; i++)
-        fprintf(stderr,"%02X",hash[i]);
-    fprintf(stderr,"\n");
-
+    /* Build the data s-expression */
     gcry_sexp_build(&datas, NULL, datastr, datampi);
     gcry_mpi_release(datampi);
-    //gcry_sexp_dump(datas);
-    gcry_sexp_build(&sigs, NULL, "(sig-val (eddsa (r %b)(s %b)))", signature->rlen, signature->r, signature->slen, signature->s);
-    //gcry_sexp_dump(sigs);
 
-    //gcry_sexp_dump(key->pub_key);
+    /* And build the signature s-expression */
+    gcry_sexp_build(&sigs, NULL, "(sig-val (eddsa (r %b)(s %b)))", signature->rlen, signature->r, signature->slen, signature->s);
+
+    /* Verify the data sexp with the signature sexp */
     err = gcry_pk_verify(sigs, datas, key->pub_key);
-    fprintf(stderr, "libotr-mpOTR: chat_sign_verify: erro is: %s\n",gcry_strerror(err));
+
     gcry_sexp_release(datas);
     gcry_sexp_release(sigs);
 
     fprintf(stderr, "libotr-mpOTR: chat_sign_verify: end\n");
 
     return err;
+
+error:
+    return 1;
 }
 
 int chat_sign_serialize_pubkey(SignKey *key, unsigned char **serialized, size_t *serlen)
@@ -277,7 +263,7 @@ int chat_sign_serialize_pubkey(SignKey *key, unsigned char **serialized, size_t 
     }
 
 
-    *serialized = malloc(*serlen);
+    *serialized = malloc(*serlen * sizeof **serialized);
     if(!*serialized) { goto error; }
 
     //fprintf(stderr,"chat_sign_serialize_pubkey: serlen %lu\n", *serlen);
@@ -306,7 +292,7 @@ int chat_sign_serialize_privkey(SignKey *key, unsigned char **serialized, size_t
     if(!temp) { goto error; }
 
 
-    *serialized = malloc(*serlen);
+    *serialized = malloc(*serlen * sizeof **serialized);
     if(!*serialized) { goto error; }
 
     memcpy(*serialized, temp, *serlen);
@@ -327,7 +313,7 @@ SignKey * chat_sign_parse_pubkey(const unsigned char *serialized, size_t serlen)
 	static char *datastr = "(public-key (ecc (curve Ed25519) (flags eddsa) (q  %b)))";
 	SignKey *key;
 
-	key = malloc(sizeof(*key));
+	key = malloc(sizeof *key);
 	if(!key) {
 		return NULL;
 	}
@@ -382,7 +368,7 @@ int chat_sign_signature_serialize(Signature *sig, unsigned char **buf, size_t *l
 
     //*len = chat_sign_signature_get_length(sig);
     temp = chat_sign_signature_get_length(sig);
-	*buf = malloc(temp * sizeof(**buf));
+	*buf = malloc(temp * sizeof **buf);
 	if(!*buf) {
 		return 1;
 	}
@@ -416,7 +402,7 @@ int chat_sign_signature_parse(const unsigned char *buf, Signature **sig)
 
     //fprintf(stderr, "libotr-mpOTR: chat_sign_signature_parse: after buf check\n");
 
-	*sig = malloc(sizeof(**sig));
+	*sig = malloc(sizeof **sig);
 	if(!*sig) {
 		return 1;
 	}
@@ -427,7 +413,7 @@ int chat_sign_signature_parse(const unsigned char *buf, Signature **sig)
 	//memcpy(&(*sig)->rlen, buf + base, 4*sizeof(char));
     (*sig)->rlen = chat_serial_string_to_int(buf + base);
     //fprintf(stderr, "\nlibotr-mpOTR: chat_sign_signature_parse: rlen %u\n", (*sig)->rlen);
-	(*sig)->r = malloc((*sig)->rlen * sizeof(*(*sig)->r));
+	(*sig)->r = malloc((*sig)->rlen * sizeof *((*sig)->r));
 	if(!(*sig)->r){
 		free(*sig);
 		return 1;
@@ -446,7 +432,7 @@ int chat_sign_signature_parse(const unsigned char *buf, Signature **sig)
     //memcpy(&(*sig)->slen, buf + base, 4*sizeof(char));
     (*sig)->slen = chat_serial_string_to_int(buf + base);
     //fprintf(stderr, "libotr-mpOTR: chat_sign_signature_parse: slen %d\n", (*sig)->slen);
-	(*sig)->s = malloc((*sig)->slen * sizeof(*(*sig)->s));
+	(*sig)->s = malloc((*sig)->slen * sizeof *((*sig)->s));
 	if(!(*sig)->s){
 		free((*sig)->r);
 		free(*sig);

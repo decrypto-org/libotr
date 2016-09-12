@@ -41,11 +41,11 @@ int chat_participant_compare(PayloadPtr a, PayloadPtr b);
   This function frees the participant a, and any data
   within the participant
 
-  @param a The participant to be free'd
+  @param participant The participant to be free'd
 
   @return void
  */
-void chat_participant_destroy(ChatParticipant a);
+void chat_participant_free(ChatParticipant *participant);
 
 /**
   Create a new participant

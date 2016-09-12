@@ -37,9 +37,9 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const OtrlMessageAppOps 
 	OtrlChatContext *ctx;
 	OtrlInsTag *ourInstanceTag;
 
-	//fprintf(stderr, "libotr-mpOTR: chat_context_create: start\n");
+	fprintf(stderr, "libotr-mpOTR: chat_context_create: start\n");
 
-	ctx = (OtrlChatContext *)malloc(sizeof(OtrlChatContext));
+	ctx = malloc(sizeof *ctx);
 	if(!ctx) { goto error; }
 
 	ctx->accountname = strdup(accountname);
@@ -72,21 +72,22 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const OtrlMessageAppOps 
 	ctx->attest_info = NULL;
 	ctx->dske_info = NULL;
 	ctx->sign_state = CHAT_SINGSTATE_NONE;
-	ctx->gka_info.keypair = NULL;
-	ctx->gka_info.state = CHAT_GKASTATE_NONE;
+    ctx->gka_info = NULL;
 	ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
 	ctx->protocol_version = CHAT_PROTOCOL_VERSION;
-	ctx->enc_info.key = NULL;
+	ctx->enc_info = NULL;
 	ctx->signing_key = NULL;
 	ctx->app_data = NULL;
 	ctx->app_data_free = NULL;
 
-	//fprintf(stderr, "libotr-mpOTR: chat_context_create: end\n");
+	//TODO shutdown info init, also change in chat_context_reset and chat_context_free
+
+	fprintf(stderr, "libotr-mpOTR: chat_context_create: end\n");
 
 	return ctx;
 
 error_with_participants_list:
-	otrl_list_destroy(ctx->participants_list);
+	otrl_list_free(ctx->participants_list);
 error_with_protocol:
 	free(ctx->protocol);
 error_with_accountname:
@@ -97,12 +98,104 @@ error:
 	return NULL;
 }
 
+int chat_context_reset(OtrlChatContext *ctx)
+{
+	otrl_list_clear(ctx->participants_list);
+	otrl_list_clear(ctx->pending_list);
+
+	// TODO remove ifs when refactoring *_free functions
+
+	chat_offer_info_free(ctx->offer_info);
+	ctx->offer_info = NULL;
+
+	chat_attest_info_free(ctx->attest_info);
+	ctx->attest_info = NULL;
+
+	chat_dske_info_free(ctx->dske_info);
+	ctx->dske_info = NULL;
+
+	chat_auth_gka_info_free(ctx->gka_info);
+    ctx->gka_info = NULL;
+
+	chat_enc_info_free(ctx->enc_info);
+	ctx->enc_info = NULL;
+
+
+	free(ctx->signing_key);
+	ctx->signing_key = NULL;
+
+	ctx->sign_state = CHAT_SINGSTATE_NONE;
+	ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
+	ctx->protocol_version = CHAT_PROTOCOL_VERSION;
+
+	/*
+	ctx->app_data = NULL;
+	ctx->app_data_free = NULL;
+	*/
+
+	return 0;
+}
+
+void chat_context_free(OtrlChatContext *ctx)
+{
+	if(ctx) {
+		free(ctx->accountname);
+		free(ctx->protocol);
+		otrl_list_free(ctx->participants_list);
+		otrl_list_free(ctx->pending_list);
+		chat_offer_info_free(ctx->offer_info);
+		chat_dske_info_free(ctx->dske_info);
+		chat_auth_gka_info_free(ctx->gka_info);
+		chat_attest_info_free(ctx->attest_info);
+		chat_enc_info_free(ctx->enc_info);
+		free(ctx->signing_key);
+
+		if(ctx->app_data && ctx->app_data_free) {
+			ctx->app_data_free(ctx->app_data);
+		}
+	}
+	free(ctx);
+}
+
+int chat_context_compare(OtrlChatContext *a, OtrlChatContext *b)
+{
+	int res = 0;
+
+	res = strcmp(a->accountname, b->accountname);
+	if(res == 0) {
+		res = strcmp(a->protocol, b->protocol);
+		if(res == 0) {
+			res = chat_token_compare(a->the_chat_token, b->the_chat_token);
+		}
+	}
+
+	return res;
+}
+
+void chat_context_print(OtrlChatContext *ctx)
+{
+	fprintf(stderr, "libotr-mpOTR: chat_context_print: start\n");
+
+	fprintf(stderr, "OtrlChatContext:\n");
+	fprintf(stderr, "|-accountname   : %s\n", ctx->accountname);
+	fprintf(stderr, "|-protocol      : %s\n", ctx->protocol);
+	fprintf(stderr, "|-our_instance  : %d\n", (int)ctx->our_instance);
+	// TODO change the way we typecast the_chat_token
+	fprintf(stderr, "|-the_chat_token: %d\n", ctx->the_chat_token);
+
+	fprintf(stderr, "libotr-mpOTR: chat_context_print: end\n");
+}
+
 int chat_context_add(OtrlUserState us, OtrlChatContext* ctx)
 {
 	OtrlListNode *node = NULL;
 
+	fprintf(stderr, "libotr-mpOTR: chat_context_add: start\n");
+
 	node = otrl_list_insert(us->chat_context_list, (PayloadPtr)ctx);
 	if(!node) {goto error; }
+
+	fprintf(stderr, "libotr-mpOTR: chat_context_add: end\n");
 
 	return 0;
 
@@ -116,7 +209,7 @@ int chat_context_remove(OtrlUserState us, OtrlChatContext *ctx) {
 	node = otrl_list_find(us->chat_context_list, (PayloadPtr)ctx);
 	if(!node) { goto error; }
 
-	otrl_list_remove_and_destroy(us->chat_context_list, node);
+	otrl_list_remove_and_free(us->chat_context_list, node);
 
 	return 0;
 
@@ -131,6 +224,8 @@ OtrlChatContext* chat_context_find(OtrlUserState us, const OtrlMessageAppOps *op
 	OtrlListNode *foundListNode;
 	OtrlChatContext *target;
 
+	fprintf(stderr, "libotr-mpOTR: chat_context_find: start\n");
+
 	target = chat_context_create(us, ops, accountname, protocol, the_chat_token);
 	if(!target) { goto error; }
 
@@ -139,12 +234,14 @@ OtrlChatContext* chat_context_find(OtrlUserState us, const OtrlMessageAppOps *op
 	foundListNode = otrl_list_find(us->chat_context_list, (PayloadPtr)target);
 	if(!foundListNode) { goto error_with_target; }
 
-	chat_context_free((PayloadPtr)target);
+	chat_context_free(target);
+
+	fprintf(stderr, "libotr-mpOTR: chat_context_find: end\n");
 
 	return (OtrlChatContext *)foundListNode->payload;
 
 error_with_target:
-	chat_context_free((PayloadPtr)target);
+	chat_context_free(target);
 error:
 	return NULL;
 }
@@ -171,86 +268,35 @@ OtrlChatContext* chat_context_find_or_add(OtrlUserState us, const OtrlMessageApp
 	return ctx;
 
 error_with_ctx:
-	chat_context_free((PayloadPtr)ctx);
+	chat_context_free(ctx);
 error:
 	return NULL;
 }
 
-int chat_context_compare(PayloadPtr a, PayloadPtr b)
+int chat_context_compareOp(PayloadPtr a, PayloadPtr b)
 {
-	OtrlChatContext *a1 = (OtrlChatContext *)a;
-	OtrlChatContext *b1 = (OtrlChatContext *)b;
-	int res = 0;
+	OtrlChatContext *ctx1 = (OtrlChatContext *)a;
+	OtrlChatContext *ctx2 = (OtrlChatContext *)b;
 
-	res = strcmp(a1->accountname, b1->accountname);
-	if(res == 0) {
-		res = strcmp(a1->protocol, b1->protocol);
-		if(res == 0) {
-			res = chat_token_compare(a1->the_chat_token, b1->the_chat_token);
-		}
-	}
-
-	return res;
+	return chat_context_compare(ctx1, ctx2);
 }
 
-void chat_context_free(PayloadPtr a)
+void chat_context_printOp(OtrlListNode *node)
+{
+	fprintf(stderr, "libotr-mpOTR: chat_context_printOp: start\n");
+	OtrlChatContext *ctx = node->payload;
+	chat_context_print(ctx);
+	fprintf(stderr, "libotr-mpOTR: chat_context_printOp: end\n");
+}
+
+void chat_context_freeOp(PayloadPtr a)
 {
 	OtrlChatContext *ctx = a;
-
-	//fprintf(stderr, "libotr-mpOTR: chat_context_free: start\n");
-	if(ctx) {
-		if(ctx->accountname) {
-			free(ctx->accountname);
-		}
-
-		if(ctx->protocol) {
-			free(ctx->protocol);
-		}
-
-		if(ctx->participants_list) {
-			otrl_list_destroy(ctx->participants_list);
-		}
-
-		otrl_list_destroy(ctx->pending_list);
-
-		if(ctx->offer_info) {
-			chat_offer_info_destroy(&ctx->offer_info);
-		}
-
-		chat_dske_destroy_info(&ctx->dske_info);
-
-		chat_auth_gka_info_destroy(&ctx->gka_info);
-
-		if(ctx->attest_info) {
-			chat_attest_info_destroy(ctx);
-		}
-
-		chat_enc_info_destroy(&ctx->enc_info);
-
-		free(ctx->signing_key);
-
-		if(ctx->app_data && ctx->app_data_free) {
-			ctx->app_data_free(ctx->app_data);
-		}
-		free(ctx);
-	}
-
-	//fprintf(stderr, "libotr-mpOTR: chat_context_free: end\n");
-}
-
-
-void chat_context_toString(OtrlListNode *node) {
-	OtrlChatContext *ctx = (OtrlChatContext *)(node->payload);
-	fprintf(stderr, "OtrlChatContext:\n");
-	fprintf(stderr, "|-accountname   : %s\n", ctx->accountname);
-	fprintf(stderr, "|-protocol      : %s\n", ctx->protocol);
-	fprintf(stderr, "|-our_instance  : %d\n", (int)ctx->our_instance);
-	// TODO change the way we typecast the_chat_token
-	fprintf(stderr, "|-the_chat_token: %d\n", *((int *)ctx->the_chat_token));
+	chat_context_free(ctx);
 }
 
 struct OtrlListOpsStruct chat_context_listOps = {
-		chat_context_compare,
-		chat_context_toString,
-		chat_context_free
+		chat_context_compareOp,
+		chat_context_printOp,
+		chat_context_freeOp
 };

@@ -132,13 +132,12 @@ error:
 
 }
 
-void chat_attest_info_destroy(OtrlChatContext *ctx)
+void chat_attest_info_free(ChatAttestInfo *info)
 {
-	if(ctx->attest_info) {
-		free(ctx->attest_info->checked);
+	if(info) {
+		free(info->checked);
 	}
-	free(ctx->attest_info);
-	ctx->attest_info = NULL;
+	free(info);
 }
 
 int chat_attest_info_init(OtrlChatContext *ctx)
@@ -160,9 +159,8 @@ int chat_attest_info_init(OtrlChatContext *ctx)
 
 	info->state = CHAT_ATTESTSTATE_AWAITING;
 
-	if(ctx->attest_info) {
-		chat_attest_info_destroy(ctx);
-	}
+	chat_attest_info_free(ctx->attest_info);
+	ctx->attest_info = NULL;
 
 	ctx->attest_info = info;
 
@@ -246,7 +244,8 @@ int chat_attest_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, Cha
 	fprintf(stderr, "libotr-mpOTR: chat_attest_handle_message: start\n");
 
 	if(!ctx->attest_info) {
-		chat_attest_info_init(ctx);
+		err = chat_attest_info_init(ctx);
+		if(err) { goto error; }
 	}
 
 	if(msg->msgType != CHAT_MSGTYPE_ATTEST) { goto error; }
@@ -280,7 +279,6 @@ int chat_attest_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, Cha
 		}
 
 		if(chat_attest_is_ready(ctx->attest_info)) {
-			fprintf(stderr, "libotr-mpOTR: chat_attest_handle_message: chat_attest_is_ready!\n");
 			ctx->attest_info->state = CHAT_ATTESTSTATE_FINISHED;
 			ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
 		}

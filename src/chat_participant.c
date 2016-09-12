@@ -32,28 +32,28 @@ int chat_participant_compare(ChatParticipant *a, ChatParticipant *b)
 	return strcmp(a->username, b->username);
 }
 
-void chat_participant_destroy(ChatParticipant *a)
+void chat_participant_free(ChatParticipant *participant)
 {
-    ChatParticipant *a1 = a;
-
     fprintf(stderr, "libotr-mpOTR: chat_participant_free: start\n");
 
-    free(a1->username);
-    chat_sign_destroy_key(a1->sign_key);
-    chat_dake_destroy(a->dake);
-    otrl_list_destroy(a->fingerprints);
-    otrl_list_destroy(a->messages);
+    if(participant)  {
+    	free(participant->username);
+    	chat_sign_destroy_key(participant->sign_key);
+    	chat_dake_destroy(participant->dake);
+    	otrl_list_free(participant->fingerprints);
+    	otrl_list_free(participant->messages);
+    }
+
+    free(participant);
 
     fprintf(stderr, "libotr-mpOTR: chat_participant_free: end\n");
-
-    free(a1);
 }
 
 ChatParticipant * chat_participant_create(const char *username, SignKey *pub_key)
 {
     ChatParticipant *participant = NULL;
 
-    participant = malloc(sizeof(ChatParticipant));
+    participant = malloc(sizeof *participant);
     if(!participant) { goto error; }
 
     participant->username = strdup(username);
@@ -65,7 +65,7 @@ ChatParticipant * chat_participant_create(const char *username, SignKey *pub_key
 
     participant->fingerprint = NULL;
 
-    participant->fingerprints = otrl_list_create(&chat_fingerprint_listOps, sizeof(ChatFingerprint));
+    participant->fingerprints = otrl_list_create(&chat_fingerprint_listOps, sizeof(OtrlChatFingerprint));
     if(!participant->fingerprints) { goto error_with_username; }
 
     participant->shutdown = NULL;
@@ -76,7 +76,7 @@ ChatParticipant * chat_participant_create(const char *username, SignKey *pub_key
     return participant;
 
 error_with_fingerprints:
-	otrl_list_destroy(participant->fingerprints);
+	otrl_list_free(participant->fingerprints);
 error_with_username:
 	free(participant->username);
 error_with_participant:
@@ -142,37 +142,26 @@ error:
 
 int chat_participant_list_from_usernames(OtrlList *participants, char **usernames, unsigned int usernames_size)
 {
-		char error = 0;
-		ChatParticipant *a_participant;
-	    //OtrlChatMessage msg;
+	ChatParticipant *a_participant;
+	int err;
 
-		fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: start\n");
+	fprintf(stderr, "libotr-mpOTR: chat_participant_list_from_usernames: start\n");
 
+	for(size_t i = 0; i < usernames_size; i++) {
+		a_participant = chat_participant_create(usernames[i],NULL);
+		if(!a_participant){ goto error_with_participants; }
 
-	    error = 0;
+		err = chat_participant_add(participants,a_participant);
+		if(err) { goto error_with_participants; }
+	}
 
-	    //fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: size: %d\n", usernames_size);
-	    for(size_t i = 0; i < usernames_size; i++) {
-	    	//fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: adding %s\n", usernames[i]);
-	    	a_participant = chat_participant_create(usernames[i],NULL);
-	    	if(!a_participant){
-	    		//fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: username was not allocated\n");
-	    		error = 1;
-	    		break;
-	    	}
-	    	if(chat_participant_add(participants,a_participant)) {
-	    		//fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: participant not added\n");
-	    		error = 1;
-	    		break;
-	    	}
-	    }
-	    if(error) {
-	    	otrl_list_clear(participants);
-	    	return 1;
-	    }
+	fprintf(stderr, "libotr-mpOTR: chat_participant_list_from_usernames: end\n");
+	return 0;
 
-	    fprintf(stderr, "libotr-mpOTR: otrl_chat_participant_list_from_users: end\n");
-	    return 0;
+error_with_participants:
+	fprintf(stderr, "libotr-mpOTR: chat_participant_list_from_usernames: error_with_participants\n");
+	otrl_list_clear(participants);
+	return 1;
 }
 
 int chat_participant_get_position(const OtrlList *participants, const char *accountname, unsigned int *position)
@@ -180,8 +169,6 @@ int chat_participant_get_position(const OtrlList *participants, const char *acco
 	char *splitposition, *name = NULL;
 	unsigned int i;
 	OtrlListNode *cur;
-
-	//fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: start\n");
 
 	//TODO Dimitris: this is a workaround, should be removed as soon as we find how to get the participant's account identifier instead of chat name
 	splitposition = strchr(accountname, '@');
@@ -196,22 +183,19 @@ int chat_participant_get_position(const OtrlList *participants, const char *acco
 		strcpy(name, accountname);
 	}
 
-	//fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: before if(!participants)\n");
-	if(!participants) { goto error; }
+	if(!participants) { goto error_with_name; }
 
-	//fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: before for\n");
 	// TODO for loop should be stopped if we have gone too far in the ordered list
 	for(cur = participants->head, i = 0; cur != NULL && strcmp(name, ((ChatParticipant *)cur->payload)->username) != 0;  cur = cur->next, i++);
-	//fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: after for\n");
-	if(!cur) { goto error; }
+	if(!cur) { goto error_with_name; }
 	*position = i;
 
 	free(name);
 
-	//fprintf(stderr, "libotr-mpOTR: chat_participant_get_position: end\n");
-
 	return 0;
 
+error_with_name:
+	free(name);
 error:
 	return 1;
 }
@@ -252,24 +236,18 @@ int chat_participant_get_messages_hash(ChatParticipant *participant, unsigned ch
     fprintf(stderr,"libotr-mpOTR: chat_participant_get_messages_hash: start\n");
 
     err = gcry_md_open(&md, GCRY_MD_SHA512, 0);
-    if(err) {
-        return err;
-    }
+    if(err) { goto error; }
 
     for(cur = participant->messages->head; cur != NULL; cur = cur->next)
     {
         msg = cur->payload;
         len = strlen(msg);
-
         gcry_md_write(md, msg, len);
     }
 
     gcry_md_final(md);
     hash_result = gcry_md_read(md, GCRY_MD_SHA512);
-    if(!hash_result) {
-        gcry_md_close(md);
-        return 1;
-    }
+    if(!hash_result) { goto error_with_md; }
 
     memcpy(result, hash_result, gcry_md_get_algo_dlen(GCRY_MD_SHA512));
 
@@ -278,6 +256,11 @@ int chat_participant_get_messages_hash(ChatParticipant *participant, unsigned ch
     fprintf(stderr,"libotr-mpOTR: chat_participant_get_messages_hash: end\n");
 
     return 0;
+
+error_with_md:
+	gcry_md_close(md);
+error:
+	return 1;
 }
 
 void chat_participant_print(ChatParticipant *participant)
@@ -309,14 +292,14 @@ void chat_participant_printOp(OtrlListNode *node)
 	chat_participant_print(participant);
 }
 
-void chat_participant_destroyOp(PayloadPtr a)
+void chat_participant_freeOp(PayloadPtr a)
 {
 	ChatParticipant *participant = a;
-    chat_participant_destroy(participant);
+    chat_participant_free(participant);
 }
 
 struct OtrlListOpsStruct chat_participant_listOps = {
 	chat_participant_compareOp,
 	chat_participant_printOp,
-    chat_participant_destroyOp
+    chat_participant_freeOp
 };

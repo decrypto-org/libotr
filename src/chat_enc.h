@@ -46,7 +46,7 @@
 
   @param enc_info a pointer to the struct to be initialized
  */
-void chat_enc_initialize_enc_info(OtrlChatEncInfo *enc_info);
+OtrlChatEncInfo* chat_enc_info_new();
 
 /**
   Destroys an OtrlChatEncInfo struct. It does not free the enc_info struct
@@ -54,7 +54,7 @@ void chat_enc_initialize_enc_info(OtrlChatEncInfo *enc_info);
 
   @param enc_info a pointer to the struct to be destroyed
  */
-void chat_enc_info_destroy(OtrlChatEncInfo *enc_info);
+void chat_enc_info_free(OtrlChatEncInfo *enc_info);
 
 /**
   Generates the shared secret

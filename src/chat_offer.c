@@ -78,19 +78,15 @@ error:
 	return NULL;
 }
 
-void chat_offer_info_destroy(ChatOfferInfo **info) {
+void chat_offer_info_free(ChatOfferInfo *info) {
 	unsigned int i;
-	ChatOfferInfo *offer_info = *info;
 
-	if(offer_info) {
-
-		for(i=0; i<offer_info->size; i++) {
-			free(offer_info->sid_contributions[i]);
+	if(info) {
+		for(i=0; i<info->size; i++) {
+			free(info->sid_contributions[i]);
 		}
-		free(offer_info);
 	}
-
-	offer_info = NULL;
+	free(info);
 }
 
 int chat_offer_info_init(OtrlChatContext *ctx, size_t size) {
@@ -235,9 +231,7 @@ int chat_offer_start(OtrlChatContext *ctx, ChatMessage **msgToSend)
 
 	*msgToSend = NULL;
 
-	if(ctx->offer_info) {
-		chat_offer_info_destroy(&ctx->offer_info);
-	}
+	chat_offer_info_free(ctx->offer_info);
 
 	err = chat_offer_info_init(ctx, otrl_list_length(ctx->participants_list));
 	if(err) { goto error; }

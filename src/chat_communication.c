@@ -103,7 +103,7 @@ int chat_communication_broadcast(OtrlChatContext *ctx, const char *message,
 	// TODO maybe get length from chat_enc_encrypt so that we can support other modes of aes
 	datalen = strlen(message);
 
-	msg = chat_message_data_create(ctx, ctx->enc_info.ctr, datalen, ciphertext);
+	msg = chat_message_data_create(ctx, ctx->enc_info->ctr, datalen, ciphertext);
 	if(!msg) { goto error_with_ciphertext; }
 
     /* And insert the message he is sending, so that we can later execute

@@ -204,29 +204,24 @@ int chat_dake_send_key(DAKE *dake, unsigned char* key_bytes, size_t keylen,
 	fprintf(stderr,"chat_dake_send_key: start\n");
 
 	*dataToSend = malloc(sizeof(**dataToSend));
-	if(!*dataToSend) {
-		return 1;
-	}
+	if(!*dataToSend) { goto error; }
 
 	//fprintf(stderr,"chat_dake_send_key: after data malloc, keylen: %lu\n", keylen);
 
 	(*dataToSend)->key = malloc(keylen * sizeof(*(*dataToSend)->key));
-	if(!(*dataToSend)->key) {
-		free(*dataToSend);
-		return 1;
-	}
+	if(!(*dataToSend)->key) { goto error_with_data; }
 
 	//fprintf(stderr,"chat_dake_send_key: after data  key malloc\n");
 
 	(*dataToSend)->keylen = keylen;
 
-	if(!dake)
+	if(!dake) {
 		fprintf(stderr,"chat_dake_send_key: dake is null\n");
+        goto error_with_key;
+    }
 
 	if(chat_dake_auth_encrypt(dake, key_bytes, keylen, NULL, 0, (*dataToSend)->key, (*dataToSend)->mac)) {
-		free((*dataToSend)->key);
-		free(*dataToSend);
-		return 1;
+        goto error_with_key;
 	}
 
 	//fprintf(stderr,"chat_dake_send_key: after data  auth encrypt\n");
@@ -234,6 +229,14 @@ int chat_dake_send_key(DAKE *dake, unsigned char* key_bytes, size_t keylen,
 	dake->state = DAKE_STATE_WAITING_KEY;
 	fprintf(stderr,"chat_dake_send_key: end\n");
 	return 0;
+
+error_with_key:
+    free((*dataToSend)->key);
+error_with_data:
+    free(*dataToSend);
+    dataToSend = NULL;
+error:
+    return 1;
 }
 
 int chat_dake_receive_key(DAKE *dake, DAKE_key_message_data *data,

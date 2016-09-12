@@ -32,7 +32,7 @@ typedef struct {
 	void (*init)(ChatIdKey*);
 	void (*destroy_key)(ChatIdKey*);
 	ChatIdKey * (*parse)(gcry_sexp_t);
-	gcry_error_t (*generate_key)(ChatIdKey**);
+	int (*generate_key)(ChatIdKey**);
 	gcry_error_t (*serialize)(ChatIdKey*, gcry_sexp_t*);
 	ChatIdKey * (*find_key)(OtrlList *key_list, const char *accountname, const char *protocol);
 } ChatIdKeyManager;
@@ -41,7 +41,7 @@ struct OtrlListOpsStruct chat_idkey_listOps;
 
 ChatIdKeyManager chat_id_key_manager;
 
-void chat_idkey_print_key(ChatIdKey *key);
+void chat_idkey_print(ChatIdKey *key);
 
 ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const char *protocol);
 #endif /* CHAT_IDKEY_H */

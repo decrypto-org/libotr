@@ -36,26 +36,26 @@ int chat_message_compare_payload(const char *msg_a, const char *msg_b)
     return strcmp(msg_a, msg_b);
 }
 
+int chat_message_compareOp(PayloadPtr a, PayloadPtr b)
+{
+    return chat_message_compare_payload(a, b);
+}
+
 void chat_message_printOp(OtrlListNode *a)
 {
     char *msg = a->payload;
     printf("%s\n", msg);
 }
 
-void chat_message_destroyOp(PayloadPtr a)
+void chat_message_freeOp(PayloadPtr a)
 {
     free(a);
-}
-
-int chat_message_compareOp(PayloadPtr a, PayloadPtr b)
-{
-    return chat_message_compare_payload(a, b);
 }
 
 struct OtrlListOpsStruct chat_message_listOps = {
     chat_message_compareOp,
     chat_message_printOp,
-    chat_message_destroyOp
+    chat_message_freeOp
 };
 
 /**
@@ -477,7 +477,7 @@ unsigned char * chat_message_payload_gka_upflow_serialize(ChatMessagePayloadPtr 
 {
 	ChatMessagePayloadGKAUpflow *myPayload = payload;
 	unsigned char *ret, **keys;
-	unsigned int i;
+	unsigned int i, interKeysSize = 0;
 	int err;
 	size_t *keySizes, len;
 	gcry_mpi_t *k;
@@ -485,14 +485,19 @@ unsigned char * chat_message_payload_gka_upflow_serialize(ChatMessagePayloadPtr 
 
 	otrl_list_dump(myPayload->interKeys);
 
-	keys = malloc(myPayload->interKeys->size * sizeof *keys);
+	if(myPayload->interKeys == NULL) { goto error; }
+
+	interKeysSize = otrl_list_length(myPayload->interKeys);
+	if(interKeysSize == 0) { goto error; }
+
+	keys = malloc(interKeysSize * sizeof *keys);
 	if(!keys) { goto error; }
 
-	for(i = 0; i < myPayload->interKeys->size; i++) {
+	for(i = 0; i < interKeysSize; i++) {
 		keys[i] = NULL;
 	}
 
-	keySizes = malloc(myPayload->interKeys->size * sizeof *keySizes);
+	keySizes = malloc(interKeysSize * sizeof *keySizes);
 	if(!keySizes) { goto error_with_keys; }
 
 	len = 0;
@@ -513,17 +518,17 @@ unsigned char * chat_message_payload_gka_upflow_serialize(ChatMessagePayloadPtr 
 
 	chat_serial_int_to_string(myPayload->recipient, &ret[pos]);
 	pos += 4;
-	chat_serial_int_to_string(myPayload->interKeys->size, &ret[pos]);
+	chat_serial_int_to_string(interKeysSize, &ret[pos]);
 	pos += 4;
 
-	for(i=0; i<myPayload->interKeys->size; i++) {
+	for(i=0; i<interKeysSize; i++) {
 		chat_serial_int_to_string(keySizes[i], &ret[pos]);
 		pos += 4;
 		memcpy(&ret[pos], keys[i], keySizes[i]);
 		pos += keySizes[i];
 	}
 
-	for(i=0; i<myPayload->interKeys->size; i++) { free(keys[i]); }
+	for(i=0; i<interKeysSize; i++) { free(keys[i]); }
 	free(keySizes);
 	free(keys);
 
@@ -531,7 +536,7 @@ unsigned char * chat_message_payload_gka_upflow_serialize(ChatMessagePayloadPtr 
 	return ret;
 
 error_with_filled_keys:
-	for(i=0; i<myPayload->interKeys->size; i++) { free(keys[i]); }
+	for(i=0; i<interKeysSize; i++) { free(keys[i]); }
 	free(keySizes);
 error_with_keys:
 	free(keys);
@@ -597,7 +602,7 @@ ChatMessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char 
 error_with_key:
 	free(key);
 error_with_payload_interKeys:
-	otrl_list_destroy(payload->interKeys);
+	otrl_list_free(payload->interKeys);
 error_with_payload:
 	free(payload);
 error:
@@ -613,7 +618,7 @@ void chat_message_payload_gka_upflow_free(ChatMessagePayloadPtr payload)
 {
 	ChatMessagePayloadGKAUpflow *myPayload = payload;
 
-	otrl_list_destroy(myPayload->interKeys);
+	otrl_list_free(myPayload->interKeys);
 	free(myPayload);
 }
 
@@ -630,20 +635,25 @@ unsigned char * chat_message_payload_gka_downflow_serialize(ChatMessagePayloadPt
 {
 	ChatMessagePayloadGKADownflow *myPayload = payload;
 	unsigned char *ret, **keys;
-	unsigned int i;
+	unsigned int i, interKeysSize = 0;
 	int err;
 	size_t *keySizes, len;
 	gcry_mpi_t *k;
 	OtrlListNode *cur;
 
-	keys = malloc(myPayload->interKeys->size * sizeof *keys);
+	if(myPayload->interKeys == NULL) { goto error; }
+
+	interKeysSize = otrl_list_length(myPayload->interKeys);
+	if(interKeysSize == 0) { goto error; }
+
+	keys = malloc(interKeysSize * sizeof *keys);
 	if(!keys) { goto error; }
 
-	for(i = 0; i < myPayload->interKeys->size; i++) {
+	for(i = 0; i < interKeysSize; i++) {
 		keys[i] = NULL;
 	}
 
-	keySizes = malloc(myPayload->interKeys->size * sizeof *keySizes);
+	keySizes = malloc(interKeysSize * sizeof *keySizes);
 	if(!keySizes) { goto error_with_keys; }
 
 	len = 0;
@@ -661,17 +671,17 @@ unsigned char * chat_message_payload_gka_downflow_serialize(ChatMessagePayloadPt
 	if(!ret) { goto error_with_filled_keys; }
 
 	unsigned int pos = 0;
-	chat_serial_int_to_string(myPayload->interKeys->size, &ret[pos]);
+	chat_serial_int_to_string(interKeysSize, &ret[pos]);
 	pos += 4;
 
-	for(i=0; i<myPayload->interKeys->size; i++) {
+	for(i=0; i<interKeysSize; i++) {
 		chat_serial_int_to_string(keySizes[i], &ret[pos]);
 		pos += 4;
 		memcpy(&ret[pos], keys[i], keySizes[i]);
 		pos += keySizes[i];
 	}
 
-	for(i=0; i<myPayload->interKeys->size; i++) { free(keys[i]); }
+	for(i=0; i<interKeysSize; i++) { free(keys[i]); }
 	free(keySizes);
 	free(keys);
 
@@ -679,7 +689,7 @@ unsigned char * chat_message_payload_gka_downflow_serialize(ChatMessagePayloadPt
 	return ret;
 
 error_with_filled_keys:
-	for(i=0; i<myPayload->interKeys->size; i++) { free(keys[i]); }
+	for(i=0; i<interKeysSize; i++) { free(keys[i]); }
 	free(keySizes);
 error_with_keys:
 	free(keys);
@@ -740,7 +750,7 @@ ChatMessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned cha
 error_with_key:
 	free(key);
 error_with_payload_interKeys:
-	otrl_list_destroy(payload->interKeys);
+	otrl_list_free(payload->interKeys);
 error_with_payload:
 	free(payload);
 error:
@@ -756,7 +766,7 @@ void chat_message_payload_gka_downflow_free(ChatMessagePayloadPtr payload)
 {
 	ChatMessagePayloadGKADownflow *myPayload = payload;
 
-	otrl_list_destroy(myPayload->interKeys);
+	otrl_list_free(myPayload->interKeys);
 	free(myPayload);
 }
 
@@ -1213,20 +1223,25 @@ int chat_message_type_should_be_signed(ChatMessageType type)
 	}
 }
 
+/**
+  Serializes a chat message
+
+  @param[in]  msg 		The message to be serialized
+  @param[out] length 	The size of the serialized message
+
+  @return A pointer to the serialized message. NULL in case of error.
+  	  	  Caller should free the returned buffer.
+ */
 unsigned char * chat_message_serialize(ChatMessage *msg, size_t *length)
 {
-	//char *message;
 	unsigned char *buf, *payload_serialized = NULL;
 	size_t buflen, payloadlen = 0;
 	unsigned int pos = 0;
 
 	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: start\n");
 
-	fprintf(stderr, "libotr-mpOTR: msg: %p\n", msg);
-
 	if(!msg) { goto error; }
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before if(msg->payload_serialize && msg->payload) {\n");
 	if(msg->payload_serialize && msg->payload) {
 		payload_serialized = msg->payload_serialize(msg->payload, &payloadlen);
 		if(!payload_serialized) { goto error; }
@@ -1237,7 +1252,6 @@ unsigned char * chat_message_serialize(ChatMessage *msg, size_t *length)
 		buflen += CHAT_OFFER_SID_LENGTH;
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before malloc\n");
 	buf = malloc(buflen * sizeof *buf);
 	if(!buf) { goto error_with_payload_serialized; }
 
@@ -1249,12 +1263,12 @@ unsigned char * chat_message_serialize(ChatMessage *msg, size_t *length)
 	pos += 4;
 	chat_serial_int_to_string((int)msg->chatInsTag, &buf[pos]);
 	pos += 4;
+
 	if(chat_message_type_contains_sid(msg->msgType)) {
 		memcpy(&buf[pos], msg->sid, CHAT_OFFER_SID_LENGTH);
 		pos += CHAT_OFFER_SID_LENGTH;
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before if(payload_serialized) {\n");
 	if(payload_serialized) {
 		memcpy(&buf[pos], payload_serialized, payloadlen);
 		pos += payloadlen;
@@ -1267,11 +1281,25 @@ unsigned char * chat_message_serialize(ChatMessage *msg, size_t *length)
 	return buf;
 
 error_with_payload_serialized:
+	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: error_with_payload_serialized\n");
 	free(payload_serialized);
 error:
+	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: error\n");
 	return NULL;
 }
 
+/**
+  Parses the message payload from a serialized chat messsage payload
+
+  @param[in/out]  msg 		The message struct that the payload will be parsed
+  	  	  	  	  	  	  	into. Should have a proper value in msgType field.
+  @param[in]  	  message 	The serialized message payload
+  @param[out] 	  length 	The length of the serialized message payload
+
+  @return 0 in case of no error. A non-zero value in case of error. The caller
+  	  	  should check if msg->payload and msg->payload_free are not NULL, and
+  	  	  free the payload using the msg->payload_free(msg->payload) function.
+ */
 int chat_message_payload_parse(ChatMessage *msg, const unsigned char *message, size_t length)
 {
 	fprintf(stderr, "libotr-mpOTR: chat_message_payload_parse: start\n");
@@ -1373,6 +1401,15 @@ error:
 	return 1;
 }
 
+/**
+  Parses the message type from a serialized chat messsage
+
+  @param[in]  message 		The serialized chat message
+  @param[in]  messagelen 	The length of the serialized chat message
+  @param[out] type 			The parsed type
+
+  @return 0 in case of no error. A non-zero value in case of error.
+ */
 int chat_message_parse_type(const unsigned char *message, const size_t messagelen, ChatMessageType *type)
 {
 	if(messagelen < 3) { goto error; }
@@ -1384,6 +1421,15 @@ error:
 	return 1;
 }
 
+/**
+  Parses the sid from a serialized chat messsage
+
+  @param[in]  message 		The serialized chat message
+  @param[in]  messagelen 	The length of the serialized chat message
+  @param[out] sid 			The parsed sid
+
+  @return 0 in case of no error. A non-zero value in case of error.
+ */
 int chat_message_parse_sid(const unsigned char *message, const size_t messagelen, unsigned char **sid)
 {
 	unsigned char *thesid;
@@ -1403,6 +1449,17 @@ error:
 	return 1;
 }
 
+/**
+  Parses a serialized chat messsage
+
+  @param[in] message 		The serialized chat message
+  @param[in] messagelen 	The length of the serialized chat message
+  @param[in] accountname 	The sender's name
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
 ChatMessage * chat_message_parse(const unsigned char *message, const size_t messagelen, const char *accountname)
 {
 	ChatMessage *msg;
@@ -1414,7 +1471,10 @@ ChatMessage * chat_message_parse(const unsigned char *message, const size_t mess
 	msg = malloc(sizeof *msg);
 	if(!msg) { goto error; }
 
-	msg->senderName = NULL;
+	msg->payload = NULL;
+	msg->payload_free = NULL;
+	msg->payload_serialize = NULL;
+
 	msg->senderName = strdup(accountname);
 	if(!msg->senderName) { goto error_with_msg; }
 

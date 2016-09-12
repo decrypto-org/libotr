@@ -36,7 +36,7 @@ static gcry_error_t chat_privkeydh_sexp_write(FILE *privf, gcry_sexp_t sexp)
     char *buf;
 
     buflen = gcry_sexp_sprint(sexp, GCRYSEXP_FMT_ADVANCED, NULL, 0);
-    buf = malloc(buflen);
+    buf = malloc(buflen * sizeof *buf);
     if (buf == NULL && buflen > 0) {
 	return gcry_error(GPG_ERR_ENOMEM);
     }
@@ -80,7 +80,7 @@ gcry_error_t otrl_chat_privkeydh_read_FILEp(OtrlUserState us, FILE *privf)
     	err = gcry_error_from_errno(errno);
     	return err;
     }
-    buf = malloc(st.st_size);
+    buf = malloc(st.st_size * sizeof *buf);
     if (!buf && st.st_size > 0) {
     	return gcry_error(GPG_ERR_ENOMEM);
     }
@@ -144,7 +144,7 @@ error:
 gcry_error_t chat_privkeydh_generate_start(OtrlUserState us, const char* accountname,
                                       const char* protocol, ChatIdKey **newkey)
 {
-    gcry_error_t err;
+	int err;
     ChatIdKey *key;
 
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_start: start\n");
@@ -261,20 +261,23 @@ int otrl_chat_privkeydh_generate_FILEp(OtrlUserState us, FILE *privf,
 
     return err;
 }
-ChatIdKey * chat_privkeydh_find_or_generate(OtrlUserState us, const OtrlMessageAppOps *ops, const char *accountname, const char* protocol){
+ChatIdKey * chat_privkeydh_find_or_generate(OtrlUserState us, const OtrlMessageAppOps *ops, const char *accountname, const char* protocol)
+{
 	ChatIdKey *key;
+	int keyexists;
 
-	int keyexists = chat_privkeydh_key_exists(us, accountname, protocol);
+	fprintf(stderr, "libotr-mpOTR: chat_privkeydh_find_or_generate: start\n");
+    keyexists = chat_privkeydh_key_exists(us, accountname, protocol);
 	if(!keyexists) {
 		ops->chat_privkey_create(NULL, accountname, protocol);
 	}
 
-	fprintf(stderr, "chat_privkeydh_find_or_generate: dumping key list\n");
+	fprintf(stderr, "libotr-mpOTR: chat_privkeydh_find_or_generate: dumping key list\n");
 	otrl_list_dump(us->chat_privkey_list);
 
 	key = chat_id_key_manager.find_key(us->chat_privkey_list, accountname, protocol);
 
-	fprintf(stderr, "chat_privkeydh_find_or_generate: after find_key\n");
+	fprintf(stderr, "libotr-mpOTR: chat_privkeydh_find_or_generate: end\n");
 
 	return key;
 }
