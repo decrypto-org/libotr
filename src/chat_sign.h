@@ -41,6 +41,8 @@ void chat_sign_print_pubkey(SignKey *key);
 
 SignKey * chat_sign_genkey();
 
+SignKey * chat_sign_copy_pub(SignKey *key);
+
 Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datalen);
 
 int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Signature *signature);

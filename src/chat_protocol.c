@@ -348,60 +348,114 @@ error:
 	return 1;
 }
 
-int chat_protocol_consensus_inform(const OtrlMessageAppOps *ops, const OtrlChatContext *ctx)
+int chat_protocol_emit_event(const OtrlMessageAppOps *ops, const OtrlChatContext *ctx, OtrlChatEvent *event)
 {
-	int flag;
-	unsigned int pos;
-	ChatParticipant * me = NULL;
-	OtrlListNode *cur = NULL;
 	OtrlChatInfo *info = NULL;
-	OtrlChatEvent *event;
-	OtrlChatEventConsensusParticipantData *event_data;
-	OtrlChatEventType event_type;
-
-	me = chat_participant_find(ctx, ctx->accountname, &pos);
-	if(!me) { goto error; }
 
 	info = chat_info_create(ctx);
 	if(!info) { goto error; }
 
-	flag = 1;
-
-	for(cur = ctx->participants_list->head;	cur != NULL; cur=cur->next) {
-		ChatParticipant *part = cur->payload;
-
-		if(part != me) {
-			event_data = chat_event_consensus_participant_data_create(part->username);
-			if(!event_data) { goto error_with_info; }
-
-			event_type = (part->consensus) ? OTRL_CHAT_EVENT_CONSENSUS_PARTICIPANT_OK : OTRL_CHAT_EVENT_CONSENSUS_PARTICIPANT_BROKEN;
-
-			event = chat_event_create(event_type, event_data, chat_event_consensus_participant_data_free);
-			if(!event) { goto error_with_event_data; }
-
-			ops->chat_handle_event(NULL, info, event);
-			chat_event_free(event);
-
-			if(!part->consensus) flag = 0;
-		}
-	}
-
-	event_type = (flag) ? OTRL_CHAT_EVENT_CONSENSUS_OK : OTRL_CHAT_EVENT_CONSENSUS_BROKEN;
-
-	event = chat_event_create(event_type, NULL, NULL);
-	if(!event) { goto error_with_info; }
-
 	ops->chat_handle_event(NULL, info, event);
-	chat_event_free(event);
 
 	chat_info_free(info);
 
 	return 0;
 
-error_with_event_data:
-	chat_event_consensus_participant_data_free(event_data);
-error_with_info:
-	chat_info_free(info);
+error:
+	return 1;
+}
+
+int chat_protocol_emit_consensus_events(const OtrlMessageAppOps *ops, const OtrlChatContext *ctx)
+{
+	OtrlChatEvent *event;
+	OtrlListNode *cur = NULL;
+	ChatParticipant * me = NULL;
+	unsigned int pos;
+	int err;
+
+	me = chat_participant_find(ctx, ctx->accountname, &pos);
+	if(!me) { goto error; }
+
+	for(cur = ctx->participants_list->head;	cur != NULL; cur=cur->next) {
+		ChatParticipant *part = cur->payload;
+		if(part != me && !part->consensus) {
+			event = chat_event_consensus_broken_create(part->username);
+			if(!event) { goto error; }
+
+			err = chat_protocol_emit_event(ops, ctx, event);
+			if(err) { goto error_with_event; }
+
+			chat_event_free(event);
+		}
+	}
+
+	return 0;
+
+error_with_event:
+	chat_event_free(event);
+error:
+	return 1;
+}
+
+int chat_protocol_emit_offer_received_event(const OtrlMessageAppOps *ops, const OtrlChatContext *ctx, const char *username)
+{
+	OtrlChatEvent *event;
+	int err;
+
+	event = chat_event_offer_received_create(username);
+	if(!event) { goto error; }
+
+	err = chat_protocol_emit_event(ops, ctx, event);
+	if(err) { goto error_with_event; }
+
+	chat_event_free(event);
+
+	return 0;
+
+error_with_event:
+	chat_event_free(event);
+error:
+	return 1;
+}
+
+int chat_protocol_emit_started_event(const OtrlMessageAppOps *ops, const OtrlChatContext *ctx)
+{
+	OtrlChatEvent *event;
+	int err;
+
+	event = chat_event_started_create();
+	if(!event) { goto error; }
+
+	err = chat_protocol_emit_event(ops, ctx, event);
+	if(err) { goto error_with_event; }
+
+	chat_event_free(event);
+
+	return 0;
+
+error_with_event:
+	chat_event_free(event);
+error:
+	return 1;
+}
+
+int chat_protocol_emit_finished_event(const OtrlMessageAppOps *ops, const OtrlChatContext *ctx)
+{
+	OtrlChatEvent *event;
+	int err;
+
+	event = chat_event_finished_create();
+	if(!event) { goto error; }
+
+	err = chat_protocol_emit_event(ops, ctx, event);
+	if(err) { goto error_with_event; }
+
+	chat_event_free(event);
+
+	return 0;
+
+error_with_event:
+	chat_event_free(event);
 error:
 	return 1;
 }
@@ -456,6 +510,10 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 		if(chat_offer_is_my_message(msg)) {
 			// TODO Dimtiris: Check if we have this already and free it
 			if(!ctx->offer_info) {
+
+				// Library-Application Communication
+				chat_protocol_emit_offer_received_event(ops, ctx, sender);
+
 				err = chat_protocol_participants_list_init(us, ops, ctx);
 				if(err) { goto error_with_msg; }
 
@@ -586,7 +644,10 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 				}
 
 				if(ctx->attest_info && ctx->attest_info->state == CHAT_ATTESTSTATE_FINISHED) {
+					// Library-Application Communication
+					chat_protocol_emit_started_event(ops, ctx);
 					chat_protocol_app_info_refresh(ops, ctx);
+
 					chat_shutdown_init(ctx);
 				}
 			}
@@ -660,8 +721,9 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 					chat_message_free(msgToSend);
 					msgToSend = NULL;
 
-					chat_protocol_consensus_inform(ops, ctx);
-
+					// Library-Application Communication
+					chat_protocol_emit_finished_event(ops, ctx);
+					chat_protocol_emit_consensus_events(ops, ctx);
 					chat_protocol_app_info_refresh(ops, ctx);
 
 					err = chat_protocol_reset(us, ctx);
