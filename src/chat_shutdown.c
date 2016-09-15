@@ -98,7 +98,7 @@ int chat_shutdown_send_shutdown(OtrlChatContext *ctx, ChatMessage **msgToSend)
 {
     ChatParticipant *me;
     unsigned int my_pos;
-    unsigned char my_hash[MESSAGES_HASH_LEN];
+    //unsigned char my_hash[MESSAGES_HASH_LEN];
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_shutdown: start\n");
 
@@ -111,11 +111,11 @@ int chat_shutdown_send_shutdown(OtrlChatContext *ctx, ChatMessage **msgToSend)
         return 1;
     }
 
-    if(chat_participant_get_messages_hash(me, my_hash)) {
+    if(chat_participant_get_messages_hash(me, me->messages_hash)) {
         return 1;
     }
 
-    *msgToSend = chat_message_shutdown_shutdown_create(ctx, my_hash);
+    *msgToSend = chat_message_shutdown_shutdown_create(ctx, me->messages_hash);
     if(!*msgToSend) {
     	return 1;
     }
@@ -184,12 +184,6 @@ int chat_shutdown_handle_shutdown_message(OtrlChatContext *ctx, ChatMessage *msg
         if(get_consensus_hash(ctx->participants_list, ctx->shutdown_info.consensus_hash)) {
            return 1;
         }
-
-        //*msgToSend = chat_message_shutdown_digest_create(ctx,
-                                                         //ctx->shutdown_info.consensus_hash);
-        //if(!*msgToSend) {
-        //    return 1;
-        //}
 
         ctx->shutdown_info.state = CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS;
     }
@@ -287,6 +281,15 @@ int chat_shutdown_handle_digest_message(OtrlChatContext *ctx, ChatMessage *msg, 
 
     /* Determine consensus with this user */
     sender->consensus = memcmp(digest_msg->digest, ctx->shutdown_info.consensus_hash, CONSENSUS_HASH_LEN) ? 0 : 1;
+
+    fprintf(stderr, "libotr-mpOTR: local digest: ");
+    for(int i = 0; i < CONSENSUS_HASH_LEN; i++)
+        fprintf(stderr, "%0X", ctx->shutdown_info.consensus_hash[i]);
+    fprintf(stderr, "\nlibotr-mpOTR: received digest: ");
+    for(int i = 0; i < CONSENSUS_HASH_LEN; i++)
+        fprintf(stderr, "%0X", digest_msg->digest[i]);
+    fprintf(stderr, "\n");
+
 
     if(0 == ctx->shutdown_info.digests_remaining) {
         fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_digest_message: waiting ends\n");

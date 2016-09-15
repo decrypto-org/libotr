@@ -72,7 +72,7 @@ ChatParticipant* chat_participant_create(const char *username, gcry_mpi_t pub_ke
 
   @return If the user is found a pointer to it will be returned. Otherwise NULL
  */
-ChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username, unsigned int *position);
+ChatParticipant* chat_participant_find(const OtrlChatContext *ctx, const char *username, unsigned int *position);
 
 /**
   Add a user to the ctx's participants list

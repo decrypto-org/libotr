@@ -85,13 +85,13 @@ error:
 	return NULL;
 }
 
-ChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username, unsigned int *position)
+ChatParticipant* chat_participant_find(const OtrlChatContext *ctx, const char *username, unsigned int *position)
 {
     unsigned int i;
     OtrlListNode *cur;
     ChatParticipant *res = NULL;
 
-    fprintf(stderr,"chat_participant_find: start\n");
+    fprintf(stderr,"libotr-mpOTR: chat_participant_find: start\n");
 
     if(!ctx) { goto error; }
     if(!ctx->participants_list) { goto error; }
@@ -119,7 +119,7 @@ ChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *usernam
     	res = cur->payload;
     }
 
-    fprintf(stderr,"chat_participant_find: end\n");
+    fprintf(stderr,"libotr-mpOTR: chat_participant_find: end\n");
 
     return res;
 
@@ -146,6 +146,8 @@ int chat_participant_list_from_usernames(OtrlList *participants, char **username
 	int err;
 
 	fprintf(stderr, "libotr-mpOTR: chat_participant_list_from_usernames: start\n");
+
+	otrl_list_clear(participants);
 
 	for(size_t i = 0; i < usernames_size; i++) {
 		a_participant = chat_participant_create(usernames[i],NULL);
