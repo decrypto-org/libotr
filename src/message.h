@@ -296,8 +296,10 @@ typedef struct s_OtrlMessageAppOps {
     void (*timer_control)(void *opdata, unsigned int interval);
 
     /* DIKOMAS */
-    void (*chat_inject_message)(void *opdata, const char *accountname, const char *protocol, otrl_chat_token_t chat_token, const char *message);
-    char **(*chat_get_participants)(void *opdata, const char *accountname, const char *protocol, otrl_chat_token_t chat_token, unsigned int *size);
+    void (*chat_inject_message)(void *opdata, const OtrlChatInfo *info, const char *message);
+    void (*chat_handle_event)(void *odata, const OtrlChatInfo *info, const OtrlChatEvent *event);
+    void (*chat_display_notification_cb)(void *opdata, const OtrlChatInfo *info, const char *notification);
+    char **(*chat_get_participants)(void *opdata, const OtrlChatInfo *info, unsigned int *size);
     void (*chat_privkey_create)(void *opdata, const char *accountname, const char *protocol);
     void (*chat_fingerprints_write)(void *opdata);
     void (*chat_info_refresh)(void *opdata, const OtrlChatInfo *info);

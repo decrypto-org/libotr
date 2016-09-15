@@ -311,4 +311,32 @@ typedef struct OtrlChatInfoStruct {
 	OtrlChatInfoPrivacyLevel level;
 } OtrlChatInfo;
 
+typedef enum {
+	// Event emitted when the protocol attempts to start a conversation
+	OTRL_CHAT_EVENT_STARTING,
+
+	// Event emitted when the private conversation has started
+	OTRL_CHAT_EVENT_STARTED,
+
+	// Event emitted when a private chatroom receives a plaintext message
+	OTRL_CHAT_EVENT_PLAINTEXT_RECEIVED,
+
+	OTRL_CHAT_EVENT_CONSENSUS_PARTICIPANT_OK,
+	OTRL_CHAT_EVENT_CONSENSUS_PARTICIPANT_BROKEN,
+	OTRL_CHAT_EVENT_CONSENSUS_OK,
+	OTRL_CHAT_EVENT_CONSENSUS_BROKEN
+} OtrlChatEventType;
+
+typedef void * OtrlChatEventDataPtr;
+
+typedef struct OtrlChatEventStruct {
+	OtrlChatEventType type;
+	void *data;
+	void (*data_free)(OtrlChatEventDataPtr);
+} OtrlChatEvent;
+
+typedef struct OtrlChatEventConsensusParticipantData {
+	char *username;
+} OtrlChatEventConsensusParticipantData;
+
 #endif /* CHAT_TYPES_H */
