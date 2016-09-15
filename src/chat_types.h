@@ -312,19 +312,12 @@ typedef struct OtrlChatInfoStruct {
 } OtrlChatInfo;
 
 typedef enum {
-	// Event emitted when the protocol attempts to start a conversation
-	OTRL_CHAT_EVENT_STARTING,
-
-	// Event emitted when the private conversation has started
-	OTRL_CHAT_EVENT_STARTED,
-
-	// Event emitted when a private chatroom receives a plaintext message
-	OTRL_CHAT_EVENT_PLAINTEXT_RECEIVED,
-
-	OTRL_CHAT_EVENT_CONSENSUS_PARTICIPANT_OK,
-	OTRL_CHAT_EVENT_CONSENSUS_PARTICIPANT_BROKEN,
-	OTRL_CHAT_EVENT_CONSENSUS_OK,
-	OTRL_CHAT_EVENT_CONSENSUS_BROKEN
+	OTRL_CHAT_EVENT_OFFER_RECEIVED, 	/* emitted when we received an offer */
+	OTRL_CHAT_EVENT_STARTING,			/* emitted when the protocol attempts to start a private session */
+	OTRL_CHAT_EVENT_STARTED,			/* emitted when the private conversation has started */
+	OTRL_CHAT_EVENT_PLAINTEXT_RECEIVED,	/* emitted when a private chatroom receives a plaintext message */
+	OTRL_CHAT_EVENT_CONSENSUS_BROKEN, 	/* emitted when there was no consensus with a participant */
+	OTRL_CHAT_EVENT_FINISHED			/* emited when a private session was finished */
 } OtrlChatEventType;
 
 typedef void * OtrlChatEventDataPtr;

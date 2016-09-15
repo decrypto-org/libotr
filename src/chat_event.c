@@ -47,7 +47,7 @@ error:
 	return NULL;
 }
 
- void chat_event_consensus_participant_data_free(OtrlChatEventDataPtr data)
+ void chat_event_participant_data_free(OtrlChatEventDataPtr data)
 {
 	 OtrlChatEventConsensusParticipantData *part_data = data;
 	 if(part_data) {
@@ -56,7 +56,7 @@ error:
 	 free(part_data);
 }
 
-OtrlChatEventConsensusParticipantData *chat_event_consensus_participant_data_create(const char *username)
+OtrlChatEventConsensusParticipantData *chat_event_participant_data_create(const char *username)
 {
 	OtrlChatEventConsensusParticipantData *data;
 
@@ -70,6 +70,83 @@ OtrlChatEventConsensusParticipantData *chat_event_consensus_participant_data_cre
 
 error_with_data:
 	free(data);
+error:
+	return NULL;
+}
+
+OtrlChatEvent *chat_event_offer_received_create(const char *username)
+{
+	OtrlChatEvent *event;
+	OtrlChatEventConsensusParticipantData *data;
+
+	data = chat_event_participant_data_create(username);
+	if(!data) { goto error; }
+
+	event = chat_event_create(OTRL_CHAT_EVENT_OFFER_RECEIVED, data, chat_event_participant_data_free);
+	if(!event) { goto error_with_data; }
+
+	return event;
+
+error_with_data:
+	chat_event_participant_data_free(data);
+error:
+	return NULL;
+}
+
+OtrlChatEvent *chat_event_starting_create()
+{
+	OtrlChatEvent *event;
+
+	event = chat_event_create(OTRL_CHAT_EVENT_STARTING, NULL, NULL);
+	if(!event) { goto error; }
+
+	return event;
+
+error:
+	return NULL;
+}
+
+OtrlChatEvent *chat_event_started_create()
+{
+	OtrlChatEvent *event;
+
+	event = chat_event_create(OTRL_CHAT_EVENT_STARTED, NULL, NULL);
+	if(!event) { goto error; }
+
+	return event;
+
+error:
+	return NULL;
+}
+
+OtrlChatEvent *chat_event_consensus_broken_create(const char *username)
+{
+	OtrlChatEvent *event;
+	OtrlChatEventConsensusParticipantData *data;
+
+	data = chat_event_participant_data_create(username);
+	if(!data) { goto error; }
+
+	event = chat_event_create(OTRL_CHAT_EVENT_CONSENSUS_BROKEN, data, chat_event_participant_data_free);
+	if(!event) { goto error_with_data; }
+
+	return event;
+
+error_with_data:
+	chat_event_participant_data_free(data);
+error:
+	return NULL;
+}
+
+OtrlChatEvent *chat_event_finished_create()
+{
+	OtrlChatEvent *event;
+
+	event = chat_event_create(OTRL_CHAT_EVENT_FINISHED, NULL, NULL);
+	if(!event) { goto error; }
+
+	return event;
+
 error:
 	return NULL;
 }

@@ -218,7 +218,7 @@ int append_with_key(OtrlList *new_key_list, OtrlList *old_key_list, DH_keypair *
 		if(!w) { goto error; }
 		*w = gcry_mpi_new(256);
 
-		/* raise it to the key->prive (mod the modulo) */
+		/* raise it to the key->priv (mod the modulo) */
 		otrl_dh_powm(*w, *tmp , key->priv);
 
 		/* Append it to the new_list and check if it was added correctly */
@@ -328,9 +328,11 @@ OtrlList * final_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 
 	fprintf(stderr, "libotr-mpOTR: final_key_list_to_send: start\n");
 
+    /* Create a new list */
 	new_list = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
 	if(!new_list) { goto error; }
 
+    /* And add each intermediate key, raising it to our private key */
 	err = append_with_key(new_list, key_list, key);
 	if(err) { goto error_with_new_list; }
 
@@ -368,6 +370,7 @@ gcry_error_t get_participants_hash(OtrlList *participants, unsigned char* hash)
 
 	fprintf(stderr, "libotr-mpOTR: get_participants_hash: start\n");
 
+    /* Open a new md */
 	err = gcry_md_open(&md, GCRY_MD_SHA512, 0);
 	if(err)
 		return err;
@@ -437,7 +440,7 @@ int chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
         return 1;
     }
 
-    /* Do any initializations needed */
+    /* Initialize the gka info */
     g_err = initialize_gka_info(ctx->gka_info);
     if(g_err) {
     	return 1;
@@ -661,24 +664,7 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
 
 	fprintf(stderr, "libotr-mpOTR: handle_downflow_message: start\n");
 
-    //DONE? TODO check if we are in the correct state before processing downflow
-    /* Check if the message is intended for the same users */
-    /*if(memcmp(ctx->sid, msg->sid, CHAT_PARTICIPANTS_HASH_LENGTH)) {
-    	fprintf(stderr,"libotr-mpOTR: handle_downflow_message: hashes are not equal");
-    	fprintf(stderr,"libotr-mpOTR: handle_downflow_message: stored hash is: ");
-    	for(size_t i = 0; i < CHAT_OFFER_SID_LENGTH; i++)
-    		fprintf(stderr,"%02X", ctx->sid[i]);
-    	fprintf(stderr,"\n");
-
-    	fprintf(stderr,"ligotr-mpOTR: handle_downflow_message: received hash is: ");
-    	for(size_t i = 0; i < CHAT_OFFER_SID_LENGTH; i++)
-    		fprintf(stderr,"%02X", msg->sid[i]);
-    	fprintf(stderr,"\n");
-
-    	return gcry_error(GPG_ERR_BAD_DATA);
-    }
-    fprintf(stderr, "libotr-mpOTR: handle_downflow_message: after hash check\n");
-    */
+    /* Get the intermediate key list length */
     key_list_length = otrl_list_length(downflowMsg->interKeys);
 
     /* The key list is reversed so we need the i-th element from the end
@@ -701,6 +687,7 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
         return 1;
     }
 
+    /* Calculate the shared secret */
     err = chat_enc_create_secret(ctx->enc_info, *w, ctx->gka_info->keypair);
     if(err) {
     	return err;

@@ -54,6 +54,7 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 
     fprintf(stderr,"chat_dske_init: start\n");
 
+    /* Allocate memory for the info struct */
     ctx->dske_info = malloc(sizeof(*ctx->dske_info));
     if(!ctx->dske_info) {
         return DSKE_ERROR;
@@ -61,6 +62,7 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 
     chat_idkey_print(ctx->identity_key);
 
+    /* Find us in the participant list */
     me = chat_participant_find(ctx, ctx->accountname, &my_pos);
     if(!me) {
         return DSKE_ERROR;
@@ -68,39 +70,41 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 
     //chat_idkey_print_key(ctx->identity_key);
     fprintf(stderr,"chat_dske_init: before genkey\n");
-    //TODO make sure to destroy the key in the event of an error
+    //TODO 1: make sure to destroy the key in the event of an error KOSTIS
+    //TODO 2: Is ctx->singing_key needed?? i dont think it is used anywhere...
+    //        Generate it in a local variable instead of a context field. KOSTIS
+    /* Generate an ephemeral signing key for this session */
     ctx->signing_key = chat_sign_genkey();
 
     //chat_idkey_print_key(ctx->identity_key);
-    fprintf(stderr,"chat_dske_init: after my keygen\n");
+    fprintf(stderr,"chat_dske_init: after genkey\n");
     //TODO encapsulate this in a chat_sign function
-    me->sign_key = malloc(sizeof *(me->sign_key));
-    if(!me->sign_key) {
-        chat_sign_destroy_key(ctx->signing_key);
-            return DSKE_ERROR;
-    }
 
-    //chat_idkey_print_key(ctx->identity_key);
-    //fprintf(stderr,"chat_dske_init: after my key alloc\n");
-    me->sign_key->pub_key = gcry_sexp_find_token(ctx->signing_key->pub_key, "public-key", 0);
-    me->sign_key->priv_key = NULL;
+    /* Copy the public part of the signing key in me */
+    me->sign_key = chat_sign_copy_pub(ctx->signing_key);
 
-    //gcry_sexp_dump(ctx->signing_key->pub_key);
-    //gcry_sexp_dump(me->sign_key->pub_key);
+    //me->sign_key = malloc(sizeof *(me->sign_key));
+    //if(!me->sign_key) {
+    //    chat_sign_destroy_key(ctx->signing_key);
+    //        return DSKE_ERROR;
+    //}
 
-    //fprintf(stderr,"chat_dske_init: after genkey\n");
+    //me->sign_key->pub_key = gcry_sexp_find_token(ctx->signing_key->pub_key, "public-key", 0);
+    //me->sign_key->priv_key = NULL;
 
-    /* Get what values we should broadcast to every other user */
-    //chat_idkey_print_key(ctx->identity_key);
+    fprintf(stderr,"chat_dske_init: after key copy\n");
+
+    /* Get what values we should broadcast to every other user. dataToSend will
+     * contain the data that will be sent in the handshake message. */
     error = chat_dake_init_keys(&ctx->dske_info->dake_info, ctx->identity_key, ctx->accountname,
                         ctx->protocol, &dataToSend);
     if(error) {
         chat_sign_destroy_key(ctx->signing_key);
         return DSKE_ERROR;
     }
-    //fprintf(stderr,"chat_dske_init: after init_keys\n");
 
-    /* Initiate a dake for each participant */
+    /* Initiate a dake for each participant. The dake struct holds information
+     * regarding each individual DAKE with each participant. */
     for(cur = ctx->participants_list->head; cur != NULL; cur = cur->next)
     {
         participant = cur->payload;

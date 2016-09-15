@@ -59,6 +59,26 @@ error:
     return NULL;
 }
 
+SignKey* chat_sign_copy_pub(SignKey* key)
+{
+    SignKey *tmp = NULL;
+
+    /* Allocate a new SignKey */
+    tmp = malloc(sizeof *tmp);
+    if(!tmp) { goto error; }
+
+    /* Copy the public part */
+    tmp->pub_key = gcry_sexp_find_token(key->pub_key, "public-key", 0);
+
+    /* And put NULL in the private part */
+    tmp->priv_key = NULL;
+
+    return tmp;
+
+error:
+    return NULL;
+}
+
 int chat_sign_get_data_hash(const unsigned char *data, size_t datalen, unsigned char *hash)
 {
     gcry_error_t err;
