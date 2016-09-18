@@ -24,6 +24,9 @@ void chat_event_free(OtrlChatEvent *event);
 OtrlChatEvent *chat_event_offer_received_create(const char *username);
 OtrlChatEvent *chat_event_starting_create();
 OtrlChatEvent *chat_event_started_create();
+OtrlChatEvent *chat_event_unverified_participant_create(const char *username);
+OtrlChatEvent *chat_event_plaintext_received_create(const char *username, const char *message);
+OtrlChatEvent *chat_event_private_received_create(const char *username);
 OtrlChatEvent *chat_event_consensus_broken_create(const char *username);
 OtrlChatEvent *chat_event_finished_create();
 

@@ -17,7 +17,7 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "chat_dake.h"
+#include "chat_types.h"
 
 int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend);
 

@@ -17,15 +17,18 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include <stdlib.h>
-
 #include <gcrypt.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "chat_types.h"
-#include "chat_sign.h"
 #include "chat_message.h"
 #include "chat_participant.h"
 #include "chat_protocol.h"
+#include "chat_sign.h"
+#include "chat_types.h"
+#include "context.h"
 #include "list.h"
 
 int chat_attest_assoctable_hash(OtrlList *partList, unsigned char **hash)
@@ -178,8 +181,6 @@ int chat_attest_create_our_message(OtrlChatContext *ctx, unsigned int our_pos , 
 	unsigned char *assoctable_hash;
 	ChatMessage *msg;
 
-	fprintf(stderr, "libotr-mpOTR: chat_attest_create_our_message: start\n");
-
 	err = chat_attest_assoctable_hash(ctx->participants_list, &assoctable_hash);
 	if(err) { goto error; }
 
@@ -187,8 +188,6 @@ int chat_attest_create_our_message(OtrlChatContext *ctx, unsigned int our_pos , 
 	if(!msg) { goto error_with_assoctable_hash; }
 
 	free(assoctable_hash);
-
-	fprintf(stderr, "libotr-mpOTR: chat_attest_create_our_message: end\n");
 
 	*msgToSend = msg;
 	return 0;
@@ -204,8 +203,6 @@ int chat_attest_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 	int err;
 	unsigned int our_pos;
 	ChatMessage *ourMsg = NULL;
-
-	fprintf(stderr, "libotr-mpOTR: chat_attest_init: start\n");
 
 	if(!ctx->attest_info) {
 		err = chat_attest_info_init(ctx);
@@ -223,8 +220,6 @@ int chat_attest_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 	}
 
 	ctx->attest_info->state = CHAT_ATTESTSTATE_AWAITING;
-
-	fprintf(stderr, "libotr-mpOTR: chat_attest_init: end\n");
 
 	*msgToSend = ourMsg;
 	return 0;
@@ -261,8 +256,7 @@ int chat_attest_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, Cha
 
 	if(res == 0) {
 		fprintf(stderr, "libotr-mpOTR: chat_attest_handle_message: attest verification failed for participant #: %u\n", their_pos);
-		//TODO call protocol reset in chat_protocol.c
-		//chat_protocol_reset(ctx);
+		chat_protocol_reset(ctx);
 		goto error;
 	} else {
 

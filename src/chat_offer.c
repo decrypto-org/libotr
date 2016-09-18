@@ -144,6 +144,8 @@ int chat_offer_sid_contribution_exists(OtrlChatContext *ctx, unsigned int positi
 		return 1;
 	}
 
+
+
 }
 
 int chat_offer_is_ready(OtrlChatContext *ctx)
@@ -174,7 +176,6 @@ int chat_offer_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, Chat
 	err = chat_participant_get_position(ctx->participants_list, msg->senderName, &their_pos);
 	if(err) { goto error; }
 	if(their_pos != payload->position || their_pos >= ctx->offer_info->size) {
-		fprintf(stderr, "libotr-mpOTR: chat_offer_handle_message: error in position their_pos: %u, payload->position: %u, offer_info->size: %lu\n", their_pos, payload->position, ctx->offer_info->size);
 		goto error;
 	}
 

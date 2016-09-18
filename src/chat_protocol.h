@@ -20,7 +20,7 @@
 #ifndef CHAT_PROTOCOL_H_
 #define CHAT_PROTOCOL_H_
 
-void chat_protocol_reset(OtrlChatContext *ctx);
+int chat_protocol_reset(OtrlChatContext *ctx);
 
  int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
  	void *opdata, const char *accountname, const char *protocol,

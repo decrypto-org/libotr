@@ -20,6 +20,8 @@
 #ifndef CHAT_ATTEST_H_
 #define CHAT_ATTEST_H_
 
+#include "chat_types.h"
+
 void chat_attest_info_free(ChatAttestInfo *info);
 
 int chat_attest_init(OtrlChatContext *ctx, ChatMessage **msgToSend);

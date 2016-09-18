@@ -49,10 +49,37 @@ int otrl_chat_privkeydh_generate_FILEp(OtrlUserState us, FILE *privf,
                                        const char *accountname,
                                        const char *protocol);
 
+/**
+ Returns the identity key for the specific accountname/protocol combination.
+
+ This function will return the long term identity key for the specific
+ accountname and protocol combination. If such a key does not exist in
+ the user state privkey list it will be generated and then returned.
+
+ @param us The user state
+ @param ops The application operations
+ @param accountname The accountname we are looking an identity key for
+ @param protocol The underlying IM protocol
+ @return The longeterm identity key. If there was an error NULL is returned
+*/
 ChatIdKey * chat_privkeydh_find_or_generate(OtrlUserState us, const OtrlMessageAppOps *ops, const char *accountname, const char* protocol);
 
+/**
+ Checks if a key exists in the user state privkey list
+
+ @param us The user state
+ @param accountname The account name to look for
+ @param protocol The protocol to look for
+ @return Non-zero if the key exists. Zero if it does not
+*/
 int chat_privkeydh_key_exists(OtrlUserState us, const char *accountname, const char *protocol);
 
+/**
+ Returns a pointer to a buffer that holds the fingerprint of the provided key
+
+ @param pubkey The key whose fingerprint we want
+ @return A pointer to a buffer that holds the fingerprint of the pubkey
+*/
 unsigned char *chat_privkeydh_get_fingerprint(gcry_mpi_t pubkey);
 
 #endif

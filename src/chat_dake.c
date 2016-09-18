@@ -18,10 +18,11 @@
  */
 
 #include "chat_dake.h"
-#include "chat_types.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "chat_privkeydh.h"
-#include "tdh.h"
-#include "list.h"
 
 #define CONF_MSG "key confirmation msg"
 #define CONF_MSG_LEN 20

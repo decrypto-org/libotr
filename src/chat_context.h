@@ -20,18 +20,16 @@
 #ifndef CHAT_CONTEXT_H_
 #define CHAT_CONTEXT_H_
 
-#include "instag.h"
-#include "context.h"
-#include "dh.h"
-#include "message.h"
 #include "chat_types.h"
+#include "message.h"
+#include "userstate.h"
 
 OtrlChatContext* chat_context_find(OtrlUserState us, const OtrlMessageAppOps *ops,
 		const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token);
 
 int chat_context_add(OtrlUserState us, OtrlChatContext* ctx);
 
-int chat_context_reset(OtrlChatContext *ctx);
+void chat_context_reset(OtrlChatContext *ctx);
 
 OtrlChatContext* chat_context_find_or_add(OtrlUserState us, const OtrlMessageAppOps *ops,
 		const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token);

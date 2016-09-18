@@ -17,27 +17,33 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "chat_context.h"
+
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "chat_context.h"
-#include "userstate.h"
-#include "list.h"
-#include "chat_token.h"
-#include "chat_participant.h"
+
+#include "chat_attest.h"
 #include "chat_auth.h"
+#include "chat_dske.h"
 #include "chat_enc.h"
 #include "chat_offer.h"
-#include "chat_dske.h"
-#include "chat_attest.h"
+#include "chat_participant.h"
 #include "chat_pending.h"
+#include "chat_shutdown.h"
+#include "chat_token.h"
+#include "chat_types.h"
+#include "context.h"
+#include "instag.h"
+#include "list.h"
+#include "message.h"
+#include "userstate.h"
 
 OtrlChatContext * chat_context_create(OtrlUserState us, const OtrlMessageAppOps *ops, const char *accountname, const char *protocol,
 		otrl_chat_token_t the_chat_token)
 {
 	OtrlChatContext *ctx;
 	OtrlInsTag *ourInstanceTag;
-
-	fprintf(stderr, "libotr-mpOTR: chat_context_create: start\n");
 
 	ctx = malloc(sizeof *ctx);
 	if(!ctx) { goto error; }
@@ -62,6 +68,10 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const OtrlMessageAppOps 
 
 	ctx->the_chat_token = the_chat_token;
 
+	ctx->protocol_version = CHAT_PROTOCOL_VERSION;
+	ctx->sign_state = CHAT_SINGSTATE_NONE;
+	ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
+
 	ctx->participants_list = otrl_list_create(&chat_participant_listOps, sizeof(ChatParticipant));
 	if(!ctx->participants_list) { goto error_with_protocol; }
 
@@ -71,18 +81,12 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const OtrlMessageAppOps 
 	ctx->offer_info = NULL;
 	ctx->attest_info = NULL;
 	ctx->dske_info = NULL;
-	ctx->sign_state = CHAT_SINGSTATE_NONE;
     ctx->gka_info = NULL;
-	ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
-	ctx->protocol_version = CHAT_PROTOCOL_VERSION;
 	ctx->enc_info = NULL;
+	ctx->shutdown_info = NULL;
 	ctx->signing_key = NULL;
 	ctx->app_data = NULL;
 	ctx->app_data_free = NULL;
-
-	//TODO shutdown info init, also change in chat_context_reset and chat_context_free
-
-	fprintf(stderr, "libotr-mpOTR: chat_context_create: end\n");
 
 	return ctx;
 
@@ -98,12 +102,10 @@ error:
 	return NULL;
 }
 
-int chat_context_reset(OtrlChatContext *ctx)
+void chat_context_reset(OtrlChatContext *ctx)
 {
 	otrl_list_clear(ctx->participants_list);
 	otrl_list_clear(ctx->pending_list);
-
-	// TODO remove ifs when refactoring *_free functions
 
 	chat_offer_info_free(ctx->offer_info);
 	ctx->offer_info = NULL;
@@ -120,20 +122,14 @@ int chat_context_reset(OtrlChatContext *ctx)
 	chat_enc_info_free(ctx->enc_info);
 	ctx->enc_info = NULL;
 
+	chat_shutdown_info_free(ctx->shutdown_info);
+	ctx->shutdown_info = NULL;
 
 	free(ctx->signing_key);
 	ctx->signing_key = NULL;
 
 	ctx->sign_state = CHAT_SINGSTATE_NONE;
 	ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
-	ctx->protocol_version = CHAT_PROTOCOL_VERSION;
-
-	/*
-	ctx->app_data = NULL;
-	ctx->app_data_free = NULL;
-	*/
-
-	return 0;
 }
 
 void chat_context_free(OtrlChatContext *ctx)
@@ -148,6 +144,7 @@ void chat_context_free(OtrlChatContext *ctx)
 		chat_auth_gka_info_free(ctx->gka_info);
 		chat_attest_info_free(ctx->attest_info);
 		chat_enc_info_free(ctx->enc_info);
+		chat_shutdown_info_free(ctx->shutdown_info);
 		free(ctx->signing_key);
 
 		if(ctx->app_data && ctx->app_data_free) {
@@ -174,28 +171,20 @@ int chat_context_compare(OtrlChatContext *a, OtrlChatContext *b)
 
 void chat_context_print(OtrlChatContext *ctx)
 {
-	fprintf(stderr, "libotr-mpOTR: chat_context_print: start\n");
-
 	fprintf(stderr, "OtrlChatContext:\n");
 	fprintf(stderr, "|-accountname   : %s\n", ctx->accountname);
 	fprintf(stderr, "|-protocol      : %s\n", ctx->protocol);
 	fprintf(stderr, "|-our_instance  : %d\n", (int)ctx->our_instance);
 	// TODO change the way we typecast the_chat_token
 	fprintf(stderr, "|-the_chat_token: %d\n", ctx->the_chat_token);
-
-	fprintf(stderr, "libotr-mpOTR: chat_context_print: end\n");
 }
 
 int chat_context_add(OtrlUserState us, OtrlChatContext* ctx)
 {
 	OtrlListNode *node = NULL;
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_add: start\n");
-
 	node = otrl_list_insert(us->chat_context_list, (PayloadPtr)ctx);
 	if(!node) {goto error; }
-
-	fprintf(stderr, "libotr-mpOTR: chat_context_add: end\n");
 
 	return 0;
 
@@ -224,8 +213,6 @@ OtrlChatContext* chat_context_find(OtrlUserState us, const OtrlMessageAppOps *op
 	OtrlListNode *foundListNode;
 	OtrlChatContext *target;
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_find: start\n");
-
 	target = chat_context_create(us, ops, accountname, protocol, the_chat_token);
 	if(!target) { goto error; }
 
@@ -235,8 +222,6 @@ OtrlChatContext* chat_context_find(OtrlUserState us, const OtrlMessageAppOps *op
 	if(!foundListNode) { goto error_with_target; }
 
 	chat_context_free(target);
-
-	fprintf(stderr, "libotr-mpOTR: chat_context_find: end\n");
 
 	return (OtrlChatContext *)foundListNode->payload;
 
@@ -252,8 +237,6 @@ OtrlChatContext* chat_context_find_or_add(OtrlUserState us, const OtrlMessageApp
 	OtrlChatContext *ctx;
 	int err;
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_find_or_add: start\n");
-
 	ctx = chat_context_find(us, ops, accountname, protocol, the_chat_token);
 
 	if(!ctx) {
@@ -262,8 +245,6 @@ OtrlChatContext* chat_context_find_or_add(OtrlUserState us, const OtrlMessageApp
 		err = chat_context_add(us, ctx);
 		if(err) { goto error_with_ctx; }
 	}
-
-	fprintf(stderr, "libotr-mpOTR: chat_context_find_or_add: end\n");
 
 	return ctx;
 
@@ -283,10 +264,8 @@ int chat_context_compareOp(PayloadPtr a, PayloadPtr b)
 
 void chat_context_printOp(OtrlListNode *node)
 {
-	fprintf(stderr, "libotr-mpOTR: chat_context_printOp: start\n");
 	OtrlChatContext *ctx = node->payload;
 	chat_context_print(ctx);
-	fprintf(stderr, "libotr-mpOTR: chat_context_printOp: end\n");
 }
 
 void chat_context_freeOp(PayloadPtr a)

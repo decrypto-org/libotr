@@ -122,7 +122,7 @@ OtrlChatFingerprint *chat_fingerprint_find(OtrlUserState us, char *accountname ,
 	int found = 0;
 
 	cur = us->chat_fingerprints->head;
-	//TODO better find implementation
+
 	while(cur != NULL && !found) {
 		fnprnt = cur->payload;
 
@@ -157,7 +157,6 @@ int chat_fingerprint_remove(OtrlUserState us, OtrlChatFingerprint *finger)
 {
 	OtrlListNode *node;
 
-
 	node = otrl_list_find(us->chat_fingerprints, finger);
 	if(!node) { goto error; }
 
@@ -171,24 +170,19 @@ error:
 
 int otrl_chat_fingerprint_verify(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint *finger)
 {
-	fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_verify: start\n");
-
+	// TODO check already initialized contexts and inform the application
 	finger->isTrusted = 1;
 	ops->chat_fingerprints_write(NULL);
 
-	fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_verify: end\n");
 	return 0;
 }
 
 int otrl_chat_fingerprint_forget(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint *finger)
 {
-
-	fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_forget: start\n");
-
+	// TODO check already initialized contexts and inform the application
 	chat_fingerprint_remove(us, finger);
 	ops->chat_fingerprints_write(NULL);
 
-	fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_forget: end\n");
 	return 0;
 }
 
@@ -209,16 +203,12 @@ int otrl_chat_fingerprint_read_FILEp(OtrlUserState us, FILE *fingerfile)
 
 		if(strlen(buf) == 0) { continue; }
 
-		fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_read_FILEp: parsing line: %s\n", buf);
-
 		pch = strtok (buf, ",");
 		if(pch == NULL) {
 			continue;
 		}
 		accountname = strdup(pch);
 		if(!accountname) { goto error; }
-
-		fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_read_FILEp: accountname: %s\n", accountname);
 
 		pch = strtok (NULL, ",");
 		if(pch == NULL) {
@@ -227,8 +217,6 @@ int otrl_chat_fingerprint_read_FILEp(OtrlUserState us, FILE *fingerfile)
 		}
 		protocol = strdup(pch);
 		if(!protocol) { goto error_with_accountname; }
-
-		fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_read_FILEp: protocol: %s\n", protocol);
 
 		pch = strtok (NULL, ",");
 		if(pch == NULL) {
@@ -239,8 +227,6 @@ int otrl_chat_fingerprint_read_FILEp(OtrlUserState us, FILE *fingerfile)
 		username = strdup(pch);
 		if(!username) { goto error_with_protocol; }
 
-		fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_read_FILEp: username: %s\n", username);
-
 		pch = strtok (NULL, ",");
 		if(pch == NULL) {
 			free(accountname);
@@ -250,8 +236,6 @@ int otrl_chat_fingerprint_read_FILEp(OtrlUserState us, FILE *fingerfile)
 		}
 		fingerprint_hex = strdup(pch);
 		if(!fingerprint_hex) { goto error_with_username; }
-
-		fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_read_FILEp: fingerprint_hex: %s\n", fingerprint_hex);
 
 		pch = strtok (NULL, ",");
 		if(pch == NULL) {
@@ -291,7 +275,6 @@ int otrl_chat_fingerprint_read_FILEp(OtrlUserState us, FILE *fingerfile)
 	fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_read_FILEp: dumping fingerprint list:\n");
 	otrl_list_dump(us->chat_fingerprints);
 
-
 	fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_read_FILEp: end\n");
 
 	return 0;
@@ -325,7 +308,6 @@ int otrl_chat_fingerprint_write_FILEp(OtrlUserState us, FILE *fingerFile)
 	{
 		fnprnt = cur->payload;
 		hex_fingerprint = otrl_chat_fingerprint_bytes_to_hex(fnprnt->fingerprint);
-		// TODO better handle this case
 		if(!hex_fingerprint) { goto error; }
 		isTrustedChar = (fnprnt->isTrusted) ? '1' : '0';
 		fprintf(fingerFile, "%s,%s,%s,%s,%c\n", fnprnt->accountname, fnprnt->protocol, fnprnt->username, hex_fingerprint, isTrustedChar);
@@ -349,8 +331,6 @@ void chat_fingerprint_print(OtrlChatFingerprint *fingerprint)
 
 	free(finhex);
 }
-
-
 
 int chat_fingerprint_compare(OtrlChatFingerprint *a, OtrlChatFingerprint *b)
 {

@@ -59,7 +59,8 @@ gcry_error_t otrl_chat_privkeydh_read_FILEp(OtrlUserState us, FILE *privf)
     const char *token;
     size_t tokenlen;
     gcry_error_t err;
-	gcry_sexp_t accounts;
+	gcry_sexp_t accounts; //Linguistic note. accounts means account sexp.
+                          //Its not plural
     gcry_sexp_t allkeys;
     int i;
     OtrlListNode *node;
@@ -69,66 +70,67 @@ gcry_error_t otrl_chat_privkeydh_read_FILEp(OtrlUserState us, FILE *privf)
 
     if (!privf) return gcry_error(GPG_ERR_NO_ERROR);
 
-    fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_read_FILEp: before clear\n");
     /* Release any old ideas we had about our keys */
     otrl_list_clear(us->chat_privkey_list);
 
-    fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_read_FILEp: before load\n");
-    /* Load the data into a buffer */
+    /** Load the data into a buffer **/
+
+    /* Get the file descriptor of the privkey file */
     privfd = fileno(privf);
+
+    /* Use fstat to get the file size */
     if (fstat(privfd, &st)) {
     	err = gcry_error_from_errno(errno);
     	return err;
     }
+
+    /* Allocate memory for a buffer to hold the file contents */
     buf = malloc(st.st_size * sizeof *buf);
     if (!buf && st.st_size > 0) {
     	return gcry_error(GPG_ERR_ENOMEM);
     }
+
+    /* Read the file contents into the buffer */
     if (fread(buf, st.st_size, 1, privf) != 1) {
     	err = gcry_error_from_errno(errno);
     	free(buf);
     	return err;
     }
 
+    /* Create an s-expression from the read buffer */
     err = gcry_sexp_new(&allkeys, buf, st.st_size, 0);
     free(buf);
     if (err) {
 	    return err;
     }
-    fprintf(stderr,"libotr-mpOTR: otrl_chat_privkeydh_read_FILEp: before nth_data \n");
+
+
+    /* Validate that the s-expression is a "chat_privkeys" instance */
     token = gcry_sexp_nth_data(allkeys, 0, &tokenlen);
     if (tokenlen != 13 || strncmp(token, "chat_privkeys", 13)) {
 	gcry_sexp_release(allkeys);
 	return gcry_error(GPG_ERR_UNUSABLE_SECKEY);
     }
 
-    fprintf(stderr,"libotr-mpOTR: otrl_chat_privkeydh_read_FILEp: before for\n");
-    /* Get each account */
+
+    /* Iterate over each account in the list */
     for(i=1; i<gcry_sexp_length(allkeys); ++i) {
 
     	/* Get the ith "account" S-exp */
     	accounts = gcry_sexp_nth(allkeys, i);
 
-    	/* It's really an "account" S-exp? */
-    	/*token = gcry_sexp_nth_data(accounts, 0, &tokenlen);
-    	if (tokenlen != 7 || strncmp(token, "account", 7)) {
-    		gcry_sexp_release(accounts);
-    		gcry_sexp_release(allkeys);
-    		return gcry_error(GPG_ERR_UNUSABLE_SECKEY);
-    	}
-    	*/
+        /* Parse the account sexpression */
     	key = chat_id_key_manager.parse(accounts);
-    	if(!key) goto error;
+    	if(!key) { goto error; }
 
+        /* Append the parsed key in the privkey list */
     	node = otrl_list_append(us->chat_privkey_list, key);
-        if(!node) {goto error_with_key; }
+        if(!node) { goto error_with_key; }
 
     	gcry_sexp_release(accounts);
 	}
     gcry_sexp_release(allkeys);
 
-    fprintf(stderr,"libotr-mpOTR: otrl_chat_privkeydh_read_FILEp: end\n");
-    otrl_list_dump(us->chat_privkey_list);
     return gcry_error(GPG_ERR_NO_ERROR);
 
 error_with_key:
@@ -149,12 +151,16 @@ gcry_error_t chat_privkeydh_generate_start(OtrlUserState us, const char* account
 
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_start: start\n");
 
+    /* Generate a key */
     err = chat_id_key_manager.generate_key(&key);
     if(err || !key) { goto error; }
 
+    //TODO maybe move the accountname and protocol copying in chat_idkey
+    /* Copy the username in the key struct */
     key->accountname = strdup(accountname);
     if(!key->accountname) { goto error_with_key; }
 
+    /* And the protocol */
     key->protocol = strdup(protocol);
     if(!key->protocol) { goto error_with_accountname; }
 
@@ -179,50 +185,63 @@ gcry_error_t chat_privkeydh_account_write(FILE *privf, ChatIdKey *k)
     gcry_error_t err;
     gcry_sexp_t keys;
 
-  //  fprintf(privf, " (account");
 
+    /* Serialize the key to be written */
     err = chat_id_key_manager.serialize(k, &keys);
-    if(!err) {
-        chat_privkeydh_sexp_write(privf, keys);
-        gcry_sexp_release(keys);
-    }
+    if(err) { goto error; }
 
-    //fprintf(privf, ")\n");
+    /* Write the sexpression in the file */
+    chat_privkeydh_sexp_write(privf, keys);
 
+    gcry_sexp_release(keys);
+
+    return gcry_error(GPG_ERR_NO_ERROR);
+
+error:
     return err;
-
 }
 
 gcry_error_t chat_privkeydh_generate_finish(OtrlUserState us, ChatIdKey *newkey, FILE *privf)
 {
-    OtrlListNode *cur;
+    OtrlListNode *cur, *next;
     OtrlListNode *node = NULL;
     ChatIdKey *k;
     gcry_error_t err = gcry_error(GPG_ERR_NO_ERROR);
 
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: start\n");
+
     if(newkey && us && privf) {
-    	fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: in if\n");
+        /* Print the starting parenthesis of the s expression along with its
+        name */
         fprintf(privf, "(chat_privkeys\n");
 
-        fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: before for\n");
-        for(cur = us->chat_privkey_list->head; cur!=NULL; cur=cur->next) {
+        /* We iterate over every key in the privkey list */
+        cur = us->chat_privkey_list->head;
+        while(cur != NULL) {
+            next = cur->next;
             k = cur->payload;
 
+            /* If the current element is for the same account as the newley
+             created key then pass on to the next list element. This means
+             that if there is an older key in the list for the same account
+             we will forget about it, and write only the new key */
             if(!strcmp(k->accountname, newkey->accountname) &&
                !strcmp(k->protocol, newkey->protocol)) {
-                continue;
+
+                /* Remove the old key from the list */
+                otrl_list_remove_and_free(us->chat_privkey_list, cur);
+            }
+            else {
+                /* If this is not an old key write it in the key file */
+                chat_privkeydh_account_write(privf, k);
             }
 
-            chat_privkeydh_account_write(privf, k);
+            cur = next;
         }
-        fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: after for\n");
 
+        /* Write the new key in the file */
         chat_privkeydh_account_write(privf,newkey);
         fprintf(privf, ")\n");
-
-        //fseek(privf, 0, SEEK_SET);
-        fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: before append\n");
 
         //TODO maybe append instead of inserting to be more efficient? This will break the find call on the list though
         /* If the append is not successfull then destroy the key and return error */
@@ -245,12 +264,17 @@ int otrl_chat_privkeydh_generate_FILEp(OtrlUserState us, FILE *privf,
 {
     ChatIdKey *newkey = NULL;
     gcry_error_t err;
+
     fprintf(stderr,"libotr-mpOTR: otrl_chat_privkeydh_generate_FILEp: start\n");
+
     if(!accountname || !protocol)
     	return 1;
+
+    /* Start the generation of a new key */
     err = chat_privkeydh_generate_start(us, accountname, protocol, &newkey);
 
     if(newkey) {
+        /* If it was succesfully generated then finalize the generation */
         err = chat_privkeydh_generate_finish(us, newkey, privf);
         if(err) {
         	fprintf(stderr,"libotr-mpOTR: otrl_chat_privkeydh_generate_FILEp: error\n");
@@ -267,15 +291,20 @@ ChatIdKey * chat_privkeydh_find_or_generate(OtrlUserState us, const OtrlMessageA
 	int keyexists;
 
 	fprintf(stderr, "libotr-mpOTR: chat_privkeydh_find_or_generate: start\n");
+
+    /* Check if the requested key in the user state */
     keyexists = chat_privkeydh_key_exists(us, accountname, protocol);
+
+    /* If it does not, create it now */
 	if(!keyexists) {
 		ops->chat_privkey_create(NULL, accountname, protocol);
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_privkeydh_find_or_generate: dumping key list\n");
-	otrl_list_dump(us->chat_privkey_list);
-
+    /* Now look for the key in the list. It must be in there */
 	key = chat_id_key_manager.find_key(us->chat_privkey_list, accountname, protocol);
+    if(!key) {
+        return NULL;
+    }
 
 	fprintf(stderr, "libotr-mpOTR: chat_privkeydh_find_or_generate: end\n");
 
@@ -287,8 +316,11 @@ int chat_privkeydh_key_exists(OtrlUserState us, const char *accountname, const c
 	OtrlListNode *cur;
 	ChatIdKey *k;
 
+    /* Iterate over every key in the privkey list */
 	for(cur = us->chat_privkey_list->head; cur != NULL; cur = cur->next) {
 		k = cur->payload;
+
+        /* Check if we are on the requested key, and if yes return TRUE */
 		if(strcmp(k->accountname, accountname) == 0 && strcmp(k->protocol, protocol) == 0 ) {
 			return 1;
 		}
@@ -297,6 +329,8 @@ int chat_privkeydh_key_exists(OtrlUserState us, const char *accountname, const c
 	return 0;
 }
 
+//TODO this function should probably accept a SignKey parameter isntead of
+//a gcry_mpi_t
 unsigned char *chat_privkeydh_get_fingerprint(gcry_mpi_t pubkey)
 {
 	gcry_error_t err;
@@ -304,20 +338,28 @@ unsigned char *chat_privkeydh_get_fingerprint(gcry_mpi_t pubkey)
 	unsigned char *buf, *hash;
 	size_t buflen;
 
+    /* Get the pubkey length*/
 	gcry_mpi_print(GCRYMPI_FMT_HEX,NULL,0,&buflen,pubkey);
+
+    /* Allocate memory for a temporary buffer to hold the pubkey data */
 	buf = malloc(buflen * sizeof *buf);
 	if(!buf) { goto error; }
 
+    /* Print the pubkey in the buf */
 	gcry_mpi_print(GCRYMPI_FMT_HEX,buf,buflen,NULL,pubkey);
 
+    /* Open a digest */
 	err = gcry_md_open(&md, GCRY_MD_SHA256, 0);
 	if(err){ goto error_with_buf; }
 
+    /* And write the data contained in buf to the digest */
 	gcry_md_write(md, buf, buflen);
 
+    /* Allocate memory for the hash result */
 	hash = malloc(CHAT_FINGERPRINT_SIZE * sizeof *hash);
 	if(!hash) { goto error_with_buf; }
 
+    /* And finally copy the result from the digest */
 	memcpy(hash, gcry_md_read(md, GCRY_MD_SHA256), CHAT_FINGERPRINT_SIZE);
 	gcry_md_close(md);
 

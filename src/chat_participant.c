@@ -34,8 +34,6 @@ int chat_participant_compare(ChatParticipant *a, ChatParticipant *b)
 
 void chat_participant_free(ChatParticipant *participant)
 {
-    fprintf(stderr, "libotr-mpOTR: chat_participant_free: start\n");
-
     if(participant)  {
     	free(participant->username);
     	chat_sign_destroy_key(participant->sign_key);
@@ -45,8 +43,6 @@ void chat_participant_free(ChatParticipant *participant)
     }
 
     free(participant);
-
-    fprintf(stderr, "libotr-mpOTR: chat_participant_free: end\n");
 }
 
 ChatParticipant * chat_participant_create(const char *username, SignKey *pub_key)
@@ -91,8 +87,6 @@ ChatParticipant* chat_participant_find(const OtrlChatContext *ctx, const char *u
     OtrlListNode *cur;
     ChatParticipant *res = NULL;
 
-    fprintf(stderr,"libotr-mpOTR: chat_participant_find: start\n");
-
     if(!ctx) { goto error; }
     if(!ctx->participants_list) { goto error; }
 
@@ -119,8 +113,6 @@ ChatParticipant* chat_participant_find(const OtrlChatContext *ctx, const char *u
     	res = cur->payload;
     }
 
-    fprintf(stderr,"libotr-mpOTR: chat_participant_find: end\n");
-
     return res;
 
 error:
@@ -145,8 +137,6 @@ int chat_participant_list_from_usernames(OtrlList *participants, char **username
 	ChatParticipant *a_participant;
 	int err;
 
-	fprintf(stderr, "libotr-mpOTR: chat_participant_list_from_usernames: start\n");
-
 	otrl_list_clear(participants);
 
 	for(size_t i = 0; i < usernames_size; i++) {
@@ -157,7 +147,6 @@ int chat_participant_list_from_usernames(OtrlList *participants, char **username
 		if(err) { goto error_with_participants; }
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_participant_list_from_usernames: end\n");
 	return 0;
 
 error_with_participants:
@@ -207,15 +196,11 @@ int chat_participant_get_me_next_position(const char *accountname, const OtrlLis
 	int err;
 	unsigned int me;
 
-	fprintf(stderr, "libotr-mpOTR: chat_participant_get_me_next_position: start\n");
-
 	err = chat_participant_get_position(participants, accountname, &me);
 	if(err) { goto error; }
 
 	me_next[0] = me;
 	me_next[1] = (me < participants->size-1) ? me+1 : 0;
-
-	fprintf(stderr, "libotr-mpOTR: chat_participant_get_me_next_position: end\n");
 
 	return 0;
 
@@ -235,8 +220,6 @@ int chat_participant_get_messages_hash(ChatParticipant *participant, unsigned ch
     size_t len;
     unsigned char *hash_result = NULL;
 
-    fprintf(stderr,"libotr-mpOTR: chat_participant_get_messages_hash: start\n");
-
     err = gcry_md_open(&md, GCRY_MD_SHA512, 0);
     if(err) { goto error; }
 
@@ -254,8 +237,6 @@ int chat_participant_get_messages_hash(ChatParticipant *participant, unsigned ch
     memcpy(result, hash_result, gcry_md_get_algo_dlen(GCRY_MD_SHA512));
 
     gcry_md_close(md);
-
-    fprintf(stderr,"libotr-mpOTR: chat_participant_get_messages_hash: end\n");
 
     return 0;
 
