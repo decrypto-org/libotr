@@ -57,3 +57,4 @@ libotr.pc
 
 .cproject
 .project
+.settings/*
