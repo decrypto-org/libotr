@@ -17,12 +17,15 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "chat_attest.h"
+
 #include <gcrypt.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "chat_context.h"
 #include "chat_message.h"
 #include "chat_participant.h"
 #include "chat_protocol.h"
@@ -31,60 +34,114 @@
 #include "context.h"
 #include "list.h"
 
-int chat_attest_assoctable_hash(OtrlList *partList, unsigned char **hash)
+struct ChatAttestInfoStruct {
+	size_t size;
+	size_t checked_count;
+	unsigned short int *checked;
+	ChatAttestState state;
+};
+
+ChatAttestInfo chat_attest_info_new(size_t size)
 {
-	OtrlListNode *cur;
-	unsigned char *buf, *key;
+	ChatAttestInfo attest_info;
+
+	attest_info = malloc(sizeof *attest_info);
+	if(!attest_info) { goto error; }
+
+	attest_info->size = size;
+	attest_info->checked_count = 0;
+
+	attest_info->checked = calloc(attest_info->size, sizeof *(attest_info->checked));
+	if(!attest_info->checked) { goto error_with_attest_info; }
+
+	attest_info->state = CHAT_ATTESTSTATE_AWAITING;
+
+	return attest_info;
+
+error_with_attest_info:
+	free(attest_info);
+error:
+	return NULL;
+}
+
+ChatAttestState chat_attest_info_get_state(ChatAttestInfo attest_info)
+{
+	return attest_info->state;
+}
+
+void chat_attest_info_free(ChatAttestInfo attest_info)
+{
+	if(attest_info) {
+		free(attest_info->checked);
+	}
+	free(attest_info);
+}
+
+int chat_attest_assoctable_hash(OtrlList participants_list, unsigned char **hash)
+{
+	OtrlListIterator iter;
+	OtrlListNode cur;
+	ChatParticipant participant;
+	unsigned char *buf = NULL, *key = NULL;
 	gcry_md_hd_t md;
 	gcry_error_t g_err;
-    int error;
+    int err;
 	size_t len;
 
 	g_err = gcry_md_open(&md, GCRY_MD_SHA512, 0);
 	if(g_err) { goto error; }
 
-	for(cur=partList->head; cur!=NULL; cur=cur->next) {
-		ChatParticipant *part = cur->payload;
-		if(part->sign_key == NULL) { goto error_with_md; }
+	iter = otrl_list_iterator_new(participants_list);
+	if(!iter) { goto error_with_md; }
 
-		error = chat_sign_serialize_pubkey(part->sign_key, &key, &len);
-        if(error) { goto error_with_md; }
+	while(otrl_list_iterator_has_next(iter)) {
+		cur = otrl_list_iterator_next(iter);
+		participant = otrl_list_node_get_payload(cur);
+
+		if(NULL == chat_participant_get_sign_key(participant)) { goto error_with_iter; }
+
+		err = chat_sign_serialize_pubkey(chat_participant_get_sign_key(participant), &key, &len);
+        if(err) { goto error_with_iter; }
 
 		gcry_md_write(md, key, len);
 		free(key);
 	}
 
 	buf = malloc(CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH * sizeof *buf);
-	if(buf == NULL) { goto error_with_md; }
+	if(!buf) { goto error_with_iter; }
 
 	memcpy(buf, gcry_md_read(md, GCRY_MD_SHA512), CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH);
+
+	otrl_list_iterator_free(iter);
 	gcry_md_close(md);
 
 	*hash = buf;
 	return 0;
 
+error_with_iter:
+	otrl_list_iterator_free(iter);
 error_with_md:
 	gcry_md_close(md);
 error:
 	return 1;
 }
 
-int chat_attest_verify_sid(OtrlChatContext *ctx, unsigned char *sid)
+int chat_attest_verify_sid(ChatContext ctx, unsigned char *sid)
 {
 	int res, eq;
 
-	eq = memcmp(ctx->sid, sid, CHAT_OFFER_SID_LENGTH);
+	eq = memcmp(chat_context_get_sid(ctx), sid, CHAT_OFFER_SID_LENGTH);
 	res = (eq==0) ? 1 : 0;
 
 	return res;
 }
 
-int chat_attest_verify_assoctable_hash(OtrlChatContext *ctx, unsigned char *hash, int *result)
+int chat_attest_verify_assoctable_hash(OtrlList participants_list, unsigned char *hash, int *result)
 {
 	int err, res, eq;
 	unsigned char *ourhash;
 
-	err = chat_attest_assoctable_hash(ctx->participants_list, &ourhash);
+	err = chat_attest_assoctable_hash(participants_list, &ourhash);
 	if(err) { goto error; }
 
 	eq = memcmp(ourhash, hash, CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH);
@@ -100,31 +157,35 @@ error:
 	return 1;
 }
 
-int chat_attest_is_ready(ChatAttestInfo *info)
+int chat_attest_is_ready(ChatAttestInfo attest_info)
 {
-	return (info->checked_count == info->size) ? 1 : 0;
+	return (attest_info->checked_count == attest_info->size) ? 1 : 0;
 }
 
-int chat_attest_verify(OtrlChatContext *ctx, unsigned char *sid, unsigned char *assoctable_hash, unsigned int part_pos, int *result)
+int chat_attest_verify(ChatContext ctx, unsigned char *sid, unsigned char *assoctable_hash, unsigned int part_pos, int *result)
 {
+	ChatAttestInfo attest_info;
 	int err, res;
 
-	if(part_pos >= ctx->attest_info->size) { goto error; }
+	attest_info = chat_context_get_attest_info(ctx);
+	if(!attest_info) { goto error; }
 
-	if(ctx->attest_info->checked[part_pos]) {
-		ctx->attest_info->checked[part_pos] = 0;
-		ctx->attest_info->checked_count--;
+	if(part_pos >= attest_info->size) { goto error; }
+
+	if(attest_info->checked[part_pos]) {
+		attest_info->checked[part_pos] = 0;
+		attest_info->checked_count--;
 	}
 
 	res = chat_attest_verify_sid(ctx, sid);
 	if(res) {
-		err = chat_attest_verify_assoctable_hash(ctx, assoctable_hash, &res);
+		err = chat_attest_verify_assoctable_hash(chat_context_get_participants_list(ctx), assoctable_hash, &res);
 		if(err) { goto error; }
 	}
 
 	if(res) {
-		ctx->attest_info->checked[part_pos] = 1;
-		ctx->attest_info->checked_count++;
+		attest_info->checked[part_pos] = 1;
+		attest_info->checked_count++;
 	}
 
 	*result = res;
@@ -135,56 +196,36 @@ error:
 
 }
 
-void chat_attest_info_free(ChatAttestInfo *info)
+int chat_attest_info_init(ChatContext ctx)
 {
-	if(info) {
-		free(info->checked);
-	}
-	free(info);
-}
+	size_t size;
+	ChatAttestInfo attest_info;
 
-int chat_attest_info_init(OtrlChatContext *ctx)
-{
-	ChatAttestInfo *info;
+	size = otrl_list_size(chat_context_get_participants_list(ctx));
 
-	info = malloc(sizeof *(ctx->attest_info));
-	if(!info) { goto error; }
+	attest_info = chat_attest_info_new(size);
+	if(!attest_info) { goto error; }
 
-	info->size = otrl_list_length(ctx->participants_list);
-	info->checked_count = 0;
+	chat_attest_info_free(chat_context_get_attest_info(ctx));
 
-	info->checked = calloc(info->size, sizeof *(info->checked));
-	if(!info->checked) { goto error_with_info; }
-
-	/*for(unsigned int i=0; i<info->size; i++) {
-		info->checked[i] = 0;
-	}*/
-
-	info->state = CHAT_ATTESTSTATE_AWAITING;
-
-	chat_attest_info_free(ctx->attest_info);
-	ctx->attest_info = NULL;
-
-	ctx->attest_info = info;
+	chat_context_set_attest_info(ctx, attest_info);
 
 	return 0;
 
-error_with_info:
-	free(info);
 error:
 	return 1;
 }
 
-int chat_attest_create_our_message(OtrlChatContext *ctx, unsigned int our_pos , ChatMessage **msgToSend)
+int chat_attest_create_our_message(ChatContext ctx, unsigned int our_pos , ChatMessage **msgToSend)
 {
 	int err;
 	unsigned char *assoctable_hash;
 	ChatMessage *msg;
 
-	err = chat_attest_assoctable_hash(ctx->participants_list, &assoctable_hash);
+	err = chat_attest_assoctable_hash(chat_context_get_participants_list(ctx), &assoctable_hash);
 	if(err) { goto error; }
 
-	msg = chat_message_attest_create(ctx, ctx->sid, assoctable_hash);
+	msg = chat_message_attest_new(ctx, chat_context_get_sid(ctx), assoctable_hash);
 	if(!msg) { goto error_with_assoctable_hash; }
 
 	free(assoctable_hash);
@@ -198,28 +239,31 @@ error:
 	return 1;
 }
 
-int chat_attest_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
+int chat_attest_init(ChatContext ctx, ChatMessage **msgToSend)
 {
+	ChatAttestInfo attest_info;
 	int err;
 	unsigned int our_pos;
 	ChatMessage *ourMsg = NULL;
 
-	if(!ctx->attest_info) {
+	attest_info = chat_context_get_attest_info(ctx);
+	if(NULL == attest_info) {
 		err = chat_attest_info_init(ctx);
 		if(err) { goto error; }
+		attest_info = chat_context_get_attest_info(ctx);
 	}
 
-	err = chat_participant_get_position(ctx->participants_list, ctx->accountname, &our_pos);
+	err = chat_participant_get_position(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &our_pos);
 	if(err) { goto error; }
 
-	if(!ctx->attest_info->checked[our_pos]) {
+	if(!attest_info->checked[our_pos]) {
 		err = chat_attest_create_our_message(ctx, our_pos, &ourMsg);
 		if(err) { goto error; }
-		ctx->attest_info->checked[our_pos] = 1;
-		ctx->attest_info->checked_count++;
+		attest_info->checked[our_pos] = 1;
+		attest_info->checked_count++;
 	}
 
-	ctx->attest_info->state = CHAT_ATTESTSTATE_AWAITING;
+	attest_info->state = CHAT_ATTESTSTATE_AWAITING;
 
 	*msgToSend = ourMsg;
 	return 0;
@@ -229,8 +273,11 @@ error:
 
 }
 
-int chat_attest_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, ChatMessage **msgToSend)
+int chat_attest_handle_message(ChatContext ctx, const ChatMessage *msg, ChatMessage **msgToSend)
 {
+	ChatAttestInfo attest_info;
+	OtrlList participants_list;
+	char *accountname;
 	unsigned int our_pos, their_pos;
 	int res, err;
 	ChatMessagePayloadAttest *payload;
@@ -238,17 +285,23 @@ int chat_attest_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, Cha
 
 	fprintf(stderr, "libotr-mpOTR: chat_attest_handle_message: start\n");
 
-	if(!ctx->attest_info) {
+	attest_info = chat_context_get_attest_info(ctx);
+
+	if(!attest_info) {
 		err = chat_attest_info_init(ctx);
 		if(err) { goto error; }
+		attest_info = chat_context_get_attest_info(ctx);
 	}
 
+	participants_list = chat_context_get_participants_list(ctx);
+	accountname = chat_context_get_accountname(ctx);
+
 	if(msg->msgType != CHAT_MSGTYPE_ATTEST) { goto error; }
-	if(ctx->attest_info->state != CHAT_ATTESTSTATE_AWAITING) { goto error; }
+	if(attest_info->state != CHAT_ATTESTSTATE_AWAITING) { goto error; }
 
 	payload = msg->payload;
 
-	err = chat_participant_get_position(ctx->participants_list, msg->senderName, &their_pos);
+	err = chat_participant_get_position(participants_list, msg->senderName, &their_pos);
 	if(err) { goto error; }
 
 	err = chat_attest_verify(ctx, payload->sid, payload->assoctable_hash, their_pos, &res);
@@ -261,20 +314,20 @@ int chat_attest_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, Cha
 	} else {
 
 		// Create our attest message if we haven't already sent one
-		err = chat_participant_get_position(ctx->participants_list, ctx->accountname, &our_pos);
+		err = chat_participant_get_position(participants_list, accountname, &our_pos);
 		if(err) { goto error; }
 
-		if(!ctx->attest_info->checked[our_pos]) {
+		if(!attest_info->checked[our_pos]) {
 			err = chat_attest_create_our_message(ctx, our_pos, &ourMsg);
 			if(err) { goto error; }
 
-			ctx->attest_info->checked[our_pos] = 1;
-			ctx->attest_info->checked_count++;
+			attest_info->checked[our_pos] = 1;
+			attest_info->checked_count++;
 		}
 
-		if(chat_attest_is_ready(ctx->attest_info)) {
-			ctx->attest_info->state = CHAT_ATTESTSTATE_FINISHED;
-			ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
+		if(chat_attest_is_ready(attest_info)) {
+			attest_info->state = CHAT_ATTESTSTATE_FINISHED;
+			chat_context_set_msg_state(ctx, OTRL_MSGSTATE_ENCRYPTED);
 		}
 	}
 

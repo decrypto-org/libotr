@@ -30,9 +30,9 @@ typedef struct s_OtrlUserState* OtrlUserState;
 
 struct s_OtrlUserState {
     ConnContext *context_root;
-    OtrlList *chat_context_list; /* DIKOMAS */
-    OtrlList *chat_privkey_list; /* DIKOMAS */
-    OtrlList *chat_fingerprints; /* DIKOMAS */
+    OtrlList chat_context_list; /* DIKOMAS */
+    OtrlList chat_privkey_list; /* DIKOMAS */
+    OtrlList chat_fingerprints; /* DIKOMAS */
     OtrlPrivKey *privkey_root;
     OtrlInsTag *instag_root;
     OtrlPendingPrivKey *pending_root;

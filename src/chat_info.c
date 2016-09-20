@@ -17,45 +17,61 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "chat_info.h"
+
 #include <stdlib.h>
 
+#include "chat_context.h"
 #include "chat_types.h"
 #include "chat_participant.h"
+#include "list.h"
 
-int chat_info_privacy_level_calculate(const OtrlChatContext *ctx, OtrlChatInfoPrivacyLevel *privacy_level)
+struct OtrlChatInfoStruct {
+	char *accountname;
+	char *protocol;
+	otrl_chat_token_t chat_token;
+	OtrlChatPrivacyLevel privacy_level;
+};
+
+int chat_info_privacy_level_calculate(const ChatContext ctx, OtrlChatPrivacyLevel *privacy_level)
 {
-	ChatParticipant *me;
-	OtrlChatInfoPrivacyLevel level;
-	OtrlListNode *cur;
+	OtrlChatPrivacyLevel level;
+	OtrlListIterator iter;
+	OtrlListNode cur;
+	ChatParticipant me, part;
+	OtrlChatFingerprint fnprnt;
 	unsigned int pos;
 	unsigned char untrusted = 0;
 
-	me = chat_participant_find(ctx, ctx->accountname, &pos);
+	me = chat_participant_find(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &pos);
 	if(!me) { goto error; }
 
-	switch(ctx->msg_state) {
+	switch(chat_context_get_msg_state(ctx)) {
 		case OTRL_MSGSTATE_PLAINTEXT:
-			level = LEVEL_NONE;
+			level = OTRL_CHAT_PRIVACY_LEVEL_NONE;
 			break;
 
 		case OTRL_MSGSTATE_ENCRYPTED:
-			for(cur = ctx->participants_list->head; cur != NULL && !untrusted; cur = cur->next) {
-				ChatParticipant *part = cur->payload;
-
+			iter = otrl_list_iterator_new(chat_context_get_participants_list(ctx));
+			if(!iter) { goto error; }
+			while(otrl_list_iterator_has_next(iter)) {
+				cur = otrl_list_iterator_next(iter);
+				part = otrl_list_node_get_payload(cur);
 				if(part != me) {
-					OtrlChatFingerprint *finger = part->fingerprint;
-					if(!finger) { goto error; }
+					fnprnt = chat_participant_get_fingerprint(part);
+					if(!fnprnt) { goto error_with_iter; }
 
-					if (!finger->isTrusted) {
+					if (0 == otrl_chat_fingerprint_is_trusted(fnprnt)) {
 						untrusted = 1;
 					}
 				}
 			}
-			level = (untrusted) ? LEVEL_UNVERIFIED : LEVEL_PRIVATE;
+			otrl_list_iterator_free(iter);
+			level = (untrusted) ? OTRL_CHAT_PRIVACY_LEVEL_UNVERIFIED : OTRL_CHAT_PRIVACY_LEVEL_PRIVATE;
 			break;
 
 		case OTRL_MSGSTATE_FINISHED:
-			level = LEVEL_FINISHED;
+			level = OTRL_CHAT_PRIVACY_LEVEL_FINISHED;
 			break;
 
 		default:
@@ -66,52 +82,51 @@ int chat_info_privacy_level_calculate(const OtrlChatContext *ctx, OtrlChatInfoPr
 	*privacy_level = level;
 	return 0;
 
+error_with_iter:
+	otrl_list_iterator_free(iter);
 error:
-	fprintf(stderr, "libotr-mpOTR: chat_info_privacy_level_calculate: error\n");
 	return 1;
 }
 
-OtrlChatInfo *chat_info_create(const OtrlChatContext *ctx)
+OtrlChatInfo chat_info_new(const ChatContext ctx)
 {
-	OtrlChatInfo *info;
+	OtrlChatInfo info;
 
 	info = malloc(sizeof *info);
 	if(!info) { goto error; }
 
-	info->accountname = strdup(ctx->accountname);
+	info->accountname = strdup(chat_context_get_accountname(ctx));
 	if(!info->accountname) { goto error_with_info; }
 
-	info->protocol = strdup(ctx->protocol);
+	info->protocol = strdup(chat_context_get_protocol(ctx));
 	if(!info->protocol) { goto error_with_accountname; }
 
-	info->chat_token = ctx->the_chat_token;
+	info->chat_token = chat_context_get_chat_token(ctx);
+	info->privacy_level = OTRL_CHAT_PRIVACY_LEVEL_UNKNOWN;
 
 	return info;
 
 error_with_accountname:
-	fprintf(stderr, "libotr-mpOTR: chat_info_create: error_with_accountname\n");
 	free(info->accountname);
 error_with_info:
-	fprintf(stderr, "libotr-mpOTR: chat_info_create: error_with_info\n");
 	free(info);
 error:
-	fprintf(stderr, "libotr-mpOTR: chat_info_create: error\n");
 	return NULL;
 }
 
-OtrlChatInfo *chat_info_create_with_level(const OtrlChatContext *ctx)
+OtrlChatInfo chat_info_new_with_level(const ChatContext ctx)
 {
-	OtrlChatInfo *info;
-	OtrlChatInfoPrivacyLevel level;
+	OtrlChatInfo info;
+	OtrlChatPrivacyLevel level;
 	int err;
 
 	err = chat_info_privacy_level_calculate(ctx, &level);
 	if(err) { goto error; }
 
-	info = chat_info_create(ctx);
+	info = chat_info_new(ctx);
 	if(!info) { goto error; }
 
-	info->level = level;
+	info->privacy_level = level;
 
 	return info;
 
@@ -119,7 +134,7 @@ error:
 	return NULL;
 }
 
-void chat_info_free(OtrlChatInfo *info)
+void chat_info_free(OtrlChatInfo info)
 {
 	if(info) {
 		free(info->accountname);
@@ -127,3 +142,25 @@ void chat_info_free(OtrlChatInfo *info)
 	}
 	free(info);
 }
+
+char * otrl_chat_info_get_accountname(OtrlChatInfo info)
+{
+	return info->accountname;
+}
+
+char * otrl_chat_info_get_protocol(OtrlChatInfo info)
+{
+	return info->protocol;
+}
+
+otrl_chat_token_t otrl_chat_info_get_chat_token(OtrlChatInfo info)
+{
+	return info->chat_token;
+}
+
+OtrlChatPrivacyLevel otrl_chat_info_get_privacy_level(OtrlChatInfo info)
+{
+	return info->privacy_level;
+}
+
+

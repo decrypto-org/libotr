@@ -26,10 +26,11 @@
 
 /* libotr headers */
 #include "b64.h"
+#include "chat_context.h"
+#include "chat_gka.h"
+#include "chat_serial.h"
 #include "list.h"
 #include "message.h"
-#include "chat_serial.h"
-#include "chat_auth.h"
 
 #define CHAT_MESSAGE_TYPE_POSITION 2
 
@@ -38,18 +39,20 @@ int chat_message_compare_payload(const char *msg_a, const char *msg_b)
     return strcmp(msg_a, msg_b);
 }
 
-int chat_message_compareOp(PayloadPtr a, PayloadPtr b)
+int chat_message_compareOp(OtrlListPayload a, OtrlListPayload b)
 {
     return chat_message_compare_payload(a, b);
 }
 
-void chat_message_printOp(OtrlListNode *a)
+void chat_message_printOp(OtrlListNode a)
 {
-    char *msg = a->payload;
+    char *msg;
+
+    msg = otrl_list_node_get_payload(a);
     printf("%s\n", msg);
 }
 
-void chat_message_freeOp(PayloadPtr a)
+void chat_message_freeOp(OtrlListPayload a)
 {
     free(a);
 }
@@ -483,13 +486,14 @@ unsigned char * chat_message_payload_gka_upflow_serialize(ChatMessagePayloadPtr 
 	int err;
 	size_t *keySizes, len;
 	gcry_mpi_t *k;
-	OtrlListNode *cur;
+	OtrlListIterator iter;
+	OtrlListNode cur;
 
 	otrl_list_dump(myPayload->interKeys);
 
 	if(myPayload->interKeys == NULL) { goto error; }
 
-	interKeysSize = otrl_list_length(myPayload->interKeys);
+	interKeysSize = otrl_list_size(myPayload->interKeys);
 	if(interKeysSize == 0) { goto error; }
 
 	keys = malloc(interKeysSize * sizeof *keys);
@@ -502,12 +506,16 @@ unsigned char * chat_message_payload_gka_upflow_serialize(ChatMessagePayloadPtr 
 	keySizes = malloc(interKeysSize * sizeof *keySizes);
 	if(!keySizes) { goto error_with_keys; }
 
-	len = 0;
-	for(i = 0, cur = myPayload->interKeys->head; cur != NULL; i++, cur = cur->next) {
-		k = cur->payload;
+	len = 0; i = 0;
+	iter = otrl_list_iterator_new(myPayload->interKeys);
+	if(!iter) { goto error_with_keySizes; }
+	while(otrl_list_iterator_has_next(iter)) {
+		cur = otrl_list_iterator_next(iter);
+		k = otrl_list_node_get_payload(cur);
 		err = chat_serial_mpi_to_string(*k, &keys[i], &keySizes[i]);
 		if(err) { goto error_with_filled_keys; }
 		len += keySizes[i] + 4;
+		i++;
 	}
 
 	// 4 recipient, 4 interkeys size header
@@ -531,6 +539,7 @@ unsigned char * chat_message_payload_gka_upflow_serialize(ChatMessagePayloadPtr 
 	}
 
 	for(i=0; i<interKeysSize; i++) { free(keys[i]); }
+	otrl_list_iterator_free(iter);
 	free(keySizes);
 	free(keys);
 
@@ -539,6 +548,8 @@ unsigned char * chat_message_payload_gka_upflow_serialize(ChatMessagePayloadPtr 
 
 error_with_filled_keys:
 	for(i=0; i<interKeysSize; i++) { free(keys[i]); }
+	otrl_list_iterator_free(iter);
+error_with_keySizes:
 	free(keySizes);
 error_with_keys:
 	free(keys);
@@ -561,7 +572,7 @@ ChatMessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char 
 	ChatMessagePayloadGKAUpflow *payload;
 
 	unsigned int pos = 0;
-	OtrlListNode *node;
+	OtrlListNode node;
 	int keysLength, i, keySize, err;
 	gcry_mpi_t *key;
 
@@ -575,7 +586,7 @@ ChatMessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char 
 	keysLength = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
 
-	payload->interKeys = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
+	payload->interKeys = otrl_list_new(&interKeyOps, sizeof(gcry_mpi_t));
 	if(!payload->interKeys) { goto error_with_payload; }
 
 	for(i=0; i<keysLength; i++) {
@@ -641,11 +652,12 @@ unsigned char * chat_message_payload_gka_downflow_serialize(ChatMessagePayloadPt
 	int err;
 	size_t *keySizes, len;
 	gcry_mpi_t *k;
-	OtrlListNode *cur;
+	OtrlListIterator iter;
+	OtrlListNode cur;
 
 	if(myPayload->interKeys == NULL) { goto error; }
 
-	interKeysSize = otrl_list_length(myPayload->interKeys);
+	interKeysSize = otrl_list_size(myPayload->interKeys);
 	if(interKeysSize == 0) { goto error; }
 
 	keys = malloc(interKeysSize * sizeof *keys);
@@ -658,12 +670,17 @@ unsigned char * chat_message_payload_gka_downflow_serialize(ChatMessagePayloadPt
 	keySizes = malloc(interKeysSize * sizeof *keySizes);
 	if(!keySizes) { goto error_with_keys; }
 
-	len = 0;
-	for(i = 0, cur = myPayload->interKeys->head; cur != NULL; i++, cur = cur->next) {
-		k = cur->payload;
+	iter = otrl_list_iterator_new(myPayload->interKeys);
+	if(!iter) { goto error_with_keySizes; }
+	len = 0; i = 0;
+
+	while(otrl_list_iterator_has_next(iter)) {
+		cur = otrl_list_iterator_next(iter);
+		k = otrl_list_node_get_payload(cur);
 		err = chat_serial_mpi_to_string(*k, &keys[i], &keySizes[i]);
 		if(err) { goto error_with_filled_keys;	}
 		len += keySizes[i] + 4;
+		i++;
 	}
 
 	// 4 interkeys size header
@@ -684,6 +701,7 @@ unsigned char * chat_message_payload_gka_downflow_serialize(ChatMessagePayloadPt
 	}
 
 	for(i=0; i<interKeysSize; i++) { free(keys[i]); }
+	otrl_list_iterator_free(iter);
 	free(keySizes);
 	free(keys);
 
@@ -692,6 +710,8 @@ unsigned char * chat_message_payload_gka_downflow_serialize(ChatMessagePayloadPt
 
 error_with_filled_keys:
 	for(i=0; i<interKeysSize; i++) { free(keys[i]); }
+	otrl_list_iterator_free(iter);
+error_with_keySizes:
 	free(keySizes);
 error_with_keys:
 	free(keys);
@@ -716,7 +736,7 @@ ChatMessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned cha
 	unsigned int pos = 0;
 	int keysLength, i, keySize, err;
 	gcry_mpi_t *key;
-	OtrlListNode *node;
+	OtrlListNode node;
 
 	if(length < 4) { goto error; }
 
@@ -726,7 +746,7 @@ ChatMessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned cha
 	keysLength = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
 
-	payload->interKeys = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
+	payload->interKeys = otrl_list_new(&interKeyOps, sizeof(gcry_mpi_t));
 	if(!payload->interKeys) { goto error_with_payload; }
 
 	for(i=0; i<keysLength; i++) {
@@ -1502,21 +1522,21 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_create(OtrlChatContext *ctx, ChatMessageType msgType)
+ChatMessage * chat_message_new(ChatContext ctx, ChatMessageType msgType)
 {
 	ChatMessage *msg;
 
 	msg = malloc(sizeof *msg);
 	if(!msg) { goto error; }
 
-	msg->protoVersion = ctx->protocol_version;
+	msg->protoVersion = chat_context_get_protocol_version(ctx);
 	msg->msgType = msgType;
-	msg->senderInsTag = ctx->our_instance;
+	msg->senderInsTag = chat_context_get_our_instag(ctx);
 	msg->chatInsTag = OTRL_INSTAG_CHAT;
-	msg->senderName = strdup(ctx->accountname);
+	msg->senderName = strdup(chat_context_get_accountname(ctx));
 	if(!msg->senderName) { goto error_with_msg; }
 	if(chat_message_type_contains_sid(msgType)) {
-		memcpy(msg->sid, ctx->sid, CHAT_OFFER_SID_LENGTH);
+		memcpy(msg->sid, chat_context_get_sid(ctx), CHAT_OFFER_SID_LENGTH);
 	}
 	msg->payload = NULL;
 	msg->payload_free = NULL;
@@ -1541,12 +1561,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_offer_create(OtrlChatContext *ctx, const unsigned char *sid_contribution, unsigned int position)
+ChatMessage * chat_message_offer_new(ChatContext ctx, const unsigned char *sid_contribution, unsigned int position)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadOffer *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_OFFER);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_OFFER);
 	if(!msg) { goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -1578,12 +1598,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_dake_handshake_create(OtrlChatContext *ctx, DAKE_handshake_message_data *data)
+ChatMessage * chat_message_dake_handshake_new(ChatContext ctx, DAKE_handshake_message_data *data)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadDAKEHandshake *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_DAKE_HANDSHAKE);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_DAKE_HANDSHAKE);
 	if(!msg) { goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -1615,12 +1635,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_dake_confirm_create(OtrlChatContext *ctx, unsigned int recipient, DAKE_confirm_message_data *data)
+ChatMessage * chat_message_dake_confirm_new(ChatContext ctx, unsigned int recipient, DAKE_confirm_message_data *data)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadDAKEConfirm *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_DAKE_CONFIRM);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_DAKE_CONFIRM);
 	if(!msg) { goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -1653,12 +1673,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_dake_key_create(OtrlChatContext *ctx, unsigned int recipient, DAKE_key_message_data *data)
+ChatMessage * chat_message_dake_key_new(ChatContext ctx, unsigned int recipient, DAKE_key_message_data *data)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadDAKEKey *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_DAKE_KEY);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_DAKE_KEY);
 	if(!msg) { goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -1692,12 +1712,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_gka_upflow_create(OtrlChatContext *ctx, OtrlList *interKeys, unsigned int recipient)
+ChatMessage * chat_message_gka_upflow_new(ChatContext ctx, OtrlList interKeys, unsigned int recipient)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadGKAUpflow *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_GKA_UPFLOW);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_GKA_UPFLOW);
 	if(!msg) { goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -1729,12 +1749,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, OtrlList *interKeys)
+ChatMessage * chat_message_gka_downflow_new(ChatContext ctx, OtrlList interKeys)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadGKADownflow *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_GKA_DOWNFLOW);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_GKA_DOWNFLOW);
 	if(!msg) {goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -1765,12 +1785,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_attest_create(OtrlChatContext *ctx, unsigned char *sid, unsigned char *assoctable_hash)
+ChatMessage * chat_message_attest_new(ChatContext ctx, unsigned char *sid, unsigned char *assoctable_hash)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadAttest *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_ATTEST);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_ATTEST);
 	if(!msg) {goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -1803,12 +1823,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_data_create(OtrlChatContext *ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext)
+ChatMessage * chat_message_data_new(ChatContext ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadData *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_DATA);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_DATA);
 	if(!msg) { goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -1841,12 +1861,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_shutdown_shutdown_create(OtrlChatContext *ctx, unsigned char *shutdown_hash)
+ChatMessage * chat_message_shutdown_shutdown_new(ChatContext ctx, unsigned char *shutdown_hash)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadShutdownShutdown *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_SHUTDOWN_SHUTDOWN);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_SHUTDOWN_SHUTDOWN);
 	if(!msg) {goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -1876,12 +1896,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_shutdown_digest_create(OtrlChatContext *ctx, unsigned char *digest)
+ChatMessage * chat_message_shutdown_digest_new(ChatContext ctx, unsigned char *digest)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadShutdownDigest *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_SHUTDOWN_DIGEST);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_SHUTDOWN_DIGEST);
 	if(!msg) {goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -1910,11 +1930,11 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_shutdown_end_create(OtrlChatContext *ctx)
+ChatMessage * chat_message_shutdown_end_new(ChatContext ctx)
 {
 	ChatMessage *msg;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_SHUTDOWN_END);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_SHUTDOWN_END);
 	if(!msg) { goto error; }
 
 	msg->payload = NULL;
@@ -1938,12 +1958,12 @@ error:
   	  	  should free the returned message using the chat_message_free()
   	  	  function.
  */
-ChatMessage * chat_message_shutdown_keyrelease_create(OtrlChatContext *ctx, unsigned char *key, size_t keylen)
+ChatMessage * chat_message_shutdown_keyrelease_new(ChatContext ctx, unsigned char *key, size_t keylen)
 {
 	ChatMessage *msg;
 	ChatMessagePayloadShutdownKeyRelease *payload;
 
-	msg = chat_message_create(ctx, CHAT_MSGTYPE_SHUTDOWN_KEYRELEASE);
+	msg = chat_message_new(ctx, CHAT_MSGTYPE_SHUTDOWN_KEYRELEASE);
 	if(!msg) { goto error; }
 
 	payload = malloc(sizeof *payload);

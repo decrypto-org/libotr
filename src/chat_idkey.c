@@ -251,10 +251,10 @@ int chat_idkey_compare(ChatIdKey *a_key, ChatIdKey *b_key)
    	return username_eq;
 }
 
-ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const char *protocol)
+ChatIdKey * chat_idkey_find(OtrlList key_list, const char *accountname, const char *protocol)
 {
     ChatIdKey target, *res;
-    OtrlListNode *found;
+    OtrlListNode found;
 
     fprintf(stderr,"libotr-mpOTR: chat_idkey_find: start\n");
 
@@ -275,7 +275,7 @@ ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const c
 
     fprintf(stderr,"libotr-mpOTR: chat_idkey_find: end\n");
 
-    res = found->payload;
+    res = otrl_list_node_get_payload(found);
     return res;
 
 error_with_protocol:
@@ -286,7 +286,7 @@ error:
     return NULL;
 }
 
-int chat_idkey_compareOp(PayloadPtr a, PayloadPtr b)
+int chat_idkey_compareOp(OtrlListPayload a, OtrlListPayload b)
 {
     ChatIdKey *a_key = a;
     ChatIdKey *b_key = b;
@@ -294,13 +294,14 @@ int chat_idkey_compareOp(PayloadPtr a, PayloadPtr b)
    	return chat_idkey_compare(a_key, b_key);
 }
 
-void chat_idkey_printOp(OtrlListNode* a) {
-	ChatIdKey *key = a->payload;
+void chat_idkey_printOp(OtrlListNode a) {
+	ChatIdKey *key;
 
+	key = otrl_list_node_get_payload(a);
 	chat_idkey_print(key);
 }
 
-void chat_idkey_freeOp(PayloadPtr a) {
+void chat_idkey_freeOp(OtrlListPayload a) {
 	chat_idkey_free(a);
 }
 

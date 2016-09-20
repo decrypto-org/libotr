@@ -17,13 +17,23 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "chat_offer.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <gcrypt.h>
-#include "chat_offer.h"
-#include "chat_types.h"
+
+#include "chat_context.h"
 #include "chat_message.h"
 #include "chat_participant.h"
+#include "chat_types.h"
+
+struct ChatOfferInfoStruct {
+		size_t size;
+		size_t added;
+		unsigned char **sid_contributions;
+		ChatOfferState state;
+};
 
 unsigned char * chat_offer_compute_sid(unsigned char **sid_contributions, size_t size)
 {
@@ -78,19 +88,9 @@ error:
 	return NULL;
 }
 
-void chat_offer_info_free(ChatOfferInfo *info) {
-	unsigned int i;
-
-	if(info) {
-		for(i=0; i<info->size; i++) {
-			free(info->sid_contributions[i]);
-		}
-	}
-	free(info);
-}
-
-int chat_offer_info_init(OtrlChatContext *ctx, size_t size) {
-	ChatOfferInfo *offer_info;
+ChatOfferInfo chat_offer_info_new(size_t size)
+{
+	ChatOfferInfo offer_info;
 
 	offer_info = malloc(sizeof *offer_info);
 	if(!offer_info) { goto error; }
@@ -102,19 +102,46 @@ int chat_offer_info_init(OtrlChatContext *ctx, size_t size) {
 
 	offer_info->state = CHAT_OFFERSTATE_NONE;
 
-	ctx->offer_info = offer_info;
-
-	return 0;
+	return offer_info;
 
 err_with_offer_info:
 	free(offer_info);
 error:
+	return NULL;
+}
+
+void chat_offer_info_free(ChatOfferInfo info) {
+	unsigned int i;
+
+	if(info) {
+		for(i=0; i<info->size; i++) {
+			free(info->sid_contributions[i]);
+		}
+	}
+	free(info);
+}
+
+ChatOfferState chat_offer_info_get_state(ChatOfferInfo offer_info)
+{
+	return offer_info->state;
+}
+
+int chat_offer_info_init(ChatContext ctx, size_t size) {
+	ChatOfferInfo offer_info;
+
+	offer_info = chat_offer_info_new(size);
+	if(!offer_info) { goto error; }
+
+	chat_context_set_offer_info(ctx, offer_info);
+
+	return 0;
+
+error:
 	return 1;
 }
 
-int chat_offer_add_sid_contribution(OtrlChatContext *ctx, const unsigned char *sid_contribution, unsigned int position)
+int chat_offer_add_sid_contribution(ChatOfferInfo offer_info, const unsigned char *sid_contribution, unsigned int position)
 {
-	ChatOfferInfo *offer_info = ctx->offer_info;
 	unsigned char *contribution;
 
 	if(position >= offer_info->size) { goto error; }
@@ -133,25 +160,18 @@ error:
 	return 1;
 }
 
-int chat_offer_sid_contribution_exists(OtrlChatContext *ctx, unsigned int position)
+int chat_offer_sid_contribution_exists(ChatOfferInfo offer_info, unsigned int position)
 {
-	ChatOfferInfo *offer_info = ctx->offer_info;
-
 	//TODO maybe check if position >= offer_info->size???
 	if(offer_info->sid_contributions[position] == NULL) {
 		return 0;
 	} else {
 		return 1;
 	}
-
-
-
 }
 
-int chat_offer_is_ready(OtrlChatContext *ctx)
+int chat_offer_is_ready(ChatOfferInfo offer_info)
 {
-	ChatOfferInfo *offer_info = ctx->offer_info;
-
 	if(offer_info->added < offer_info->size) {
 		return 0;
 	} else {
@@ -159,11 +179,12 @@ int chat_offer_is_ready(OtrlChatContext *ctx)
 	}
 }
 
-int chat_offer_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, ChatMessage **msgToSend)
+int chat_offer_handle_message(ChatContext ctx, const ChatMessage *msg, ChatMessage **msgToSend)
 {
 	int err;
 	unsigned int their_pos, our_pos;
 	unsigned char *our_contribution, *sid;
+	ChatOfferInfo offer_info;
 	ChatMessage *newmsg = NULL;
 	ChatMessagePayloadOffer *payload = msg->payload;
 
@@ -171,44 +192,46 @@ int chat_offer_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, Chat
 
 	fprintf(stderr, "libotr-mpOTR: chat_offer_handle_message: start\n");
 
-	if(!ctx->offer_info) { goto error; }
+	offer_info = chat_context_get_offer_info(ctx);
+	if(!offer_info) { goto error; }
 
-	err = chat_participant_get_position(ctx->participants_list, msg->senderName, &their_pos);
+	err = chat_participant_get_position(chat_context_get_participants_list(ctx), msg->senderName, &their_pos);
 	if(err) { goto error; }
-	if(their_pos != payload->position || their_pos >= ctx->offer_info->size) {
+	if(their_pos != payload->position || their_pos >= offer_info->size) {
 		goto error;
 	}
 
-	if( chat_offer_sid_contribution_exists(ctx, their_pos)) {
+	if( chat_offer_sid_contribution_exists(offer_info, their_pos)) {
 		goto error;
 	}
 
-	err = chat_offer_add_sid_contribution(ctx, payload->sid_contribution, their_pos);
+	err = chat_offer_add_sid_contribution(offer_info, payload->sid_contribution, their_pos);
 	if(err) { goto error; }
 
-	err = chat_participant_get_position(ctx->participants_list, ctx->accountname, &our_pos);
+	err = chat_participant_get_position(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &our_pos);
 	if(err) { goto error; }
 
-	if(!chat_offer_sid_contribution_exists(ctx, our_pos)) {
+	if(!chat_offer_sid_contribution_exists(offer_info, our_pos)) {
 		our_contribution = chat_offer_create_sid_contribution();
 		if(!our_contribution) { goto error; }
 
-		err = chat_offer_add_sid_contribution(ctx, our_contribution, our_pos);
+		err = chat_offer_add_sid_contribution(offer_info, our_contribution, our_pos);
 		if(err) { free(our_contribution); goto error; }
 
-		newmsg = chat_message_offer_create(ctx, our_contribution, our_pos);
+		newmsg = chat_message_offer_new(ctx, our_contribution, our_pos);
 
 		if(!newmsg) { goto error; }
 
 		free(our_contribution);
 	}
 
-	if(chat_offer_is_ready(ctx)) {
-		sid = chat_offer_compute_sid(ctx->offer_info->sid_contributions, ctx->offer_info->size);
+	if(chat_offer_is_ready(offer_info)) {
+		sid = chat_offer_compute_sid(offer_info->sid_contributions, offer_info->size);
 		if(!sid) { goto error; }
-		memcpy(ctx->sid, sid, CHAT_OFFER_SID_LENGTH);
+		//TODO Dimitris: Here the getter plays the role of a setter
+		memcpy(chat_context_get_sid(ctx), sid, CHAT_OFFER_SID_LENGTH);
 		free(sid);
-		ctx->offer_info->state = CHAT_OFFERSTATE_FINISHED;
+		offer_info->state = CHAT_OFFERSTATE_FINISHED;
 	}
 
 	*msgToSend = newmsg;
@@ -221,40 +244,41 @@ error:
 	return 1;
 }
 
-int chat_offer_start(OtrlChatContext *ctx, ChatMessage **msgToSend)
+int chat_offer_start(ChatContext ctx, ChatMessage **msgToSend)
 {
-	int err;
+	ChatOfferInfo offer_info;
 	unsigned int our_pos;
 	unsigned char *our_contribution, *sid;
 	ChatMessage *newmsg = NULL;
+	int err;
 
 	fprintf(stderr, "libotr-mpOTR: chat_offer_start: start\n");
 
+	offer_info = chat_context_get_offer_info(ctx);
+	if(!offer_info) { goto error; }
+
 	*msgToSend = NULL;
 
-	chat_offer_info_free(ctx->offer_info);
-
-	err = chat_offer_info_init(ctx, otrl_list_length(ctx->participants_list));
-	if(err) { goto error; }
-
-	err = chat_participant_get_position(ctx->participants_list, ctx->accountname, &our_pos);
+	err = chat_participant_get_position(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &our_pos);
 	if(err) { goto error; }
 
 	our_contribution = chat_offer_create_sid_contribution();
 	if(!our_contribution) { goto error; }
 
-	newmsg = chat_message_offer_create(ctx, our_contribution, our_pos);
+	newmsg = chat_message_offer_new(ctx, our_contribution, our_pos);
 	if(!newmsg) { goto error_with_our_contribution; }
 
-	err = chat_offer_add_sid_contribution(ctx, our_contribution, our_pos);
+	err = chat_offer_add_sid_contribution(offer_info, our_contribution, our_pos);
 	if(err) { goto erro_with_newmsg; }
 
 	// TODO handle better this case
-	if(chat_offer_is_ready(ctx)) {
-		sid = chat_offer_compute_sid(ctx->offer_info->sid_contributions, ctx->offer_info->size);
+	if(chat_offer_is_ready(offer_info)) {
+		sid = chat_offer_compute_sid(offer_info->sid_contributions, offer_info->size);
 		if(!sid) { goto error; }
-		memcpy(ctx->sid, sid, CHAT_OFFER_SID_LENGTH);
-		ctx->offer_info->state = CHAT_OFFERSTATE_FINISHED;
+
+		//TODO Dimitris: the getter plays the role of a setter
+		memcpy(chat_context_get_sid(ctx), sid, CHAT_OFFER_SID_LENGTH);
+		offer_info->state = CHAT_OFFERSTATE_FINISHED;
 	}
 
 	*msgToSend = newmsg;

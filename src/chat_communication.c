@@ -22,26 +22,27 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "context.h"
+#include "chat_context.h"
 #include "chat_enc.h"
 #include "chat_message.h"
 #include "chat_participant.h"
 #include "chat_types.h"
-#include "context.h"
 #include "list.h"
 
-int chat_communication_handle_data_message(OtrlChatContext *ctx, ChatMessage *msg,
+int chat_communication_handle_data_message(ChatContext ctx, ChatMessage *msg,
 										   ChatMessage **msgToSend, char** plaintext)
 {
 	ChatMessagePayloadData *payload = msg->payload;
-    ChatParticipant *sender = NULL;
-    OtrlListNode *node = NULL;
+    ChatParticipant sender;
+    OtrlListNode node;
     unsigned int sender_pos;
 	char *plain = NULL;
     char *plain_cpy = NULL;
 
     fprintf(stderr, "libotr-mpOTR: chat_communication_handle_data_message: start\n");
 
-	switch(ctx->msg_state) {
+	switch(chat_context_get_msg_state(ctx)) {
 
 		case OTRL_MSGSTATE_PLAINTEXT:
 		case OTRL_MSGSTATE_FINISHED:
@@ -53,16 +54,16 @@ int chat_communication_handle_data_message(OtrlChatContext *ctx, ChatMessage *ms
 			plain = chat_enc_decrypt(ctx, payload->ciphertext, payload->datalen, payload->ctr, msg->senderName);
 			if (!plain) { goto error; }
 
-            sender = chat_participant_find(ctx, msg->senderName, &sender_pos);
+            sender = chat_participant_find(chat_context_get_participants_list(ctx), msg->senderName, &sender_pos);
             if(!sender) {goto error_with_plain; }
 
             plain_cpy = strdup(plain);
             if(!plain_cpy) { goto error_with_plain; }
 
-            node = otrl_list_insert(sender->messages, plain_cpy);
+            node = otrl_list_insert(chat_participant_get_messages(sender), plain_cpy);
             if(!node) { goto error_with_copy; }
 
-            otrl_list_dump(sender->messages);
+            otrl_list_dump(chat_participant_get_messages(sender));
 			break;
 	}
 
@@ -81,21 +82,21 @@ error:
 
 }
 
-int chat_communication_broadcast(OtrlChatContext *ctx, const char *message,
+int chat_communication_broadcast(ChatContext ctx, const char *message,
 								 ChatMessage **msgToSend)
 {
 	unsigned char *ciphertext;
-	OtrlListNode *node;
+	OtrlListNode node;
 	size_t datalen;
 	ChatMessage *msg = NULL;
-    ChatParticipant *me = NULL;
+    ChatParticipant me;
     unsigned int pos;
     char *msg_cpy = NULL;
 
 	fprintf(stderr, "libotr-mpOTR: chat_communication_broadcast: start\n");
 
     /* Find the user in the participants list */
-    me = chat_participant_find(ctx, ctx->accountname, &pos);
+    me = chat_participant_find(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &pos);
     if(!me) { goto error; }
 
     /* Copy the message to send */
@@ -107,16 +108,16 @@ int chat_communication_broadcast(OtrlChatContext *ctx, const char *message,
 
 	datalen = strlen(message);
 
-	msg = chat_message_data_create(ctx, ctx->enc_info->ctr, datalen, ciphertext);
+	msg = chat_message_data_new(ctx, chat_context_get_enc_info(ctx)->ctr, datalen, ciphertext);
 	if(!msg) { goto error_with_ciphertext; }
 
 	//TODO Dimitris: maybe add a chat_participant_add_message function ,to avoid code duplication of allocation and error handling
     /* And insert the message he is sending, so that we can later execute
      * the shutdown phase */
-    node = otrl_list_insert(me->messages, msg_cpy);
+    node = otrl_list_insert(chat_participant_get_messages(me), msg_cpy);
     if(!node) { goto error_with_msg; }
 
-    otrl_list_dump(me->messages);
+    otrl_list_dump(chat_participant_get_messages(me));
 
     fprintf(stderr, "libotr-mpOTR: chat_communication_broadcast: end\n");
 
@@ -150,7 +151,7 @@ int chat_communication_is_my_message(ChatMessage *msg)
 
 }
 
-int chat_communication_handle_msg(OtrlChatContext *ctx, ChatMessage *msg,
+int chat_communication_handle_msg(ChatContext ctx, ChatMessage *msg,
                                   ChatMessage **msgToSend, char **plaintext)
 {
     ChatMessageType msg_type = msg->msgType;

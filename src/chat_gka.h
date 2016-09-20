@@ -17,32 +17,29 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef CHAT_AUTH_H_
-#define CHAT_AUTH_H_
+#ifndef CHAT_GKA_H_
+#define CHAT_GKA_H_
 
 #include "chat_types.h"
 
+typedef enum {
+        CHAT_GKASTATE_NONE,
+        CHAT_GKASTATE_AWAITING_UPFLOW,
+        CHAT_GKASTATE_AWAITING_DOWNFLOW,
+        CHAT_GKASTATE_FINISHED
+} ChatGKAState;
+
 struct OtrlListOpsStruct interKeyOps;
 
-//typedef enum {
-//	OTRL_CHAT_AUTHSTATE_NONE,
-//	OTRL_CHAT_AUTHSTATE_AWAITING_RES
-//} OtrlAuthGKAState;
-//
-//typedef struct {
-//	OtrlAuthGKAState state;  /* the gka state */
-//
-//	unsigned char key[32];
-//
-//	OtrlChatMessage *auth_msg; /* the next message to be send for GKA */
-//} OtrlAuthGKAInfo;
+unsigned int chat_gka_info_get_position(ChatGKAInfo gka_info);
+ChatGKAState chat_gka_info_get_state(ChatGKAInfo gka_info);
 
 /**
   Frees all memory allocated for a OtrlAuthGKAInfo struct.
 
   @param gka_info the struct to be free'd.
  */
-void chat_auth_gka_info_free(OtrlAuthGKAInfo *gka_info);
+void chat_gka_info_free(ChatGKAInfo gka_info);
 
 /**
  Initialize the query exchange
@@ -54,7 +51,7 @@ void chat_auth_gka_info_free(OtrlAuthGKAInfo *gka_info);
  @param ctx The context for which the qery will be created
  @param msgToSend The query message will be stored here
  */
-gcry_error_t chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend);
+int chat_gka_init(ChatContext ctx, ChatMessage **msgToSend);
 
 /**
   Check if the msg belongs to the authentication protocol
@@ -65,7 +62,7 @@ gcry_error_t chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend);
   @param msg The message to check
   @returns 1 if the message belongs to the authentication protocol. 0 otherwise
  */
-int chat_auth_is_my_message(const ChatMessage *msg);
+int chat_gka_is_my_message(const ChatMessage *msg);
 
 /**
   Handle a message that belongs to the authentication protocol
@@ -80,6 +77,7 @@ int chat_auth_is_my_message(const ChatMessage *msg);
    to the handled message will be stored here
   @returns 1 if the message belongs to the authentication protocol. 0 otherwise
  */
-int chat_auth_handle_message(OtrlChatContext *ctx, ChatMessage *msg,
+int chat_gka_handle_message(ChatContext ctx, ChatMessage *msg,
 		ChatMessage **msgToSend);
-#endif /* CHAT_AUTH_H_ */
+
+#endif /* CHAT_GKA_H_ */

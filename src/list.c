@@ -22,9 +22,60 @@
 
 #include "list.h"
 
-OtrlList * otrl_list_create(struct OtrlListOpsStruct *ops, size_t payload_size)
+struct OtrlListNodeStruct {
+	struct OtrlListNodeStruct * next;
+	struct OtrlListNodeStruct * prev;
+	OtrlListPayload payload;
+	void (*payload_free)(OtrlListPayload);
+};
+
+struct OtrlListStruct {
+	OtrlListNode head;
+	OtrlListNode tail;
+	unsigned int size;
+	size_t payload_size;
+	struct OtrlListOpsStruct *ops;
+};
+
+OtrlListNode otrl_list_node_new(const OtrlListPayload payload, void (*payload_free)(OtrlListPayload))
 {
-	OtrlList *list = NULL;
+	OtrlListNode node = NULL;
+
+	node = malloc(sizeof *node);
+	if(!node) { goto error; }
+
+	node->next = NULL;
+	node->prev = NULL;
+	node->payload = payload;
+	node->payload_free = payload_free;
+
+	return node;
+
+error:
+	return NULL;
+}
+
+OtrlListPayload otrl_list_node_get_payload(OtrlListNode node)
+{
+	return node->payload;
+}
+
+OtrlListPayload otrl_list_node_get_next(OtrlListNode node)
+{
+	return node->next;
+}
+
+void otrl_list_node_free(OtrlListNode node)
+{
+	if(node->payload && node->payload_free) {
+		node->payload_free(node->payload);
+	}
+	free(node);
+}
+
+OtrlList otrl_list_new(struct OtrlListOpsStruct *ops, size_t payload_size)
+{
+	OtrlList list = NULL;
 
 	if(!ops || !ops->compar) { goto error; }
 
@@ -44,48 +95,60 @@ error:
 	return NULL;
 }
 
-OtrlListNode * otrl_list_node_create(const PayloadPtr payload) {
-	OtrlListNode *node = NULL;
-
-	node = malloc(sizeof *node);
-	if(!node) { goto error; }
-
-	node->payload = payload;
-	node->next = NULL;
-	node->prev = NULL;
-
-	return node;
-
-error:
-	return NULL;
+OtrlListNode otrl_list_get_head(OtrlList list)
+{
+	if(list) {
+		return list->head;
+	} else {
+		return NULL;
+	}
 }
 
-OtrlListNode * otrl_list_insert(OtrlList *list, const PayloadPtr payload) {
-	OtrlListNode *node = NULL;
-	OtrlListNode *cur = NULL;
+OtrlListNode otrl_list_get_tail(OtrlList list)
+{
+	if(list) {
+		return list->tail;
+	} else {
+		return NULL;
+	}
+}
 
-	node = otrl_list_node_create(payload);
+OtrlListNode otrl_list_insert(OtrlList list, const OtrlListPayload payload)
+{
+	OtrlListNode node, head, cur, next;
+
+	node = otrl_list_node_new(payload, list->ops->payload_free);
 	if(!node) { goto error; }
 
+	head = otrl_list_get_head(list);
+
 	// if list is empty
-	if(list->head == NULL) {
+	if(NULL == head) {
 		node->prev = NULL;
 		node->next = NULL;
 		list->head = node;
 		list->tail = node;
 
 	//if it should be the first node
-	} else if (list->ops->compar(node->payload, list->head->payload) < 0) {
+	} else if (list->ops->compar(otrl_list_node_get_payload(node), otrl_list_node_get_payload(head)) < 0) {
 		node->next = list->head;
 		node->prev = NULL;
 		list->head->prev = node;
 		list->head = node;
 
 	} else {
-		for(cur = list->head; cur->next!=NULL && list->ops->compar(node->payload, cur->next->payload) > 0; cur = cur->next);
-		node->next = cur->next;
+		cur = head;
+		next = cur->next;
+
+		while(NULL != next && list->ops->compar(otrl_list_node_get_payload(node), otrl_list_node_get_payload(next)) > 0) {
+			cur = cur->next;
+			next = cur->next;
+		}
+
+		node->next = next;
 		node->prev = cur;
 		cur->next = node;
+
 		if(node->next == NULL) {
 			list->tail = node;
 		}
@@ -99,10 +162,11 @@ error:
 	return NULL;
 }
 
-OtrlListNode * otrl_list_prepend(OtrlList *list, PayloadPtr payload) {
-	OtrlListNode *node = NULL;
+OtrlListNode otrl_list_prepend(OtrlList list, OtrlListPayload payload)
+{
+	OtrlListNode node;
 
-	node = otrl_list_node_create(payload);
+	node = otrl_list_node_new(payload, list->ops->payload_free);
 	if(!node) { goto error; }
 
 	node->prev = NULL;
@@ -125,10 +189,11 @@ error:
 	return NULL;
 }
 
-OtrlListNode * otrl_list_append(OtrlList *list, PayloadPtr payload) {
-	OtrlListNode *node = NULL;
+OtrlListNode otrl_list_append(OtrlList list, OtrlListPayload payload)
+{
+	OtrlListNode node;
 
-	node = otrl_list_node_create(payload);
+	node = otrl_list_node_new(payload, list->ops->payload_free);
 	if(!node) { goto error;}
 
 	node->prev = list->tail;
@@ -151,7 +216,7 @@ error:
 	return NULL;
 }
 
-void otrl_list_remove(OtrlList *list, OtrlListNode *node)
+void otrl_list_remove(OtrlList list, OtrlListNode node)
 {
 	if(!list || !node) return;
 
@@ -168,50 +233,21 @@ void otrl_list_remove(OtrlList *list, OtrlListNode *node)
 	list->size--;
 }
 
-void otrl_list_remove_and_free(OtrlList *list, OtrlListNode *node)
+void otrl_list_remove_and_free(OtrlList list, OtrlListNode node)
 {
 	otrl_list_remove(list, node);
-	otrl_list_node_free(list, node);
+	otrl_list_node_free(node);
 }
 
-void otrl_list_foreach(OtrlList *list, void (*fun)(OtrlListNode *) )
+void otrl_list_clear(OtrlList list)
 {
-	OtrlListNode *cur = list->head;
-
-	if(!cur)
-		return;
-
-	fun(cur);
-	while( (cur = cur->next) )
-		fun(cur);
-
-}
-
-void otrl_list_dump(OtrlList *list)
-{
-	if(list->ops == NULL || list->ops->print == NULL) {
-		return;
-	}
-
-	otrl_list_foreach(list, list->ops->print);
-}
-
-
-void otrl_list_node_free(OtrlList *list, OtrlListNode *node)
-{
-	list->ops->payload_free(node->payload);
-	free(node);
-}
-
-void otrl_list_clear(OtrlList *list)
-{
-	while( list->head != NULL) {
-		otrl_list_remove_and_free(list, list->head);
+	while(NULL != otrl_list_get_head(list)) {
+		otrl_list_remove_and_free(list, otrl_list_get_head(list));
 	}
 }
 
 
-void otrl_list_free(OtrlList *list)
+void otrl_list_free(OtrlList list)
 {
 	if(list) {
 		otrl_list_clear(list);
@@ -219,39 +255,36 @@ void otrl_list_free(OtrlList *list)
 	free(list);
 }
 
-OtrlListNode * otrl_list_find(OtrlList *list, PayloadPtr target)
+OtrlListNode otrl_list_find(OtrlList list, OtrlListPayload target)
 {
-	OtrlListNode *cur = NULL;
-	int res;
+	OtrlListNode cur;
 
-	cur = list->head;
-
-	// check if the list is empty
-	if(cur == NULL) { goto error; }
-
-	while(cur != NULL) {
-		res = list->ops->compar(target, cur->payload);
-		if(res == 0)
+	cur = otrl_list_get_head(list);
+	while(NULL != cur) {
+		if(0 == list->ops->compar(target, otrl_list_node_get_payload(cur))) {
 			return cur;
-		cur = cur->next;
+		}
+		cur = otrl_list_node_get_next(cur);
 	}
 
 	return NULL;
-
-error:
-	return NULL;
 }
 
-OtrlListNode * otrl_list_get(OtrlList *list, unsigned int i)
+unsigned int otrl_list_size(OtrlList list)
+{
+	return list->size;
+}
+
+OtrlListNode otrl_list_get(OtrlList list, unsigned int i)
 {
 	unsigned int j;
-	OtrlListNode *cur;
+	OtrlListNode cur;
 
-	if(!list || i >= list->size) { goto error; }
+	if(!list || i >= otrl_list_size(list)) { goto error; }
 
-	cur = list->head;
+	cur = otrl_list_get_head(list);
 	for(j=0; j<i; j++) {
-		cur = cur->next;
+		cur = otrl_list_node_get_next(cur);
 	}
 
 	return cur;
@@ -260,25 +293,67 @@ error:
 	return NULL;
 }
 
-OtrlListNode * otrl_list_get_last(OtrlList *list)
+void otrl_list_foreach(OtrlList list, void (*fun)(OtrlListNode))
 {
-	if(list) {
-		return list->tail;
-	} else {
-		return NULL;
+	OtrlListNode cur;
+
+	cur = otrl_list_get_head(list);
+	while(NULL != cur) {
+		fun(cur);
+		cur = otrl_list_node_get_next(cur);
 	}
 }
 
-OtrlListNode * otrl_list_get_first(OtrlList *list)
+void otrl_list_dump(OtrlList list)
 {
-	if(list) {
-		return list->head;
-	} else {
-		return NULL;
+	if(list->ops == NULL || list->ops->print == NULL) {
+		return;
 	}
+
+	otrl_list_foreach(list, list->ops->print);
 }
 
-unsigned int otrl_list_length(OtrlList *list)
+struct OtrlListIteratorStruct {
+	OtrlList list;
+	OtrlListNode next;
+};
+
+OtrlListIterator otrl_list_iterator_new(OtrlList list)
 {
-	return list->size;
+	OtrlListIterator iter;
+
+	if(!list) { goto error; }
+
+	iter = malloc(sizeof *iter);
+	if(!iter) { goto error; }
+
+	iter->list = list;
+	iter->next = otrl_list_get_head(list);
+
+	return iter;
+
+error:
+	return NULL;
+}
+
+void otrl_list_iterator_free(OtrlListIterator iter)
+{
+	free(iter);
+}
+
+int otrl_list_iterator_has_next(OtrlListIterator iter)
+{
+	return (iter->next) ? 1 : 0;
+}
+
+OtrlListNode otrl_list_iterator_next(OtrlListIterator iter)
+{
+	OtrlListNode result;
+
+	result = iter->next;
+	if(result) {
+		iter->next = otrl_list_node_get_next(result);
+	}
+
+	return result;
 }

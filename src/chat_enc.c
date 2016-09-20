@@ -20,16 +20,20 @@
 #include <gcrypt.h>
 
 #include "chat_enc.h"
+
+#include <stdlib.h>
+
 #include "dh.h"
-#include "stdlib.h"
 #include "instag.h"
+#include "chat_context.h"
+#include "chat_gka.h"
 #include "chat_participant.h"
 
 #define OTRL_ENC_KEY_SIZE 16
 
-OtrlChatEncInfo* chat_enc_info_new()
+ChatEncInfo* chat_enc_info_new()
 {
-    OtrlChatEncInfo *tmp;
+    ChatEncInfo *tmp;
 
     tmp = malloc(sizeof *tmp);
     if(!tmp) {
@@ -43,7 +47,7 @@ OtrlChatEncInfo* chat_enc_info_new()
 
 }
 
-void chat_enc_info_free(OtrlChatEncInfo *enc_info)
+void chat_enc_info_free(ChatEncInfo *enc_info)
 {
     if(enc_info) {
     	gcry_free(enc_info->key);
@@ -67,7 +71,7 @@ unsigned char * mpi_serial_secure(gcry_mpi_t w, size_t *size)
     return buf;
 }
 
-gcry_error_t chat_enc_create_secret(OtrlChatEncInfo *enc_info ,gcry_mpi_t w, DH_keypair *key)
+gcry_error_t chat_enc_create_secret(ChatEncInfo *enc_info ,gcry_mpi_t w, DH_keypair *key)
 {
 	gcry_md_hd_t md;
 	gcry_error_t err;
@@ -135,7 +139,7 @@ gcry_error_t chat_enc_create_secret(OtrlChatEncInfo *enc_info ,gcry_mpi_t w, DH_
 	return gcry_error(GPG_ERR_NO_ERROR);
 }
 
-gcry_error_t chat_enc_encrypt_data(gcry_cipher_hd_t cipher, OtrlChatEncInfo *enc_info,
+gcry_error_t chat_enc_encrypt_data(gcry_cipher_hd_t cipher, ChatEncInfo *enc_info,
 				   const char *in, size_t inlen,
 				   unsigned char *out, size_t outlen)
 {
@@ -178,7 +182,7 @@ err:
 }
 
 
-gcry_error_t chat_enc_get_personal_cipher(const OtrlChatEncInfo *enc_info,
+gcry_error_t chat_enc_get_personal_cipher(const ChatEncInfo *enc_info,
 			      const unsigned int sender_id, gcry_cipher_hd_t *cipher)
 {
     unsigned char *hashdata;
@@ -248,7 +252,7 @@ gcry_error_t chat_enc_get_personal_cipher(const OtrlChatEncInfo *enc_info,
     return gcry_error(GPG_ERR_NO_ERROR);
 }
 
-char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphertext,
+char * chat_enc_decrypt(const ChatContext ctx, const unsigned char *ciphertext,
 			size_t datalen, const unsigned char top_ctr[8],
 			const char *sender) {
 	char *plaintext;
@@ -261,9 +265,9 @@ char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphert
 
 	fprintf(stderr,"libotr-mpOTR: chat_enc_decrypt: start\n");
 
-	if(chat_participant_get_position(ctx->participants_list, ctx->accountname, &our_pos))
+	if(chat_participant_get_position(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &our_pos))
 		return NULL;
-	if(chat_participant_get_position(ctx->participants_list, sender, &their_pos))
+	if(chat_participant_get_position(chat_context_get_participants_list(ctx), sender, &their_pos))
 		return NULL;
 
 	/* FIXME How we get the sender_id is very hacky. At the moment setting the sender_id
@@ -272,8 +276,8 @@ char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphert
 	 * A better solution is required, when we find a robust way to handle the
 	 * usernames/user alieses.
 	 */
-	participants_len = otrl_list_length(ctx->participants_list);
-	sender_id = their_pos + ctx->gka_info->position - our_pos;
+	participants_len = otrl_list_size(chat_context_get_participants_list(ctx));
+	sender_id = their_pos + chat_gka_info_get_position(chat_context_get_gka_info(ctx)) - our_pos;
 	if(sender_id >= (int) participants_len) {
 		sender_id -= participants_len;
 	}
@@ -296,7 +300,7 @@ char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphert
 	memset(ctr, 0, 16);
 	memmove(ctr, top_ctr, 8);
 	//fprintf(stderr,"libotr-mpOTR: chat_enc_decrypt: before get_personal_cipher\n");
-	err = chat_enc_get_personal_cipher(ctx->enc_info, sender_id, &dcipher);
+	err = chat_enc_get_personal_cipher(chat_context_get_enc_info(ctx), sender_id, &dcipher);
 	if (err) {
 	    //fprintf(stderr, "libotr-mpOTR: chat_enc_decrypt: personal cipher failed\n");
 	    free(plaintext);
@@ -321,7 +325,7 @@ char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphert
 }
 
 
-unsigned char * chat_enc_encrypt(OtrlChatContext *ctx, const char *plaintext) {
+unsigned char * chat_enc_encrypt(ChatContext ctx, const char *plaintext) {
 	//char *ciphertext;
 	size_t msglen = 0;
 	unsigned char *ciphertext = NULL;
@@ -338,15 +342,14 @@ unsigned char * chat_enc_encrypt(OtrlChatContext *ctx, const char *plaintext) {
 	    return NULL;
 	}
 
-
-	err = chat_enc_get_personal_cipher(ctx->enc_info, ctx->id, &ecipher);
+	err = chat_enc_get_personal_cipher(chat_context_get_enc_info(ctx), chat_context_get_id(ctx), &ecipher);
 	if (err) {
 	    //fprintf(stderr, "libotr-mpOTR: chat_enc_encrypt: personal cipher failed\n");
 	    free(ciphertext);
 	    return NULL;
 	}
 
-	err = chat_enc_encrypt_data(ecipher, ctx->enc_info, plaintext, msglen, ciphertext, msglen);
+	err = chat_enc_encrypt_data(ecipher, chat_context_get_enc_info(ctx), plaintext, msglen, ciphertext, msglen);
 
 	if(err) {
 	    //fprintf(stderr, "libotr-mpOTR: chat_enc_encrypt: error\n");

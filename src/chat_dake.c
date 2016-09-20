@@ -27,6 +27,9 @@
 #define CONF_MSG "key confirmation msg"
 #define CONF_MSG_LEN 20
 
+//TODO refactor error handling KOSTIS
+//TODO add comments
+
 void chat_dake_destroy(DAKE *dake)
 {
 	tdh_handshake_destroy(&dake->handshake);
@@ -34,7 +37,6 @@ void chat_dake_destroy(DAKE *dake)
 
 void chat_dake_destroy_info(DAKEInfo *dake_info)
 {
-    //otrl_dh_keypair_free(&dake_info->longterm);
     otrl_dh_keypair_free(&dake_info->ephemeral);
 }
 
@@ -46,8 +48,6 @@ int chat_dake_auth_encrypt(DAKE *dake,
 	fprintf(stderr,"libotr-mpOTR: chat_dake_auth_encrypt: start\n");
     if(tdh_handshake_encrypt(&dake->handshake, ciphertext, msglen, msg, msglen))
         return 1;
-
-    //fprintf(stderr,"libotr-mpOTR: chat_dake_auth_encrypt: after encrypt\n");
 
     if(tdh_handshake_mac(&dake->handshake, mac, ciphertext, msglen, assoc_data, assoc_datalen))
         return 1;
@@ -64,8 +64,6 @@ int chat_dake_auth_decrypt(DAKE *dake, unsigned char *ciphertext,
     if(tdh_handshake_mac_verify(&dake->handshake, mac, ciphertext, cipherlen, assoc_data,
                                 assoc_datalen))
         return 1;
-
-    //fprintf(stderr,"libotr-mpOTR: chat_dake_auth_decrypt: after verify\n");
 
     if(tdh_handshake_decrypt(&dake->handshake, msg, cipherlen, ciphertext, cipherlen))
         return 1;
@@ -86,21 +84,16 @@ int chat_dake_init_keys(DAKEInfo *dake_info, ChatIdKey *key,
 {
 	int err;
 
-	fprintf(stderr,"libotr-mpOTR: chat_dake_init_keys: start\n");
     *dataToSend = malloc(sizeof(**dataToSend));
     if(!*dataToSend) {
         return DAKE_ERROR;
     }
 
-	//fprintf(stderr,"libotr-mpOTR: chat_dake_init_keys: after alloc\n");
-    //key = chat_idkey_find(longterm_key_list, accountname, protocol);
     if(!key) {
         free(*dataToSend);
         return DAKE_ERROR;
     }
     dake_info->longterm = key->keyp;
-
-	//fprintf(stderr,"libotr-mpOTR: chat_dake_init_keys: after key check\n");
 
     err = tdh_handshake_gen_ephemeral(&dake_info->ephemeral);
     if(err) {
@@ -108,18 +101,13 @@ int chat_dake_init_keys(DAKEInfo *dake_info, ChatIdKey *key,
         return DAKE_ERROR;
     }
 
-	//fprintf(stderr,"libotr-mpOTR: chat_dake_init_keys: after ephemeral key generation\n");
-
     (*dataToSend)->long_pub = gcry_mpi_copy(dake_info->longterm.pub);
     (*dataToSend)->ephem_pub = gcry_mpi_copy(dake_info->ephemeral.pub);
 
-	//fprintf(stderr,"libotr-mpOTR: chat_dake_init_keys: start\n");
-
-    fprintf(stderr,"chat_dake_init_keys: end\n");
     return DAKE_NO_ERROR;
 }
 
-int chat_dake_init(DAKE *dake, DAKEInfo *dake_info)//, ChatFingerprint *fingerprint)
+int chat_dake_init(DAKE *dake, DAKEInfo *dake_info)
 {
 
 	fprintf(stderr,"chat_dake_init: start\n");
@@ -128,7 +116,7 @@ int chat_dake_init(DAKE *dake, DAKEInfo *dake_info)//, ChatFingerprint *fingerpr
     tdh_handshake_load_longterm(&dake->handshake, &dake_info->longterm);
     tdh_handshake_load_ephemeral(&dake->handshake, &dake_info->ephemeral);
     dake->state = DAKE_STATE_WAITING_HANDSHAKE;
-    //dake->fingerprint = fingerprint ? fingerprint->fingerprint : NULL;
+
     fprintf(stderr,"chat_dake_init: end\n");
     return DAKE_NO_ERROR;
 }
@@ -147,7 +135,6 @@ int chat_dake_load_their_part(DAKE *dake,
     gcry_mpi_t long_pub = data->long_pub;
     gcry_mpi_t ephem_pub = data->ephem_pub;
     unsigned char *fingerprint;
- //   char *hexed_fingerprint;
 
 	fprintf(stderr,"chat_dake_load_their_part: start\n");
 
@@ -172,23 +159,8 @@ int chat_dake_load_their_part(DAKE *dake,
 
 
     fingerprint = chat_privkeydh_get_fingerprint(data->long_pub);
-//    if(!dake->fingerprint) {
-//    	fprintf(stderr,"chat_dake_load_their_part: end unverified\n");
-//		hexed_fingerprint = chat_fingerprint_bytes_to_hex(fingerprint);
-//		fprintf(stderr,"libotr-mpOTR: chat_dake_load_their_part: Key with fingerprint %s is not verified\n", hexed_fingerprint);
-//		free(hexed_fingerprint);
-//    	return DAKE_UNVERIFIED;
-//    }
-//    else {
-//   	if(memcmp(dake->fingerprint, fingerprint, CHAT_FINGERPRINT_SIZE)) {
-//    		hexed_fingerprint = chat_fingerprint_bytes_to_hex(fingerprint);
-//    		fprintf(stderr,"libotr-mpOTR: chat_dake_load_their_part: Key with fingerprint %s did not match\n", hexed_fingerprint);
-//    		free(hexed_fingerprint);
-//    		return DAKE_ERROR;
-//    	}
-//    }
-//    free(fingerprint);
     *received_key_fingerprint = fingerprint;
+
     fprintf(stderr,"chat_dake_load_their_part: end\n");
     return DAKE_NO_ERROR;
 }
@@ -207,12 +179,8 @@ int chat_dake_send_key(DAKE *dake, unsigned char* key_bytes, size_t keylen,
 	*dataToSend = malloc(sizeof(**dataToSend));
 	if(!*dataToSend) { goto error; }
 
-	//fprintf(stderr,"chat_dake_send_key: after data malloc, keylen: %lu\n", keylen);
-
 	(*dataToSend)->key = malloc(keylen * sizeof(*(*dataToSend)->key));
 	if(!(*dataToSend)->key) { goto error_with_data; }
-
-	//fprintf(stderr,"chat_dake_send_key: after data  key malloc\n");
 
 	(*dataToSend)->keylen = keylen;
 
@@ -224,8 +192,6 @@ int chat_dake_send_key(DAKE *dake, unsigned char* key_bytes, size_t keylen,
 	if(chat_dake_auth_encrypt(dake, key_bytes, keylen, NULL, 0, (*dataToSend)->key, (*dataToSend)->mac)) {
         goto error_with_key;
 	}
-
-	//fprintf(stderr,"chat_dake_send_key: after data  auth encrypt\n");
 
 	dake->state = DAKE_STATE_WAITING_KEY;
 	fprintf(stderr,"chat_dake_send_key: end\n");

@@ -17,19 +17,29 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "message.h"
-#include "chat_types.h"
-
 #ifndef CHAT_OFFER_H_
 #define CHAT_OFFER_H_
 
-void chat_offer_info_free(ChatOfferInfo *info);
+#include "message.h"
+#include "chat_types.h"
 
-int chat_offer_info_init(OtrlChatContext *ctx, size_t size);
+typedef enum {
+	CHAT_OFFERSTATE_NONE,
+	CHAT_OFFERSTATE_AWAITING,
+	CHAT_OFFERSTATE_FINISHED
+} ChatOfferState;
 
-int chat_offer_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, ChatMessage **msgToSend);
+ChatOfferInfo chat_offer_info_new(size_t size);
 
-int chat_offer_start(OtrlChatContext *ctx, ChatMessage **msgToSend);
+void chat_offer_info_free(ChatOfferInfo info);
+
+ChatOfferState chat_offer_info_get_state(ChatOfferInfo offer_info);
+
+int chat_offer_info_init(ChatContext ctx, size_t size);
+
+int chat_offer_handle_message(ChatContext ctx, const ChatMessage *msg, ChatMessage **msgToSend);
+
+int chat_offer_start(ChatContext ctx, ChatMessage **msgToSend);
 
 int chat_offer_is_my_message(const ChatMessage *msg);
 
