@@ -30,14 +30,14 @@ typedef enum {
 	OTRL_CHAT_PRIVACY_LEVEL_UNKNOWN
 } OtrlChatPrivacyLevel;
 
-typedef struct OtrlChatInfoStruct * OtrlChatInfo;
+typedef struct OtrlChatInfo * OtrlChatInfoPtr;
 
-OtrlChatInfo chat_info_new(const ChatContext ctx);
-OtrlChatInfo chat_info_new_with_level(const ChatContext ctx);
-void chat_info_free(OtrlChatInfo info);
-char * otrl_chat_info_get_accountname(OtrlChatInfo info);
-char * otrl_chat_info_get_protocol(OtrlChatInfo info);
-otrl_chat_token_t otrl_chat_info_get_chat_token(OtrlChatInfo info);
-OtrlChatPrivacyLevel otrl_chat_info_get_privacy_level(OtrlChatInfo info);
+OtrlChatInfoPtr chat_info_new(const ChatContextPtr ctx);
+OtrlChatInfoPtr chat_info_new_with_level(const ChatContextPtr ctx);
+void chat_info_free(OtrlChatInfoPtr info);
+char * otrl_chat_info_get_accountname(OtrlChatInfoPtr info);
+char * otrl_chat_info_get_protocol(OtrlChatInfoPtr info);
+otrl_chat_token_t otrl_chat_info_get_chat_token(OtrlChatInfoPtr info);
+OtrlChatPrivacyLevel otrl_chat_info_get_privacy_level(OtrlChatInfoPtr info);
 
 #endif /* CHAT_INFO_H */

@@ -31,15 +31,15 @@ typedef enum {
 
 struct OtrlListOpsStruct interKeyOps;
 
-unsigned int chat_gka_info_get_position(ChatGKAInfo gka_info);
-ChatGKAState chat_gka_info_get_state(ChatGKAInfo gka_info);
+unsigned int chat_gka_info_get_position(ChatGKAInfoPtr gka_info);
+ChatGKAState chat_gka_info_get_state(ChatGKAInfoPtr gka_info);
 
 /**
   Frees all memory allocated for a OtrlAuthGKAInfo struct.
 
   @param gka_info the struct to be free'd.
  */
-void chat_gka_info_free(ChatGKAInfo gka_info);
+void chat_gka_info_free(ChatGKAInfoPtr gka_info);
 
 /**
  Initialize the query exchange
@@ -51,7 +51,7 @@ void chat_gka_info_free(ChatGKAInfo gka_info);
  @param ctx The context for which the qery will be created
  @param msgToSend The query message will be stored here
  */
-int chat_gka_init(ChatContext ctx, ChatMessage **msgToSend);
+int chat_gka_init(ChatContextPtr ctx, ChatMessage **msgToSend);
 
 /**
   Check if the msg belongs to the authentication protocol
@@ -77,7 +77,7 @@ int chat_gka_is_my_message(const ChatMessage *msg);
    to the handled message will be stored here
   @returns 1 if the message belongs to the authentication protocol. 0 otherwise
  */
-int chat_gka_handle_message(ChatContext ctx, ChatMessage *msg,
+int chat_gka_handle_message(ChatContextPtr ctx, ChatMessage *msg,
 		ChatMessage **msgToSend);
 
 #endif /* CHAT_GKA_H_ */

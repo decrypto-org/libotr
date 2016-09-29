@@ -31,25 +31,25 @@ typedef enum {
 	OTRL_CHAT_EVENT_FINISHED				/* emitted when a private session was finished */
 } OtrlChatEventType;
 
-typedef void * OtrlChatEventData;
-typedef struct OtrlChatEventStruct * OtrlChatEvent;
-typedef struct OtrlChatEventParticipantDataStruct * OtrlChatEventParticipantData;
-typedef struct OtrlChatEventMessageDataStruct * OtrlChatEventMessageData;
+typedef void * OtrlChatEventDataPtr;
+typedef struct OtrlChatEvent * OtrlChatEventPtr;
+typedef struct OtrlChatEventParticipantData * OtrlChatEventParticipantDataPtr;
+typedef struct OtrlChatEventMessageData * OtrlChatEventMessageDataPtr;
 
-char * otrl_chat_event_participant_data_get_username(OtrlChatEventParticipantData data);
-char * otrl_chat_event_message_data_get_username(OtrlChatEventMessageData data);
-char * otrl_chat_event_message_data_get_message(OtrlChatEventMessageData data);
+char * otrl_chat_event_participant_data_get_username(OtrlChatEventParticipantDataPtr data);
+char * otrl_chat_event_message_data_get_username(OtrlChatEventMessageDataPtr data);
+char * otrl_chat_event_message_data_get_message(OtrlChatEventMessageDataPtr data);
 
-void chat_event_free(OtrlChatEvent event);
-OtrlChatEventType otrl_chat_event_get_type(OtrlChatEvent event);
-OtrlChatEventData otrl_chat_event_get_data(OtrlChatEvent event);
-OtrlChatEvent chat_event_offer_received_new(const char *username);
-OtrlChatEvent chat_event_starting_new();
-OtrlChatEvent chat_event_started_new();
-OtrlChatEvent chat_event_unverified_participant_new(const char *username);
-OtrlChatEvent chat_event_plaintext_received_new(const char *username, const char *message);
-OtrlChatEvent chat_event_private_received_new(const char *username);
-OtrlChatEvent chat_event_consensus_broken_new(const char *username);
-OtrlChatEvent chat_event_finished_new();
+void chat_event_free(OtrlChatEventPtr event);
+OtrlChatEventType otrl_chat_event_get_type(OtrlChatEventPtr event);
+OtrlChatEventDataPtr otrl_chat_event_get_data(OtrlChatEventPtr event);
+OtrlChatEventPtr chat_event_offer_received_new(const char *username);
+OtrlChatEventPtr chat_event_starting_new();
+OtrlChatEventPtr chat_event_started_new();
+OtrlChatEventPtr chat_event_unverified_participant_new(const char *username);
+OtrlChatEventPtr chat_event_plaintext_received_new(const char *username, const char *message);
+OtrlChatEventPtr chat_event_private_received_new(const char *username);
+OtrlChatEventPtr chat_event_consensus_broken_new(const char *username);
+OtrlChatEventPtr chat_event_finished_new();
 
 #endif /* CHAT_EVENT_H_ */

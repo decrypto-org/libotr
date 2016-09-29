@@ -36,59 +36,46 @@ typedef struct {
 	ChatParticipantShutdownState state;
 } ChatParticipantShutdown;
 
-typedef struct ChatParticipantStruct * ChatParticipant;
+typedef struct ChatParticipant * ChatParticipantPtr;
 
 /* TODO docstring */
 size_t chat_participant_size();
 
-/**
-  Create a new participant
-
-  This function creates a new participant with username as his user name
-  and pub_key as his public signing key
-
-  @param username The user's user name
-  @param pub_key The user's public key needed to verify the user's signatures
-
-  @return A pointer to the newly created participant
- */
-ChatParticipant chat_participant_new(const char *username, SignKey *pub_key);
+/* TODO docstring */
+char * chat_participant_get_username(ChatParticipantPtr participant);
 
 /* TODO docstring */
-char * chat_participant_get_username(ChatParticipant participant);
+SignKey * chat_participant_get_sign_key(ChatParticipantPtr participant);
 
 /* TODO docstring */
-SignKey * chat_participant_get_sign_key(ChatParticipant participant);
+void chat_participant_set_sign_key(ChatParticipantPtr participant, SignKey *sign_key);
 
 /* TODO docstring */
-void chat_participant_set_sign_key(ChatParticipant participant, SignKey *sign_key);
+OtrlChatFingerprintPtr chat_participant_get_fingerprint(ChatParticipantPtr participant);
 
 /* TODO docstring */
-OtrlChatFingerprint chat_participant_get_fingerprint(ChatParticipant participant);
+void chat_participant_set_fingerprint(ChatParticipantPtr participant, OtrlChatFingerprintPtr fingerprint);
 
 /* TODO docstring */
-void chat_participant_set_fingerprint(ChatParticipant participant, OtrlChatFingerprint fingerprint);
+OtrlListPtr chat_participant_get_fingerprints(ChatParticipantPtr participant);
 
 /* TODO docstring */
-OtrlList chat_participant_get_fingerprints(ChatParticipant participant);
+DAKE * chat_participant_get_dake(ChatParticipantPtr participant);
 
 /* TODO docstring */
-DAKE * chat_participant_get_dake(ChatParticipant participant);
+void chat_participant_set_dake(ChatParticipantPtr participant, DAKE *dake);
 
 /* TODO docstring */
-void chat_participant_set_dake(ChatParticipant participant, DAKE *dake);
+OtrlListPtr chat_participant_get_messages(ChatParticipantPtr participant);
 
 /* TODO docstring */
-OtrlList chat_participant_get_messages(ChatParticipant participant);
+unsigned char * chat_participant_get_messages_hash(ChatParticipantPtr participant);
 
 /* TODO docstring */
-unsigned char * chat_participant_get_messages_hash(ChatParticipant participant);
+int chat_participant_get_consensus(ChatParticipantPtr participant);
 
 /* TODO docstring */
-int chat_participant_get_consensus(ChatParticipant participant);
-
-/* TODO docstring */
-void chat_participant_set_consensus(ChatParticipant participant, int consesnus);
+void chat_participant_set_consensus(ChatParticipantPtr participant, int consesnus);
 
 /**
   Free a pariticpant
@@ -100,7 +87,7 @@ void chat_participant_set_consensus(ChatParticipant participant, int consesnus);
 
   @return void
  */
-void chat_participant_free(ChatParticipant participant);
+void chat_participant_free(ChatParticipantPtr participant);
 
 /**
   Find a participant in the ctx context's participants list
@@ -114,7 +101,7 @@ void chat_participant_free(ChatParticipant participant);
 
   @return If the user is found a pointer to it will be returned. Otherwise NULL
  */
-ChatParticipant chat_participant_find(OtrlList participants_list, const char *username, unsigned int *position);
+ChatParticipantPtr chat_participant_find(OtrlListPtr participants_list, const char *username, unsigned int *position);
 
 /**
   Add a user to the ctx's participants list
@@ -126,7 +113,7 @@ ChatParticipant chat_participant_find(OtrlList participants_list, const char *us
 
   @return 1 if the user was sucessfully added. 0 otherwise.
  */
-int chat_participant_add(OtrlList participants_list, const ChatParticipant participant);
+int chat_participant_add(OtrlListPtr participants_list, const ChatParticipantPtr participant);
 
 /**
  Add a group of usernames in a list
@@ -139,7 +126,7 @@ int chat_participant_add(OtrlList participants_list, const ChatParticipant parti
 
  @return 0 if there was no error. 1 otherwise
  */
-int chat_participant_list_from_usernames(OtrlList participants_list, char **usernames, unsigned int usernames_size);
+int chat_participant_list_from_usernames(OtrlListPtr participants_list, char **usernames, unsigned int usernames_size);
 
 
 /**
@@ -151,10 +138,10 @@ int chat_participant_list_from_usernames(OtrlList participants_list, char **user
 
  @return 0 if found. -1 otherwise
  */
-int chat_participant_get_position(OtrlList participants_list, const char *accountname, unsigned int *position);
+int chat_participant_get_position(OtrlListPtr participants_list, const char *accountname, unsigned int *position);
 
 //TODO Dimitris: write docstring
-int chat_participant_get_me_next_position(const char *accountname, OtrlList participants_list, unsigned int *me_next);
+int chat_participant_get_me_next_position(const char *accountname, OtrlListPtr participants_list, unsigned int *me_next);
 
 /**
  Destroys the participants list of ctx
@@ -176,7 +163,7 @@ int chat_participant_get_me_next_position(const char *accountname, OtrlList part
 
  @return 0 if no error occured. Non zero otherwise.
  */
-int chat_participant_calculate_messages_hash(ChatParticipant participant, unsigned char* result);
+int chat_participant_calculate_messages_hash(ChatParticipantPtr participant, unsigned char* result);
 
 struct OtrlListOpsStruct chat_participant_listOps;
 

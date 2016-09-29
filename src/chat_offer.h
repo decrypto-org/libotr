@@ -29,17 +29,17 @@ typedef enum {
 	CHAT_OFFERSTATE_FINISHED
 } ChatOfferState;
 
-ChatOfferInfo chat_offer_info_new(size_t size);
+ChatOfferInfoPtr chat_offer_info_new(size_t size);
 
-void chat_offer_info_free(ChatOfferInfo info);
+void chat_offer_info_free(ChatOfferInfoPtr info);
 
-ChatOfferState chat_offer_info_get_state(ChatOfferInfo offer_info);
+ChatOfferState chat_offer_info_get_state(ChatOfferInfoPtr offer_info);
 
-int chat_offer_info_init(ChatContext ctx, size_t size);
+int chat_offer_info_init(ChatContextPtr ctx, size_t size);
 
-int chat_offer_handle_message(ChatContext ctx, const ChatMessage *msg, ChatMessage **msgToSend);
+int chat_offer_handle_message(ChatContextPtr ctx, const ChatMessage *msg, ChatMessage **msgToSend);
 
-int chat_offer_start(ChatContext ctx, ChatMessage **msgToSend);
+int chat_offer_start(ChatContextPtr ctx, ChatMessage **msgToSend);
 
 int chat_offer_is_my_message(const ChatMessage *msg);
 

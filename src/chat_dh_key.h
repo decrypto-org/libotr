@@ -17,18 +17,20 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef CHAT_PENDING_H_
-#define CHAT_PENDING_H_
+#ifndef CHAT_DH_KEY_H_
+#define CHAT_DH_KEY_H_
 
-typedef struct ChatPending * ChatPendingPtr;
+#include <gcrypt.h>
 
-size_t chat_pending_size();
-ChatPendingPtr chat_pending_new(const char *sender, const unsigned char *msg, size_t msglen);
-void chat_pending_free(ChatPendingPtr pending);
-char *chat_pending_get_sender(ChatPendingPtr pending);
-unsigned char *chat_pending_get_msg(ChatPendingPtr pending);
-size_t chat_pending_get_msglen(ChatPendingPtr pending);
+#include "chat_id_key.h"
+#include "dh.h"
 
-struct OtrlListOpsStruct chat_pending_listOps;
+typedef struct ChatDHKey * ChatDHKeyPtr;
 
-#endif /* CHAT_PENDING_H_ */
+DH_keypair chat_dh_key_get_keypair(ChatDHKeyPtr key);
+
+unsigned char * chat_dh_key_pub_fingerprint_create(gcry_mpi_t pubkey);
+
+struct ChatInternalKeyOps chat_dh_key_internalKeyOps;
+
+#endif /* CHAT_DH_KEY_H_ */

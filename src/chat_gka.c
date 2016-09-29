@@ -32,16 +32,16 @@
 #include "dh.h"
 #include "list.h"
 
-struct ChatGKAInfoStruct {
+struct ChatGKAInfo {
         ChatGKAState state;  /* the gka state */
         unsigned int position;      /* Our position in the participants order starting from the gka initiator */
         DH_keypair *keypair;		/* The keypair used for the gka */
         unsigned char participants_hash[CHAT_PARTICIPANTS_HASH_LENGTH];
 };
 
-ChatGKAInfo chat_gka_info_new()
+ChatGKAInfoPtr chat_gka_info_new()
 {
-    ChatGKAInfo gka_info;
+    ChatGKAInfoPtr gka_info;
 
     gka_info = malloc(sizeof *gka_info);
     if(!gka_info) {
@@ -54,12 +54,12 @@ ChatGKAInfo chat_gka_info_new()
     return gka_info;
 }
 
-unsigned int chat_gka_info_get_position(ChatGKAInfo gka_info)
+unsigned int chat_gka_info_get_position(ChatGKAInfoPtr gka_info)
 {
 	return gka_info->position;
 }
 
-ChatGKAState chat_gka_info_get_state(ChatGKAInfo gka_info)
+ChatGKAState chat_gka_info_get_state(ChatGKAInfoPtr gka_info)
 {
 	return gka_info->state;
 }
@@ -72,7 +72,7 @@ ChatGKAState chat_gka_info_get_state(ChatGKAInfo gka_info)
 
   @param gka_info the OtrlAuthGKAInfo to be destroyed
  */
-void chat_gka_info_free(ChatGKAInfo gka_info)
+void chat_gka_info_free(ChatGKAInfoPtr gka_info)
 {
     if(!gka_info){
         return;
@@ -92,7 +92,7 @@ void chat_gka_info_free(ChatGKAInfo gka_info)
   @param b the second MPI to compare
   @return 0 if a = b, a positive value if a > b and a negative value if a < b
  */
-int chat_gka_keys_compare(OtrlListPayload a, OtrlListPayload b)
+int chat_gka_keys_compareOp(OtrlListPayloadPtr a, OtrlListPayloadPtr b)
 {
 	return gcry_mpi_cmp(a, b);
 }
@@ -102,7 +102,7 @@ int chat_gka_keys_compare(OtrlListPayload a, OtrlListPayload b)
 
   @param a the MPI to be free'd and released
  */
-void chat_gka_key_free(OtrlListPayload a)
+void chat_gka_key_freeOp(OtrlListPayloadPtr a)
 {
 	gcry_mpi_t *w = a;
 
@@ -116,7 +116,7 @@ void chat_gka_key_free(OtrlListPayload a)
 
   @param node the list node containing the MPI to be printed
  */
-void chat_gka_key_toString(OtrlListNode node)
+void chat_gka_key_printOp(OtrlListNodePtr node)
 {
 	gcry_mpi_t *w = otrl_list_node_get_payload(node);
 	unsigned char *buf;
@@ -138,7 +138,7 @@ void chat_gka_key_toString(OtrlListNode node)
 
   @param w the MPI to be printed
  */
-void chat_gka_mpi_toString(gcry_mpi_t w)
+void chat_gka_mpi_print(gcry_mpi_t w)
 {
 	unsigned char *buf;
     size_t s;
@@ -153,9 +153,9 @@ void chat_gka_mpi_toString(gcry_mpi_t w)
 }
 
 struct OtrlListOpsStruct interKeyOps = {
-		chat_gka_keys_compare,
-		chat_gka_key_toString,
-		chat_gka_key_free
+		chat_gka_keys_compareOp,
+		chat_gka_key_printOp,
+		chat_gka_key_freeOp
 };
 
 /**
@@ -171,11 +171,11 @@ struct OtrlListOpsStruct interKeyOps = {
  */
 //TODO maybe refactor to get an allready initialized list as argument
 //instead of allocating in the function and returning it.
-OtrlList chat_gka_initial_intermediate_key_list()
+OtrlListPtr chat_gka_initial_intermediate_key_list()
 {
-	OtrlList key_list;
+	OtrlListPtr key_list;
 	gcry_mpi_t *generator;
-	OtrlListNode node;
+	OtrlListNodePtr node;
 
 	generator = malloc(sizeof *generator);
 	if(!generator) {
@@ -214,10 +214,10 @@ error:
    holds the old values
   @key a pointer to our DH keypair used in this GKA run
  */
-int chat_gka_append_with_key(OtrlList new_key_list, OtrlList old_key_list, DH_keypair *key)
+int chat_gka_append_with_key(OtrlListPtr new_key_list, OtrlListPtr old_key_list, DH_keypair *key)
 {
-	OtrlListIterator iter;
-	OtrlListNode cur, node;
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr cur, node;
 	gcry_mpi_t *w, *tmp;
 	int err;
 
@@ -270,10 +270,10 @@ error:
   @return a list containing the keys to be sent to the next hop. This list
    must be deallocated by the caller
  */
-OtrlList chat_gka_intermediate_key_list_to_send(OtrlList key_list, DH_keypair *key)
+OtrlListPtr chat_gka_intermediate_key_list_to_send(OtrlListPtr key_list, DH_keypair *key)
 {
-	OtrlList new_list;
-	OtrlListNode node;
+	OtrlListPtr new_list;
+	OtrlListNodePtr node;
 	gcry_mpi_t *w, *last, *first;
 	int err;
 
@@ -340,9 +340,9 @@ error:
   @return a list containing the keys to be sent to everyone else. This list
    must be deallocated by the caller
  */
-OtrlList chat_gka_final_key_list_to_send(OtrlList key_list, DH_keypair *key)
+OtrlListPtr chat_gka_final_key_list_to_send(OtrlListPtr key_list, DH_keypair *key)
 {
-	OtrlList new_list;
+	OtrlListPtr new_list;
 	int err;
 
     /* Create a new list */
@@ -372,13 +372,13 @@ error:
   @param hash a buffer to hold the produced hash. It must be already
    allocated by the caller
  */
-gcry_error_t chat_gka_get_participants_hash(OtrlList participants, unsigned char* hash)
+gcry_error_t chat_gka_get_participants_hash(OtrlListPtr participants, unsigned char* hash)
 {
 	gcry_md_hd_t md;
 	gcry_error_t err;
-	OtrlListIterator iter;
-	OtrlListNode cur;
-	ChatParticipant participant;
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr cur;
+	ChatParticipantPtr participant;
 	size_t len;
 	unsigned char *hash_result;
 
@@ -410,7 +410,7 @@ error:
 	return 1;
 }
 
-int chat_gka_info_init(ChatGKAInfo gka_info)
+int chat_gka_info_init(ChatGKAInfoPtr gka_info)
 {
 	gcry_error_t err;
 
@@ -435,15 +435,15 @@ error:
 	return 1;
 }
 
-int chat_gka_init(ChatContext ctx, ChatMessage **msgToSend)
+int chat_gka_init(ChatContextPtr ctx, ChatMessage **msgToSend)
 {
-	ChatGKAInfo gka_info;
+	ChatGKAInfoPtr gka_info;
 	ChatMessage *newmsg = NULL;
     unsigned int me_next[2];
     gcry_error_t g_err;
     int err;
-    OtrlList inter_key_list;
-    OtrlList initial_key_list;
+    OtrlListPtr inter_key_list;
+    OtrlListPtr initial_key_list;
 
     fprintf(stderr, "libotr-mpOTR: chat_gka_init: start\n");
 
@@ -500,13 +500,13 @@ error:
 }
 
 
-int chat_gka_handle_upflow_message(ChatContext ctx, ChatMessage *msg, ChatMessage **msgToSend, int *free_msg)
+int chat_gka_handle_upflow_message(ChatContextPtr ctx, ChatMessage *msg, ChatMessage **msgToSend, int *free_msg)
 {
-	ChatGKAInfo gka_info;
+	ChatGKAInfoPtr gka_info;
 	ChatEncInfo *enc_info;
 	ChatMessage *newmsg = NULL;
-	OtrlList inter_key_list;
-	OtrlListNode last;
+	OtrlListPtr inter_key_list;
+	OtrlListNodePtr last;
 	gcry_mpi_t *last_key;
 	ChatMessagePayloadGKAUpflow *upflowMsg;
 	unsigned int me_next[2];
@@ -605,12 +605,12 @@ error:
 	return 1;
 }
 
-int chat_gka_handle_downflow_message(ChatContext ctx, ChatMessage *msg, ChatMessage **msgToSend, int *free_msg)
+int chat_gka_handle_downflow_message(ChatContextPtr ctx, ChatMessage *msg, ChatMessage **msgToSend, int *free_msg)
 {
-	ChatGKAInfo gka_info;
+	ChatGKAInfoPtr gka_info;
 	ChatEncInfo *enc_info;
 	ChatMessagePayloadGKADownflow *downflowMsg;
-	OtrlListNode cur;
+	OtrlListNodePtr cur;
 	gcry_mpi_t *w;
 	unsigned int i;
 	unsigned int key_list_length;
@@ -675,7 +675,7 @@ int chat_gka_is_my_message(const ChatMessage *msg)
 	}
 }
 
-int chat_gka_handle_message(ChatContext ctx, ChatMessage *msg,
+int chat_gka_handle_message(ChatContextPtr ctx, ChatMessage *msg,
                              ChatMessage **msgToSend) {
 	ChatMessageType msgType = msg->msgType;
 	int free_msg;

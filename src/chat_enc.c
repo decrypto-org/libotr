@@ -31,6 +31,8 @@
 
 #define OTRL_ENC_KEY_SIZE 16
 
+// TODO Dimitris: error handling
+
 ChatEncInfo* chat_enc_info_new()
 {
     ChatEncInfo *tmp;
@@ -56,19 +58,34 @@ void chat_enc_info_free(ChatEncInfo *enc_info)
     free(enc_info);
 }
 
+/**
+ Print an mpi to a buffer allocated in secure memory. Caller must free the buffer.
+
+ @param w The mpi to be written in the buffer
+ @param size On success this variable will hold the size of the allocated buffer
+ */
 unsigned char * mpi_serial_secure(gcry_mpi_t w, size_t *size)
 {
-	unsigned char *buf;
+	unsigned char *buf = NULL;
     size_t s;
 
+    /* Get the length of the mpi */
     gcry_mpi_print(GCRYMPI_FMT_HEX,NULL,0,&s,w);
-    buf = gcry_malloc_secure(s * sizeof *buf);
 
+    /* Allocate the buffer in secure memory */
+    buf = gcry_malloc_secure(s * sizeof *buf);
+    if(!buf) { goto error; }
+
+    /* Print the mpi in the newly allocated buffer */
     gcry_mpi_print(GCRYMPI_FMT_HEX,buf,s,NULL,w);
 
     *size = s;
 
     return buf;
+
+error:
+    *size = 0;
+    return NULL;
 }
 
 gcry_error_t chat_enc_create_secret(ChatEncInfo *enc_info ,gcry_mpi_t w, DH_keypair *key)
@@ -81,56 +98,54 @@ gcry_error_t chat_enc_create_secret(ChatEncInfo *enc_info ,gcry_mpi_t w, DH_keyp
 
 	fprintf(stderr, "libotr-mpOTR: create_secret: start\n");
 
+    /* Create a new mpi to hold the final key */
 	final_key = gcry_mpi_snew(300);
 	if(!final_key) {
-		//fprintf(stderr, "libotr-mpOTR: create_secret: no final_key\n");
 		return 1;
 	}
 
+    /* Raise the intermediate key w to our priv exponent */
 	otrl_dh_powm(final_key, w, key->priv);
 
+    /* We will hash the final_key to produce the shared secret so open
+     a digest now */
 	err = gcry_md_open(&md, GCRY_MD_SHA512, GCRY_MD_FLAG_SECURE);
 	if(err)
 		return err;
-	//fprintf(stderr, "libotr-mpOTR: create_secret: after md open\n");
 
+    /* Print the final_key in the buffer so that we can hash it */
 	buf = mpi_serial_secure(final_key, &buf_size);
 
+    /* We don't need this mpi anymore */
 	gcry_mpi_release(final_key);
 
-	//fprintf(stderr,"libotr-mpOTR: create_secret buf is: %s\n", buf);
 	if(!buf) {
 		gcry_md_close(md);
 		return gcry_error(GPG_ERR_ENOMEM);
 	}
-	//fprintf(stderr, "libotr-mpOTR: create_secret: after buf secure malloc\n");
 
+    /* Write the buffer in the digest */
 	gcry_md_write(md, buf, buf_size);
+    /* And finalize the digest */
 	gcry_md_final(md);
-	//fprintf(stderr, "libotr-mpOTR: create_secret: after buffer write\n");
 
 	gcry_free(buf);
 
 	if(enc_info->key)
 		gcry_free(enc_info->key);
 
+    /* Generate secure memory to store the shared secret */
 	enc_info->key = gcry_malloc_secure(CHAT_SECRET_LENGTH);
 	if(!enc_info->key) {
 		gcry_md_close(md);
 		return gcry_error(GPG_ERR_ENOMEM);
 	}
-	//fprintf(stderr, "libotr-mpOTR: create_secret: after secret secure malloc\n");
 
+    /* Read the sha-512 hash */
 	buf = gcry_md_read(md, GCRY_MD_SHA512);
 
+    /* And copy it in enc_info */
 	memcpy(enc_info->key, buf, CHAT_SECRET_LENGTH);
-
-	//fprintf(stderr, "Secret is: ");
-	//for(size_t i = 0; i < CHAT_SECRET_LENGTH; i++)
-	//	fprintf(stderr, "%02X", enc_info->key[i]);
-	//fprintf(stderr, "\n");
-
-	//fprintf(stderr, "libotr-mpOTR: create_secret: after read and memcopy\n");
 
 	gcry_md_close(md);
 
@@ -196,7 +211,6 @@ gcry_error_t chat_enc_get_personal_cipher(const ChatEncInfo *enc_info,
 
     sdata = gcry_malloc_secure(sdata_len);
     if(!sdata) {
-    	//fprintf(stderr, "libotr-mpOTR: chat_enc_get_personal_cipher: sdata malloc failed\n");
     	return gcry_error(GPG_ERR_ENOMEM);
     }
 
@@ -209,7 +223,6 @@ gcry_error_t chat_enc_get_personal_cipher(const ChatEncInfo *enc_info,
     hash_len = gcry_md_get_algo_dlen(GCRY_MD_SHA512);
     hashdata = gcry_malloc_secure(hash_len);
     if(!hashdata) {
-    	//fprintf(stderr, "libotr-mpOTR: chat_enc_get_personal_cipher: hashdata malloc failed\n");
     	gcry_free(sdata);
     	return gcry_error(GPG_ERR_ENOMEM);
     }
@@ -219,40 +232,25 @@ gcry_error_t chat_enc_get_personal_cipher(const ChatEncInfo *enc_info,
     err = gcry_cipher_open(cipher, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_CTR,
 			   GCRY_CIPHER_SECURE);
     if (err) {
-	//fprintf(stderr, "libotr-mpOTR: chat_enc_get_personal_cipher: cipher open failed\n");
-	gcry_free(sdata);
-	gcry_free(hashdata);
-	return err;
+	    gcry_free(sdata);
+	    gcry_free(hashdata);
+	    return err;
     }
 
     err = gcry_cipher_setkey(*cipher, hashdata, OTRL_ENC_KEY_SIZE);
     if (err) {
-	//fprintf(stderr, "libotr-mpOTR: chat_enc_get_personal_cipher: key set failed\n");
-
-	gcry_free(sdata);
-	gcry_free(hashdata);
-	gcry_cipher_close(*cipher);
-	return err;
-
+	    gcry_free(sdata);
+	    gcry_free(hashdata);
+	    gcry_cipher_close(*cipher);
+	    return err;
     }
-
-
-    //fprintf(stderr, "sdata: ");
-    //for(size_t i = 0; i < sdata_len; i++)
-    //	fprintf(stderr, "%02X", sdata[i]);
-    //fprintf(stderr, "\n");
-    //fprintf(stderr, "instag: %u \nhashdata: ", sender_id);
-    //for(size_t i =0; i<hash_len; i++)
-	//fprintf(stderr, "%02X", hashdata[i]);
-    //fprintf(stderr, "\n");
-
 
     gcry_free(sdata);
     gcry_free(hashdata);
     return gcry_error(GPG_ERR_NO_ERROR);
 }
 
-char * chat_enc_decrypt(const ChatContext ctx, const unsigned char *ciphertext,
+char * chat_enc_decrypt(const ChatContextPtr ctx, const unsigned char *ciphertext,
 			size_t datalen, const unsigned char top_ctr[8],
 			const char *sender) {
 	char *plaintext;
@@ -260,59 +258,37 @@ char * chat_enc_decrypt(const ChatContext ctx, const unsigned char *ciphertext,
 	unsigned char ctr[16];
 	gcry_cipher_hd_t dcipher;
 	gcry_error_t err;
-	unsigned int participants_len, our_pos, their_pos;
-	int sender_id;
+	unsigned int sender_id;
 
 	fprintf(stderr,"libotr-mpOTR: chat_enc_decrypt: start\n");
 
-	if(chat_participant_get_position(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &our_pos))
-		return NULL;
-	if(chat_participant_get_position(chat_context_get_participants_list(ctx), sender, &their_pos))
+	if(chat_participant_get_position(chat_context_get_participants_list(ctx), sender, &sender_id))
 		return NULL;
 
-	/* FIXME How we get the sender_id is very hacky. At the moment setting the sender_id
-	 * to simply be the senders position in the list should suffice. However this
-	 * relies on all the participants seeing the same usernames in the chatroom.
-	 * A better solution is required, when we find a robust way to handle the
-	 * usernames/user alieses.
-	 */
-	participants_len = otrl_list_size(chat_context_get_participants_list(ctx));
-	sender_id = their_pos + chat_gka_info_get_position(chat_context_get_gka_info(ctx)) - our_pos;
-	if(sender_id >= (int) participants_len) {
-		sender_id -= participants_len;
-	}
-	else if(sender_id < 0) {
-		sender_id += participants_len;
-	}
-
-        //TODO this is probably wrong. If the plaintext is not purely text data
-        //it is possible that one of its bytes may well be zero. So we should
-        //somehow return the length of the plaintext explicitely and not rely
-        //on it being null terminated.
+    //TODO this is probably wrong. If the plaintext is not purely text data
+    //it is possible that one of its bytes may well be zero. So we should
+    //somehow return the length of the plaintext explicitely and not rely
+    //on it being null terminated.
 	plaintext = malloc((datalen +1 ) * sizeof *plaintext);
 	plaintext[datalen] = '\0';
 
 	if(!plaintext) {
-	    //fprintf(stderr, "libotr-mpOTR: chat_enc_decrypt: !plaintext\n");
 	    return NULL;
 	}
 
 	memset(ctr, 0, 16);
 	memmove(ctr, top_ctr, 8);
-	//fprintf(stderr,"libotr-mpOTR: chat_enc_decrypt: before get_personal_cipher\n");
+
 	err = chat_enc_get_personal_cipher(chat_context_get_enc_info(ctx), sender_id, &dcipher);
 	if (err) {
-	    //fprintf(stderr, "libotr-mpOTR: chat_enc_decrypt: personal cipher failed\n");
 	    free(plaintext);
 	    return NULL;
 	}
 
-	//fprintf(stderr,"libotr-mpOTR: chat_enc_decrypt: before decrypt_data\n");
 	err = chat_enc_decrypt_data(dcipher, ctr, plaintext, datalen,
 				       ciphertext, datalen);
 
 	if(err){
-		//fprintf(stderr, "libotr-mpOTR: chat_enc_decrypt: there was an error\n");
 	    free(plaintext);
 	    gcry_cipher_close(dcipher);
 	    return NULL;
@@ -325,7 +301,7 @@ char * chat_enc_decrypt(const ChatContext ctx, const unsigned char *ciphertext,
 }
 
 
-unsigned char * chat_enc_encrypt(ChatContext ctx, const char *plaintext) {
+unsigned char * chat_enc_encrypt(ChatContextPtr ctx, const char *plaintext) {
 	//char *ciphertext;
 	size_t msglen = 0;
 	unsigned char *ciphertext = NULL;
@@ -344,7 +320,6 @@ unsigned char * chat_enc_encrypt(ChatContext ctx, const char *plaintext) {
 
 	err = chat_enc_get_personal_cipher(chat_context_get_enc_info(ctx), chat_context_get_id(ctx), &ecipher);
 	if (err) {
-	    //fprintf(stderr, "libotr-mpOTR: chat_enc_encrypt: personal cipher failed\n");
 	    free(ciphertext);
 	    return NULL;
 	}
@@ -352,7 +327,6 @@ unsigned char * chat_enc_encrypt(ChatContext ctx, const char *plaintext) {
 	err = chat_enc_encrypt_data(ecipher, chat_context_get_enc_info(ctx), plaintext, msglen, ciphertext, msglen);
 
 	if(err) {
-	    //fprintf(stderr, "libotr-mpOTR: chat_enc_encrypt: error\n");
 	    free(ciphertext);
 	    gcry_cipher_close(ecipher);
 	    return NULL;

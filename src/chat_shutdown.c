@@ -28,7 +28,7 @@
 
 #define CONSENSUS_HASH_LEN 64
 
-struct ChatShutdownInfoStruct{
+struct ChatShutdownInfo{
 	int shutdowns_remaining;
 	int digests_remaining;
 	int ends_remaining;
@@ -37,13 +37,13 @@ struct ChatShutdownInfoStruct{
 	ChatShutdownState state;
 };
 
-int get_consensus_hash(OtrlList participants_list, unsigned char *result)
+int get_consensus_hash(OtrlListPtr participants_list, unsigned char *result)
 {
     gcry_md_hd_t md;
     gcry_error_t err;
-    OtrlListIterator iter;
-    OtrlListNode cur;
-    ChatParticipant participant;
+    OtrlListIteratorPtr iter;
+    OtrlListNodePtr cur;
+    ChatParticipantPtr participant;
     size_t len;
     unsigned char *hash_result = NULL;
 
@@ -84,12 +84,12 @@ error:
 	return 1;
 }
 
-ChatShutdownState chat_shutdown_info_get_state(ChatShutdownInfo shutdown_info)
+ChatShutdownState chat_shutdown_info_get_state(ChatShutdownInfoPtr shutdown_info)
 {
 	return shutdown_info->state;
 }
 
-void chat_shutdown_info_free(ChatShutdownInfo shutdown_info)
+void chat_shutdown_info_free(ChatShutdownInfoPtr shutdown_info)
 {
 	if(shutdown_info) {
 		free(shutdown_info->has_send_end);
@@ -98,9 +98,9 @@ void chat_shutdown_info_free(ChatShutdownInfo shutdown_info)
 	free(shutdown_info);
 }
 
-int chat_shutdown_init(ChatContext ctx)
+int chat_shutdown_init(ChatContextPtr ctx)
 {
-	ChatShutdownInfo shutdown_info;
+	ChatShutdownInfoPtr shutdown_info;
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_init: start\n");
 
@@ -129,10 +129,10 @@ error_with_info:
 error:
 	return 1;
 }
-int chat_shutdown_send_shutdown(ChatContext ctx, ChatMessage **msgToSend)
+int chat_shutdown_send_shutdown(ChatContextPtr ctx, ChatMessage **msgToSend)
 {
-	ChatShutdownInfo shutdown_info;
-    ChatParticipant me;
+	ChatShutdownInfoPtr shutdown_info;
+    ChatParticipantPtr me;
     unsigned int my_pos;
     int err;
 
@@ -186,11 +186,11 @@ error:
 	return 1;
 }
 
-int chat_shutdown_handle_shutdown_message(ChatContext ctx, ChatMessage *msg,
+int chat_shutdown_handle_shutdown_message(ChatContextPtr ctx, ChatMessage *msg,
                                  ChatMessage **msgToSend)
 {
-	ChatShutdownInfo shutdown_info;
-    ChatParticipant sender;
+	ChatShutdownInfoPtr shutdown_info;
+    ChatParticipantPtr sender;
     unsigned int their_pos;
     int err;
 
@@ -246,10 +246,10 @@ error:
 	return 1;
 }
 
-int chat_shutdown_send_digest(ChatContext ctx, ChatMessage **msgToSend)
+int chat_shutdown_send_digest(ChatContextPtr ctx, ChatMessage **msgToSend)
 {
-	ChatShutdownInfo shutdown_info;
-    ChatParticipant me;
+	ChatShutdownInfoPtr shutdown_info;
+    ChatParticipantPtr me;
     unsigned int my_pos;
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_digest: start\n");
@@ -287,11 +287,11 @@ error:
 	return 1;
 }
 
-int chat_shutdown_handle_digest_message(ChatContext ctx, ChatMessage *msg, ChatMessage **msgToSend)
+int chat_shutdown_handle_digest_message(ChatContextPtr ctx, ChatMessage *msg, ChatMessage **msgToSend)
 {
-	ChatShutdownInfo shutdown_info;
+	ChatShutdownInfoPtr shutdown_info;
     ChatMessagePayloadShutdownDigest *digest_msg = msg->payload;
-    ChatParticipant sender;
+    ChatParticipantPtr sender;
     int consensus;
     unsigned int their_pos;
 
@@ -343,10 +343,10 @@ error:
 	return 1;
 }
 
-int chat_shutdown_send_end(ChatContext ctx, ChatMessage **msgToSend)
+int chat_shutdown_send_end(ChatContextPtr ctx, ChatMessage **msgToSend)
 {
-	ChatShutdownInfo shutdown_info;
-    ChatParticipant me;
+	ChatShutdownInfoPtr shutdown_info;
+    ChatParticipantPtr me;
     unsigned int my_pos;
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_end: start\n");
@@ -384,10 +384,10 @@ error:
 	return 1;
 }
 
-int chat_shutdown_handle_end_message(ChatContext ctx, ChatMessage *msg, ChatMessage **msgToSend)
+int chat_shutdown_handle_end_message(ChatContextPtr ctx, ChatMessage *msg, ChatMessage **msgToSend)
 {
-	ChatShutdownInfo shutdown_info;
-    ChatParticipant sender;
+	ChatShutdownInfoPtr shutdown_info;
+    ChatParticipantPtr sender;
     unsigned int their_pos;
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_end_message: start\n");
@@ -427,7 +427,7 @@ error:
 	return 1;
 }
 
-int chat_shutdown_release_secrets(ChatContext ctx, ChatMessage **msgToSend)
+int chat_shutdown_release_secrets(ChatContextPtr ctx, ChatMessage **msgToSend)
 {
     unsigned char *key_bytes = NULL;
     size_t keylen;
@@ -467,7 +467,7 @@ int chat_shutdown_is_my_message(const ChatMessage *msg)
     }
 }
 
-int chat_shutdown_handle_message(ChatContext ctx, ChatMessage *msg,
+int chat_shutdown_handle_message(ChatContextPtr ctx, ChatMessage *msg,
                                  ChatMessage **msgToSend)
 {
 	ChatMessageType msgType = msg->msgType;

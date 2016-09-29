@@ -26,20 +26,20 @@
 #include "chat_participant.h"
 #include "list.h"
 
-struct OtrlChatInfoStruct {
+struct OtrlChatInfo {
 	char *accountname;
 	char *protocol;
 	otrl_chat_token_t chat_token;
 	OtrlChatPrivacyLevel privacy_level;
 };
 
-int chat_info_privacy_level_calculate(const ChatContext ctx, OtrlChatPrivacyLevel *privacy_level)
+int chat_info_privacy_level_calculate(const ChatContextPtr ctx, OtrlChatPrivacyLevel *privacy_level)
 {
 	OtrlChatPrivacyLevel level;
-	OtrlListIterator iter;
-	OtrlListNode cur;
-	ChatParticipant me, part;
-	OtrlChatFingerprint fnprnt;
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr cur;
+	ChatParticipantPtr me, part;
+	OtrlChatFingerprintPtr fnprnt;
 	unsigned int pos;
 	unsigned char untrusted = 0;
 
@@ -88,9 +88,9 @@ error:
 	return 1;
 }
 
-OtrlChatInfo chat_info_new(const ChatContext ctx)
+OtrlChatInfoPtr chat_info_new(const ChatContextPtr ctx)
 {
-	OtrlChatInfo info;
+	OtrlChatInfoPtr info;
 
 	info = malloc(sizeof *info);
 	if(!info) { goto error; }
@@ -114,9 +114,9 @@ error:
 	return NULL;
 }
 
-OtrlChatInfo chat_info_new_with_level(const ChatContext ctx)
+OtrlChatInfoPtr chat_info_new_with_level(const ChatContextPtr ctx)
 {
-	OtrlChatInfo info;
+	OtrlChatInfoPtr info;
 	OtrlChatPrivacyLevel level;
 	int err;
 
@@ -134,7 +134,7 @@ error:
 	return NULL;
 }
 
-void chat_info_free(OtrlChatInfo info)
+void chat_info_free(OtrlChatInfoPtr info)
 {
 	if(info) {
 		free(info->accountname);
@@ -143,22 +143,22 @@ void chat_info_free(OtrlChatInfo info)
 	free(info);
 }
 
-char * otrl_chat_info_get_accountname(OtrlChatInfo info)
+char * otrl_chat_info_get_accountname(OtrlChatInfoPtr info)
 {
 	return info->accountname;
 }
 
-char * otrl_chat_info_get_protocol(OtrlChatInfo info)
+char * otrl_chat_info_get_protocol(OtrlChatInfoPtr info)
 {
 	return info->protocol;
 }
 
-otrl_chat_token_t otrl_chat_info_get_chat_token(OtrlChatInfo info)
+otrl_chat_token_t otrl_chat_info_get_chat_token(OtrlChatInfoPtr info)
 {
 	return info->chat_token;
 }
 
-OtrlChatPrivacyLevel otrl_chat_info_get_privacy_level(OtrlChatInfo info)
+OtrlChatPrivacyLevel otrl_chat_info_get_privacy_level(OtrlChatInfoPtr info)
 {
 	return info->privacy_level;
 }

@@ -22,24 +22,24 @@
 
 #include "list.h"
 
-struct OtrlListNodeStruct {
-	struct OtrlListNodeStruct * next;
-	struct OtrlListNodeStruct * prev;
-	OtrlListPayload payload;
-	void (*payload_free)(OtrlListPayload);
+struct OtrlListNode {
+	struct OtrlListNode * next;
+	struct OtrlListNode * prev;
+	OtrlListPayloadPtr payload;
+	void (*payload_free)(OtrlListPayloadPtr);
 };
 
-struct OtrlListStruct {
-	OtrlListNode head;
-	OtrlListNode tail;
+struct OtrlList {
+	OtrlListNodePtr head;
+	OtrlListNodePtr tail;
 	unsigned int size;
 	size_t payload_size;
 	struct OtrlListOpsStruct *ops;
 };
 
-OtrlListNode otrl_list_node_new(const OtrlListPayload payload, void (*payload_free)(OtrlListPayload))
+OtrlListNodePtr otrl_list_node_new(const OtrlListPayloadPtr payload, void (*payload_free)(OtrlListPayloadPtr))
 {
-	OtrlListNode node = NULL;
+	OtrlListNodePtr node = NULL;
 
 	node = malloc(sizeof *node);
 	if(!node) { goto error; }
@@ -55,17 +55,17 @@ error:
 	return NULL;
 }
 
-OtrlListPayload otrl_list_node_get_payload(OtrlListNode node)
+OtrlListPayloadPtr otrl_list_node_get_payload(OtrlListNodePtr node)
 {
 	return node->payload;
 }
 
-OtrlListPayload otrl_list_node_get_next(OtrlListNode node)
+OtrlListPayloadPtr otrl_list_node_get_next(OtrlListNodePtr node)
 {
 	return node->next;
 }
 
-void otrl_list_node_free(OtrlListNode node)
+void otrl_list_node_free(OtrlListNodePtr node)
 {
 	if(node->payload && node->payload_free) {
 		node->payload_free(node->payload);
@@ -73,9 +73,9 @@ void otrl_list_node_free(OtrlListNode node)
 	free(node);
 }
 
-OtrlList otrl_list_new(struct OtrlListOpsStruct *ops, size_t payload_size)
+OtrlListPtr otrl_list_new(struct OtrlListOpsStruct *ops, size_t payload_size)
 {
-	OtrlList list = NULL;
+	OtrlListPtr list = NULL;
 
 	if(!ops || !ops->compar) { goto error; }
 
@@ -95,7 +95,7 @@ error:
 	return NULL;
 }
 
-OtrlListNode otrl_list_get_head(OtrlList list)
+OtrlListNodePtr otrl_list_get_head(OtrlListPtr list)
 {
 	if(list) {
 		return list->head;
@@ -104,7 +104,7 @@ OtrlListNode otrl_list_get_head(OtrlList list)
 	}
 }
 
-OtrlListNode otrl_list_get_tail(OtrlList list)
+OtrlListNodePtr otrl_list_get_tail(OtrlListPtr list)
 {
 	if(list) {
 		return list->tail;
@@ -113,9 +113,9 @@ OtrlListNode otrl_list_get_tail(OtrlList list)
 	}
 }
 
-OtrlListNode otrl_list_insert(OtrlList list, const OtrlListPayload payload)
+OtrlListNodePtr otrl_list_insert(OtrlListPtr list, const OtrlListPayloadPtr payload)
 {
-	OtrlListNode node, head, cur, next;
+	OtrlListNodePtr node, head, cur, next;
 
 	node = otrl_list_node_new(payload, list->ops->payload_free);
 	if(!node) { goto error; }
@@ -162,9 +162,9 @@ error:
 	return NULL;
 }
 
-OtrlListNode otrl_list_prepend(OtrlList list, OtrlListPayload payload)
+OtrlListNodePtr otrl_list_prepend(OtrlListPtr list, OtrlListPayloadPtr payload)
 {
-	OtrlListNode node;
+	OtrlListNodePtr node;
 
 	node = otrl_list_node_new(payload, list->ops->payload_free);
 	if(!node) { goto error; }
@@ -189,9 +189,9 @@ error:
 	return NULL;
 }
 
-OtrlListNode otrl_list_append(OtrlList list, OtrlListPayload payload)
+OtrlListNodePtr otrl_list_append(OtrlListPtr list, OtrlListPayloadPtr payload)
 {
-	OtrlListNode node;
+	OtrlListNodePtr node;
 
 	node = otrl_list_node_new(payload, list->ops->payload_free);
 	if(!node) { goto error;}
@@ -216,7 +216,7 @@ error:
 	return NULL;
 }
 
-void otrl_list_remove(OtrlList list, OtrlListNode node)
+void otrl_list_remove(OtrlListPtr list, OtrlListNodePtr node)
 {
 	if(!list || !node) return;
 
@@ -233,13 +233,13 @@ void otrl_list_remove(OtrlList list, OtrlListNode node)
 	list->size--;
 }
 
-void otrl_list_remove_and_free(OtrlList list, OtrlListNode node)
+void otrl_list_remove_and_free(OtrlListPtr list, OtrlListNodePtr node)
 {
 	otrl_list_remove(list, node);
 	otrl_list_node_free(node);
 }
 
-void otrl_list_clear(OtrlList list)
+void otrl_list_clear(OtrlListPtr list)
 {
 	while(NULL != otrl_list_get_head(list)) {
 		otrl_list_remove_and_free(list, otrl_list_get_head(list));
@@ -247,7 +247,7 @@ void otrl_list_clear(OtrlList list)
 }
 
 
-void otrl_list_free(OtrlList list)
+void otrl_list_free(OtrlListPtr list)
 {
 	if(list) {
 		otrl_list_clear(list);
@@ -255,9 +255,9 @@ void otrl_list_free(OtrlList list)
 	free(list);
 }
 
-OtrlListNode otrl_list_find(OtrlList list, OtrlListPayload target)
+OtrlListNodePtr otrl_list_find(OtrlListPtr list, OtrlListPayloadPtr target)
 {
-	OtrlListNode cur;
+	OtrlListNodePtr cur;
 
 	cur = otrl_list_get_head(list);
 	while(NULL != cur) {
@@ -270,15 +270,15 @@ OtrlListNode otrl_list_find(OtrlList list, OtrlListPayload target)
 	return NULL;
 }
 
-unsigned int otrl_list_size(OtrlList list)
+unsigned int otrl_list_size(OtrlListPtr list)
 {
 	return list->size;
 }
 
-OtrlListNode otrl_list_get(OtrlList list, unsigned int i)
+OtrlListNodePtr otrl_list_get(OtrlListPtr list, unsigned int i)
 {
 	unsigned int j;
-	OtrlListNode cur;
+	OtrlListNodePtr cur;
 
 	if(!list || i >= otrl_list_size(list)) { goto error; }
 
@@ -293,9 +293,9 @@ error:
 	return NULL;
 }
 
-void otrl_list_foreach(OtrlList list, void (*fun)(OtrlListNode))
+void otrl_list_foreach(OtrlListPtr list, void (*fun)(OtrlListNodePtr))
 {
-	OtrlListNode cur;
+	OtrlListNodePtr cur;
 
 	cur = otrl_list_get_head(list);
 	while(NULL != cur) {
@@ -304,7 +304,7 @@ void otrl_list_foreach(OtrlList list, void (*fun)(OtrlListNode))
 	}
 }
 
-void otrl_list_dump(OtrlList list)
+void otrl_list_dump(OtrlListPtr list)
 {
 	if(list->ops == NULL || list->ops->print == NULL) {
 		return;
@@ -313,14 +313,14 @@ void otrl_list_dump(OtrlList list)
 	otrl_list_foreach(list, list->ops->print);
 }
 
-struct OtrlListIteratorStruct {
-	OtrlList list;
-	OtrlListNode next;
+struct OtrlListIterator {
+	OtrlListPtr list;
+	OtrlListNodePtr next;
 };
 
-OtrlListIterator otrl_list_iterator_new(OtrlList list)
+OtrlListIteratorPtr otrl_list_iterator_new(OtrlListPtr list)
 {
-	OtrlListIterator iter;
+	OtrlListIteratorPtr iter;
 
 	if(!list) { goto error; }
 
@@ -336,19 +336,19 @@ error:
 	return NULL;
 }
 
-void otrl_list_iterator_free(OtrlListIterator iter)
+void otrl_list_iterator_free(OtrlListIteratorPtr iter)
 {
 	free(iter);
 }
 
-int otrl_list_iterator_has_next(OtrlListIterator iter)
+int otrl_list_iterator_has_next(OtrlListIteratorPtr iter)
 {
 	return (iter->next) ? 1 : 0;
 }
 
-OtrlListNode otrl_list_iterator_next(OtrlListIterator iter)
+OtrlListNodePtr otrl_list_iterator_next(OtrlListIteratorPtr iter)
 {
-	OtrlListNode result;
+	OtrlListNodePtr result;
 
 	result = iter->next;
 	if(result) {

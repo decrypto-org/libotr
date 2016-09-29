@@ -22,7 +22,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "chat_privkeydh.h"
+#include "chat_id_key.h"
+#include "chat_dh_key.h"
 
 #define CONF_MSG "key confirmation msg"
 #define CONF_MSG_LEN 20
@@ -78,22 +79,27 @@ void chat_dake_destroy_handshake_data(DAKE_handshake_message_data *data)
 	gcry_mpi_release(data->long_pub);
 }
 
-int chat_dake_init_keys(DAKEInfo *dake_info, ChatIdKey *key,
+int chat_dake_init_keys(DAKEInfo *dake_info, ChatIdKeyPtr id_key,
                         const char* accountname, const char *protocol,
                         DAKE_handshake_message_data **dataToSend)
 {
 	int err;
+	ChatDHKeyPtr dh_key = NULL;
 
     *dataToSend = malloc(sizeof(**dataToSend));
     if(!*dataToSend) {
         return DAKE_ERROR;
     }
 
-    if(!key) {
+    if(!id_key) {
         free(*dataToSend);
         return DAKE_ERROR;
     }
-    dake_info->longterm = key->keyp;
+
+    dh_key = chat_id_key_get_internal_key(id_key);
+
+    //dake_info->longterm = key->keyp;
+    dake_info->longterm = chat_dh_key_get_keypair(dh_key);
 
     err = tdh_handshake_gen_ephemeral(&dake_info->ephemeral);
     if(err) {
@@ -158,7 +164,8 @@ int chat_dake_load_their_part(DAKE *dake,
     dake->state = DAKE_STATE_WAITING_CONFIRM;
 
 
-    fingerprint = chat_privkeydh_get_fingerprint(data->long_pub);
+    //fingerprint = chat_privkeydh_get_fingerprint(data->long_pub);
+    fingerprint = chat_dh_key_pub_fingerprint_create(data->long_pub);
     *received_key_fingerprint = fingerprint;
 
     fprintf(stderr,"chat_dake_load_their_part: end\n");

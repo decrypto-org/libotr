@@ -22,7 +22,6 @@
 #include <gcrypt.h>
 #include <string.h>
 
-#include "chat_privkeydh.h"
 #include "dh.h"
 #include "tdh.h"
 //#include "debug.h"
@@ -371,88 +370,3 @@ err:
     gcry_free(hashdata);
     return err;
 }
-
-
-/*
-int main(int argc, char **argv)
-{
-
-    unsigned char * buf = NULL;
-    gcry_mpi_t key = NULL;
-    size_t written;
-    gcry_error_t err;
-    unsigned char message[16] = "must be readabl";
-    unsigned char mac[32];
-    FILE *fp;
-    int i;
-    TripleDH_handshake hs_a, hs_b;
-    DH_keypair *a_keypair, *b_keypair;
-
-    if(!gcry_check_version(NULL))
-    {
-	fputs("gcrypt version missmatch\n", stderr);
-	exit(2);
-    }
-
-    //gcry_control(GCRYCTL_DISABLE_SECMEM, 0);
-
-    gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
-
-    otrl_dh_init();
-
-    tdh_handshake_init(&hs_a);
-    tdh_handshake_init(&hs_b);
-
-
-    a_keypair = gcry_malloc_secure(sizeof(DH_keypair));
-    b_keypair = gcry_malloc_secure(sizeof(DH_keypair));
-
-
-    fp = fopen("apriv", "rb");
-
-    otrl_chat_privkeydh_read_FILEp(a_keypair, fp);
-
-    fclose(fp);
-    fopen("bpriv", "rb");
-
-    otrl_chat_privkeydh_read_FILEp(b_keypair, fp);
-
-    fclose(fp);
-    tdh_handshake_load_longterm(&hs_a, a_keypair);
-    tdh_handshake_load_longterm(&hs_b, b_keypair);
-
-    tdh_handshake_gen_ephemeral(&hs_a);
-    tdh_handshake_gen_ephemeral(&hs_b);
-
-
-    tdh_handshake_load_their_pub(&hs_a, hs_b.longterm.pub,
-                                       hs_b.ephemeral.pub);
-
-    tdh_handshake_load_their_pub(&hs_b, hs_a.longterm.pub,
-                                      hs_a.ephemeral.pub);
-
-    tdh_handshake_compute_keys(&hs_a);
-    tdh_handshake_compute_keys(&hs_b);
-
-    err = tdh_handshake_encrypt(&hs_a, message, 16, NULL, 0);
-    if(err)
-        fprintf(stderr, "something went wrong when encrypting\n");
-    fwrite(message, sizeof(unsigned char), 16, stderr);
-    fprintf(stderr, "\n");
-    tdh_handshake_mac(&hs_a, mac, message, 16);
-
-    for(i = 0; i<16; i++)
-        fprintf(stderr, "%02X", mac[i]);
-    fprintf(stderr,"\n");
-
-
-    if(!tdh_handshake_mac_verify(&hs_b, mac, message,16))
-        fprintf(stderr,"message is not verified");
-    err = tdh_handshake_decrypt(&hs_b, message, 16, NULL, 0);
-    if(err)
-        fprintf(stderr, "something went wrong when decrypting\n");
-
-    fprintf(stderr, "%s\n", message);
-
-}
-*/

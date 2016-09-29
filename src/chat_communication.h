@@ -20,9 +20,9 @@
 #ifndef CHAT_COMMUNICATION_H_
 #define CHAT_COMMUNICATION_H_
 
-int chat_communication_broadcast(ChatContext ctx, const char *message, ChatMessage **msgToSend);
+int chat_communication_broadcast(ChatContextPtr ctx, const char *message, ChatMessage **msgToSend);
 int chat_communication_is_my_message(ChatMessage *msg);
-int chat_communication_handle_msg(ChatContext ctx, ChatMessage *msg, ChatMessage **msgToSend, char **plaintext);
+int chat_communication_handle_msg(ChatContextPtr ctx, ChatMessage *msg, ChatMessage **msgToSend, char **plaintext);
 
 
 #endif /* CHAT_COMMUNICATION_H_ */

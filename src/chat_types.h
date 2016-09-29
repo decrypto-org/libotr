@@ -41,7 +41,6 @@
 #include "instag.h"
 #include "chat_dake.h"
 #include "chat_fingerprint.h"
-#include "chat_idkey.h"
 #include "chat_sign.h"
 #include "list.h"
 
@@ -100,11 +99,11 @@ typedef struct ChatMessagePayloadDAKEKeyStruct {
 
 typedef struct ChatMessagePayloadGKAUpflowStruct {
 		unsigned int recipient;
-		OtrlList interKeys;
+		OtrlListPtr interKeys;
 } ChatMessagePayloadGKAUpflow;
 
 typedef struct ChatMessagePayloadGKADownflowStruct {
-		OtrlList interKeys;
+		OtrlListPtr interKeys;
 } ChatMessagePayloadGKADownflow;
 
 typedef struct ChatMessagePayloadAttestStruct {
@@ -131,11 +130,11 @@ typedef struct ChatMessagePayloadShutdownKeyReleaseStruct {
 		unsigned char *key;
 } ChatMessagePayloadShutdownKeyRelease;
 
-typedef struct ChatOfferInfoStruct * ChatOfferInfo;
-typedef struct ChatDSKEInfoStruct * ChatDSKEInfo;
-typedef struct ChatGKAInfoStruct * ChatGKAInfo;
-typedef struct ChatAttestInfoStruct * ChatAttestInfo;
-typedef struct ChatShutdownInfoStruct * ChatShutdownInfo;
+typedef struct ChatOfferInfo * ChatOfferInfoPtr;
+typedef struct ChatDSKEInfo * ChatDSKEInfoPtr;
+typedef struct ChatGKAInfo * ChatGKAInfoPtr;
+typedef struct ChatAttestInfo * ChatAttestInfoPtr;
+typedef struct ChatShutdownInfo * ChatShutdownInfoPtr;
 
 typedef int otrl_chat_token_t;
 
@@ -149,6 +148,16 @@ typedef struct ChatEncInfoStruct {
         unsigned char *key;	/* the shared secret */
 } ChatEncInfo;
 
-typedef struct ChatContextStruct * ChatContext;
+typedef struct ChatContext * ChatContextPtr;
+
+typedef struct OtrlChatIdKeyInfo * OtrlChatIdKeyInfoPtr;
+
+struct OtrlChatIdKeyInfo {
+	char *accountname;
+	char *protocol;
+	char *fingerprint_hex;
+};
+
+
 
 #endif /* CHAT_TYPES_H */

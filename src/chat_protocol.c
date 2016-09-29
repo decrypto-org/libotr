@@ -27,17 +27,17 @@
 #include "chat_attest.h"
 #include "chat_communication.h"
 #include "chat_context.h"
+#include "chat_dh_key.h"
 #include "chat_dske.h"
 #include "chat_event.h"
 #include "chat_fingerprint.h"
 #include "chat_gka.h"
-#include "chat_idkey.h"
+#include "chat_id_key.h"
 #include "chat_info.h"
 #include "chat_message.h"
 #include "chat_offer.h"
 #include "chat_participant.h"
 #include "chat_pending.h"
-#include "chat_privkeydh.h"
 #include "chat_shutdown.h"
 #include "chat_sign.h"
 #include "chat_types.h"
@@ -70,42 +70,9 @@ otrl_instag_t chat_protocol_get_instag(OtrlUserState us, const OtrlMessageAppOps
     return instag;
 }
 
-int otrl_chat_protocol_fingerprints_read_file(OtrlUserState us, FILE *fingerfile)
+int chat_protocol_app_info_refresh(const OtrlMessageAppOps *ops, ChatContextPtr ctx)
 {
-	OtrlList fingerlist;
-
-	fingerlist = us->chat_fingerprints;
-	return chat_fingerprint_read_FILEp(fingerlist, fingerfile);
-}
-
-int otrl_chat_protocol_fingerprints_write_file(OtrlUserState us, FILE *fingerfile)
-{
-	OtrlList fingerlist;
-
-	fingerlist = us->chat_fingerprints;
-	return chat_fingerprint_write_FILEp(fingerlist, fingerfile);
-}
-
-void otrl_chat_protocol_fingerprint_verify(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint fnprnt)
-{
-	chat_fingerprint_verify(fnprnt);
-	ops->chat_fingerprints_write(NULL);
-}
-
-void otrl_chat_protocol_fingerprint_forget(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint fnprnt)
-{
-	OtrlList fingerlist;
-
-	fingerlist = us->chat_fingerprints;
-	chat_fingerprint_forget(fingerlist, fnprnt);
-	ops->chat_fingerprints_write(NULL);
-}
-
-int chat_protocol_app_info_refresh(const OtrlMessageAppOps *ops, ChatContext ctx)
-{
-	OtrlChatInfo info;
-
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: start\n");
+	OtrlChatInfoPtr info;
 
 	info = chat_info_new_with_level(ctx);
 	if(!info) { goto error; }
@@ -114,7 +81,96 @@ int chat_protocol_app_info_refresh(const OtrlMessageAppOps *ops, ChatContext ctx
 
 	chat_info_free(info);
 
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_app_info_refresh: end\n");
+	return 0;
+
+error:
+	return 1;
+}
+
+int chat_protocol_app_info_refresh_all(OtrlUserState us, const OtrlMessageAppOps *ops)
+{
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr node;
+	ChatContextPtr ctx;
+	int err, ret = 0;
+
+	iter = otrl_list_iterator_new(us->chat_context_list);
+	if(!iter) { goto error; }
+	while(otrl_list_iterator_has_next(iter)) {
+		node = otrl_list_iterator_next(iter);
+		ctx = otrl_list_node_get_payload(node);
+		err = chat_protocol_app_info_refresh(ops, ctx);
+		if(err) { ret = 1; }
+	}
+
+	return ret;
+
+error:
+	return 1;
+}
+
+int chat_protocol_is_in_use(OtrlUserState us, const char *accountname, const char *protocol, int *result)
+{
+	OtrlListIteratorPtr iter = NULL;
+	OtrlListNodePtr node = NULL;
+	ChatContextPtr ctx = NULL;
+	ChatIdKeyPtr key = NULL;
+	int res = 0;
+
+	iter = otrl_list_iterator_new(us->chat_context_list);
+	if(!iter) { goto error; }
+	while(0 == res && otrl_list_iterator_has_next(iter)) {
+		node = otrl_list_iterator_next(iter);
+		ctx = otrl_list_node_get_payload(node);
+		key = chat_context_get_identity_key(ctx);
+
+		if(NULL != key) {
+			if(0 == strcmp(accountname, chat_id_key_get_accountname(key)) && 0 == strcmp(protocol, chat_id_key_get_protocol(key))) {
+				res = 1;
+			}
+		}
+	}
+	otrl_list_iterator_free(iter);
+
+	*result = res;
+	return 0;
+
+error:
+	return 1;
+}
+
+int otrl_chat_protocol_id_key_read_file(OtrlUserState us, FILE *privf)
+{
+	OtrlListPtr key_list = NULL;
+
+	key_list = us->chat_privkey_list;
+	return chat_id_key_list_read_FILEp(key_list, &chat_dh_key_internalKeyOps, privf);
+}
+
+int otrl_chat_protocol_id_keys_write_file(OtrlUserState us, FILE *privf)
+{
+	OtrlListPtr key_list;
+
+	key_list = us->chat_privkey_list;
+	return chat_id_key_list_write_FILEp(key_list, privf);
+}
+
+int otrl_chat_protocol_id_key_generate_new(OtrlUserState us, const OtrlMessageAppOps *ops, const char *accountname, const char *protocol)
+{
+	int err = 0, in_use;
+
+	fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_id_key_generate_new: start\n");
+
+	err = chat_protocol_is_in_use(us, accountname, protocol, &in_use);
+	if(err) { goto error; }
+
+	if(!in_use) {
+		err = chat_id_key_generate_new(us->chat_privkey_list, accountname, protocol, &chat_dh_key_internalKeyOps);
+		if(err) { goto error; }
+		ops->chat_privkeys_write(NULL);
+	}
+
+	fprintf(stderr, "libotr-mpOTR: otrl_chat_protocol_id_key_generate_new: end\n");
 
 	return 0;
 
@@ -122,12 +178,106 @@ error:
 	return 1;
 }
 
-int chat_protocol_participants_list_load_fingerprints(OtrlUserState us, ChatContext ctx)
+OtrlListPtr otrl_chat_protocol_id_key_list_create(OtrlUserState us)
 {
-	OtrlListNode node1, node2, node3;
-	OtrlListIterator iter1, iter2;
-	ChatParticipant participant;
-	OtrlChatFingerprint fnprnt, newfinger;
+	OtrlListPtr list = NULL;
+
+	list = chat_id_key_info_list_create(us->chat_privkey_list);
+	if(!list) { goto error; }
+
+	return list;
+
+error:
+	return NULL;
+}
+
+int chat_protocol_fingerprint_is_in_use(OtrlUserState us, OtrlChatFingerprintPtr fnprnt, int *result)
+{
+	OtrlListIteratorPtr iter1 = NULL, iter2 = NULL;
+	ChatContextPtr ctx = NULL;
+	ChatParticipantPtr part = NULL;
+	OtrlChatFingerprintPtr cur_fnprnt = NULL;
+	int res = 0;
+
+	iter1 = otrl_list_iterator_new(us->chat_context_list);
+	if(!iter1) { goto error; }
+	while(0 == res && otrl_list_iterator_has_next(iter1))
+	{
+		ctx = otrl_list_node_get_payload(otrl_list_iterator_next(iter1));
+
+		iter2 = otrl_list_iterator_new(chat_context_get_participants_list(ctx));
+		if(!iter2) { goto error_with_iter1; }
+		while(0 == res && otrl_list_iterator_has_next(iter2)) {
+			part = otrl_list_node_get_payload(otrl_list_iterator_next(iter2));
+			cur_fnprnt = chat_participant_get_fingerprint(part);
+			if(cur_fnprnt == fnprnt) {
+				res = 1;
+			}
+		}
+		otrl_list_iterator_free(iter2);
+
+	}
+	otrl_list_iterator_free(iter1);
+
+	*result = res;
+	return 0;
+
+error_with_iter1:
+	otrl_list_iterator_free(iter1);
+error:
+	return 1;
+}
+
+int otrl_chat_protocol_fingerprints_read_file(OtrlUserState us, FILE *fingerfile)
+{
+	OtrlListPtr fingerlist;
+
+	fingerlist = us->chat_fingerprints;
+	return chat_fingerprint_read_FILEp(fingerlist, fingerfile);
+}
+
+int otrl_chat_protocol_fingerprints_write_file(OtrlUserState us, FILE *fingerfile)
+{
+	OtrlListPtr fingerlist;
+
+	fingerlist = us->chat_fingerprints;
+	return chat_fingerprint_write_FILEp(fingerlist, fingerfile);
+}
+
+void otrl_chat_protocol_fingerprint_verify(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprintPtr fnprnt)
+{
+	chat_fingerprint_verify(fnprnt);
+	ops->chat_fingerprints_write(NULL);
+
+	chat_protocol_app_info_refresh_all(us, ops);
+}
+
+void otrl_chat_protocol_fingerprint_forget(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprintPtr fnprnt)
+{
+	OtrlListPtr fingerlist;
+	int err, inUse;
+
+	err = chat_protocol_fingerprint_is_in_use(us, fnprnt, &inUse);
+	if(err) { goto error; }
+
+	if(0 == inUse) {
+		fingerlist = us->chat_fingerprints;
+		chat_fingerprint_forget(fingerlist, fnprnt);
+		ops->chat_fingerprints_write(NULL);
+	}
+
+	chat_protocol_app_info_refresh_all(us, ops);
+
+error:
+	return;
+}
+
+int chat_protocol_participants_list_load_fingerprints(OtrlUserState us, ChatContextPtr ctx)
+{
+	OtrlListNodePtr node1, node2, node3;
+	OtrlListIteratorPtr iter1, iter2;
+	ChatParticipantPtr participant;
+	OtrlChatFingerprintPtr fnprnt, newfinger;
 	char *accountname = NULL, *protocol = NULL, *username = NULL;
 	unsigned char *bytes = NULL;
 	int trusted;
@@ -171,27 +321,21 @@ int chat_protocol_participants_list_load_fingerprints(OtrlUserState us, ChatCont
 	return 0;
 
 error_with_newfinger:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_load_fingerprints: error_with_newfinger\n");
 	chat_fingerprint_free(newfinger);
 error_with_iter2:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_load_fingerprints: error_with_iter2\n");
 	otrl_list_iterator_free(iter2);
 error_with_iter1:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_load_fingerprints: error_with_iter1\n");
 	otrl_list_iterator_free(iter1);
 error:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_load_fingerprints: error\n");
 	return 1;
 }
 
-int chat_protocol_participants_list_init(OtrlUserState us, const OtrlMessageAppOps *ops, ChatContext ctx)
+int chat_protocol_participants_list_init(OtrlUserState us, const OtrlMessageAppOps *ops, ChatContextPtr ctx)
 {
 	int err;
 	char **usernames;
 	unsigned int usernames_size;
-	OtrlChatInfo info;
-
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_init: start\n");
+	OtrlChatInfoPtr info;
 
 	info = chat_info_new(ctx);
 	if(!info) { goto error; }
@@ -210,31 +354,25 @@ int chat_protocol_participants_list_init(OtrlUserState us, const OtrlMessageAppO
 	free(usernames);
 	chat_info_free(info);
 
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_init: end\n");
-
     return 0;
 
 error_with_participants_list:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_init: error_with_participants_list\n");
 	otrl_list_clear(chat_context_get_participants_list(ctx));
 error_with_usernames:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_init: error_with_usernames\n");
 	for(unsigned int i = 0; i < usernames_size; i++) { free(usernames[i]); }
     free(usernames);
 error_with_info:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_init: error_with_info\n");
 	chat_info_free(info);
 error:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_participants_list_init: error\n");
 	return 1;
 }
 
-void chat_protocol_reset(ChatContext ctx)
+void chat_protocol_reset(ChatContextPtr ctx)
 {
 	chat_context_reset(ctx);
 }
 
-int chat_protocol_add_sign(ChatContext ctx, unsigned char **msg, size_t *msglen)
+int chat_protocol_add_sign(ChatContextPtr ctx, unsigned char **msg, size_t *msglen)
 {
 	Signature *aSign;
 	unsigned char *sig = NULL, *buf;
@@ -269,9 +407,9 @@ error:
 	return 1;
 }
 
-int chat_protocol_send_message(const OtrlMessageAppOps *ops, ChatContext ctx, ChatMessage *msg)
+int chat_protocol_send_message(const OtrlMessageAppOps *ops, ChatContextPtr ctx, ChatMessage *msg)
 {
-	OtrlChatInfo info;
+	OtrlChatInfoPtr info;
 	char *message = NULL;
 	unsigned char *buf = NULL;
 	size_t buflen;
@@ -305,23 +443,19 @@ int chat_protocol_send_message(const OtrlMessageAppOps *ops, ChatContext ctx, Ch
 	return 0;
 
 error_with_info:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: error_with_info\n");
 	chat_info_free(info);
 error_with_message:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: error_with_message\n");
 	free(message);
 error_with_buf:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: error_with_buf\n");
 	free(buf);
 error:
-	fprintf(stderr, "libotr-mpOTR: chat_protocol_send_message: error\n");
 	return 1;
 
 }
 
-int chat_protocol_verify_sign(ChatContext ctx, const char *sender, const unsigned char *msg, const size_t msglen) {
+int chat_protocol_verify_sign(ChatContextPtr ctx, const char *sender, const unsigned char *msg, const size_t msglen) {
 	Signature *sign;
-	ChatParticipant theSender;
+	ChatParticipantPtr theSender;
 	unsigned int their_pos;
 	int err;
 
@@ -344,10 +478,10 @@ error:
 	return 1;
 }
 
-int chat_protocol_pending_queue_add(ChatContext ctx, const char *sender, unsigned char *msg, size_t msglen)
+int chat_protocol_pending_queue_add(ChatContextPtr ctx, const char *sender, unsigned char *msg, size_t msglen)
 {
-	ChatPending pending;
-	OtrlListNode node;
+	ChatPendingPtr pending;
+	OtrlListNodePtr node;
 
 	pending = chat_pending_new(sender, msg, msglen);
 	if(!pending) { goto error; }
@@ -363,61 +497,9 @@ error:
 	return 1;
 }
 
-int chat_protocol_check_for_unknown_fingerprints(OtrlUserState us, const OtrlMessageAppOps *ops, ChatContext ctx)
+int chat_protocol_emit_event(const OtrlMessageAppOps *ops, const ChatContextPtr ctx, OtrlChatEventPtr event)
 {
-	OtrlChatFingerprint finger, newFinger;
-	OtrlListIterator iter;
-	OtrlListNode node1, node2;
-	ChatParticipant me, part;
-	unsigned int pos, err;
-
-	me = chat_participant_find(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &pos);
-	if(!me) { goto error; }
-
-	iter = otrl_list_iterator_new(chat_context_get_participants_list(ctx));
-	if(!iter) { goto error; }
-
-	while(otrl_list_iterator_has_next(iter)) {
-		node1 = otrl_list_iterator_next(iter);
-		part = otrl_list_node_get_payload(node1);
-
-		if(part != me) {
-			finger = chat_participant_get_fingerprint(part);
-			if(finger == NULL) { goto error_with_iter; }
-
-			// Check if this fingerprint is not in our list. If so, store it to our list
-			node2 = otrl_list_find(us->chat_fingerprints, finger);
-			if(!node2) {
-				newFinger = chat_fingerprint_new(otrl_chat_fingerprint_get_accountname(finger),
-						otrl_chat_fingerprint_get_protocol(finger),
-						otrl_chat_fingerprint_get_username(finger),
-						otrl_chat_fingerprint_get_bytes(finger),
-						otrl_chat_fingerprint_is_trusted(finger));
-				if(!newFinger) { goto error_with_iter; }
-
-				err = chat_fingerprint_add(us->chat_fingerprints, newFinger);
-				if(err) { goto error_with_newFinger; }
-
-				ops->chat_fingerprints_write(NULL);
-			}
-		}
-	}
-
-	otrl_list_iterator_free(iter);
-
-	return 0;
-
-error_with_newFinger:
-	chat_fingerprint_free(newFinger);
-error_with_iter:
-	otrl_list_iterator_free(iter);
-error:
-	return 1;
-}
-
-int chat_protocol_emit_event(const OtrlMessageAppOps *ops, const ChatContext ctx, OtrlChatEvent event)
-{
-	OtrlChatInfo info;
+	OtrlChatInfoPtr info;
 
 	info = chat_info_new(ctx);
 	if(!info) { goto error; }
@@ -432,12 +514,12 @@ error:
 	return 1;
 }
 
-int chat_protocol_emit_consensus_events(const OtrlMessageAppOps *ops, const ChatContext ctx)
+int chat_protocol_emit_consensus_events(const OtrlMessageAppOps *ops, const ChatContextPtr ctx)
 {
-	OtrlChatEvent event;
-	OtrlListIterator iter;
-	OtrlListNode cur;
-	ChatParticipant me, part;
+	OtrlChatEventPtr event;
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr cur;
+	ChatParticipantPtr me, part;
 	unsigned int pos;
 	int err;
 
@@ -474,9 +556,9 @@ error:
 	return 1;
 }
 
-int chat_protocol_emit_offer_received_event(const OtrlMessageAppOps *ops, const ChatContext ctx, const char *username)
+int chat_protocol_emit_offer_received_event(const OtrlMessageAppOps *ops, const ChatContextPtr ctx, const char *username)
 {
-	OtrlChatEvent event;
+	OtrlChatEventPtr event;
 	int err;
 
 	event = chat_event_offer_received_new(username);
@@ -495,9 +577,9 @@ error:
 	return 1;
 }
 
-int chat_protocol_emit_starting_event(const OtrlMessageAppOps *ops, const ChatContext ctx)
+int chat_protocol_emit_starting_event(const OtrlMessageAppOps *ops, const ChatContextPtr ctx)
 {
-	OtrlChatEvent event;
+	OtrlChatEventPtr event;
 	int err;
 
 	event = chat_event_starting_new();
@@ -516,9 +598,9 @@ error:
 	return 1;
 }
 
-int chat_protocol_emit_started_event(const OtrlMessageAppOps *ops, const ChatContext ctx)
+int chat_protocol_emit_started_event(const OtrlMessageAppOps *ops, const ChatContextPtr ctx)
 {
-	OtrlChatEvent event;
+	OtrlChatEventPtr event;
 	int err;
 
 	event = chat_event_started_new();
@@ -537,13 +619,13 @@ error:
 	return 1;
 }
 
-int chat_protocol_emit_unverified_participant_events(const OtrlMessageAppOps *ops, const ChatContext ctx)
+int chat_protocol_emit_unverified_participant_events(const OtrlMessageAppOps *ops, const ChatContextPtr ctx)
 {
-	OtrlChatEvent event;
-	OtrlListIterator iter;
-	OtrlListNode cur;
-	ChatParticipant me, part;
-	OtrlChatFingerprint fnprnt;
+	OtrlChatEventPtr event;
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr cur;
+	ChatParticipantPtr me, part;
+	OtrlChatFingerprintPtr fnprnt;
 	unsigned int pos;
 	int err;
 
@@ -585,9 +667,9 @@ error:
 	return 1;
 }
 
-int chat_protocol_emit_plaintext_received_event(const OtrlMessageAppOps *ops, const ChatContext ctx, const char *sender, const char *message)
+int chat_protocol_emit_plaintext_received_event(const OtrlMessageAppOps *ops, const ChatContextPtr ctx, const char *sender, const char *message)
 {
-	OtrlChatEvent event;
+	OtrlChatEventPtr event;
 	int err;
 
 	event = chat_event_plaintext_received_new(sender, message);
@@ -606,9 +688,9 @@ error:
 	return 1;
 }
 
-int chat_protocol_emit_private_received_event(const OtrlMessageAppOps *ops, const ChatContext ctx, const char *sender)
+int chat_protocol_emit_private_received_event(const OtrlMessageAppOps *ops, const ChatContextPtr ctx, const char *sender)
 {
-	OtrlChatEvent event;
+	OtrlChatEventPtr event;
 	int err;
 
 	event = chat_event_private_received_new(sender);
@@ -627,9 +709,9 @@ error:
 	return 1;
 }
 
-int chat_protocol_emit_finished_event(const OtrlMessageAppOps *ops, const ChatContext ctx)
+int chat_protocol_emit_finished_event(const OtrlMessageAppOps *ops, const ChatContextPtr ctx)
 {
-	OtrlChatEvent event;
+	OtrlChatEventPtr event;
 	int err;
 
 	event = chat_event_finished_new();
@@ -648,7 +730,7 @@ error:
 	return 1;
 }
 
-int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops, ChatContext ctx, const char *sender, const unsigned char *message, size_t messagelen, char **newmessagep, int *ignore, int *pending)
+int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops, ChatContextPtr ctx, const char *sender, const unsigned char *message, size_t messagelen, char **newmessagep, int *ignore, int *pending)
 {
 	int err, ignore_message = 0, ispending = 0, isrejected = 0;
 	ChatMessageType type;
@@ -660,8 +742,11 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 	if(err) { goto error; }
 
 	//TODO Dimitris: a new participant in an already initialized private session maybe should be handled better
+	// Checking Session ID:
+	// If the message contains a sid, we should check if it matches the sid of our context, otherwise reject it.
+	// If we don't have obtained a sid for the session we add the message to the pending list.
 	if(chat_message_type_contains_sid(type)) {
-		ChatOfferInfo offer_info = chat_context_get_offer_info(ctx);
+		ChatOfferInfoPtr offer_info = chat_context_get_offer_info(ctx);
 
 		if(NULL == offer_info || CHAT_OFFERSTATE_FINISHED != chat_offer_info_get_state(offer_info)) {
 			ispending = 1;
@@ -671,7 +756,6 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 			if(err) { goto error; }
 
 			if(memcmp(sid, chat_context_get_sid(ctx), CHAT_OFFER_SID_LENGTH)) {
-				// rejecting
 				isrejected = 1;
 			}
 
@@ -679,6 +763,9 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 		}
 	}
 
+	// Checking signature
+	// If the singature verification fails, we reject the message
+	// If we haven't entered the SINGED state yet, we add the message to the pending list
 	if(!ispending && !isrejected ) {
 		if(chat_message_type_should_be_signed(type)){
 			if(CHAT_SIGNSTATE_SIGNED != chat_context_get_sign_state(ctx)) {
@@ -691,15 +778,16 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 		}
 	}
 
+	// If sid and signature were verified, we try to handle the message based on its type
 	if(!ispending && !isrejected) {
-
 		msg = chat_message_parse(message, messagelen, sender);
 		if(!msg) { goto error; }
 
-		// handle offer messages
+		// CASE: Offer Message
 		if(chat_offer_is_my_message(msg)) {
 
 			// TODO Dimtiris: Check if we have this already and free it
+			// If we haven't done that yet, initialize the participant list and the offer info
 			if(NULL == chat_context_get_offer_info(ctx)) {
 
 				// Library-Application Communication
@@ -712,7 +800,7 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 				if(err) { goto error_with_msg; }
 			}
 
-			ChatOfferInfo offer_info = chat_context_get_offer_info(ctx);
+			ChatOfferInfoPtr offer_info = chat_context_get_offer_info(ctx);
 
 			if(CHAT_OFFERSTATE_FINISHED == chat_offer_info_get_state(offer_info)) {
 				//reject
@@ -728,12 +816,17 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 				}
 
 				if(NULL != offer_info && CHAT_OFFERSTATE_FINISHED == chat_offer_info_get_state(offer_info)) {
-
 					// Load or generate our private key
-					ChatIdKey *idkey = chat_privkeydh_find_or_generate(us, ops, chat_context_get_accountname(ctx), chat_context_get_protocol(ctx));
-					if(!idkey) { goto error_with_msg; }
+					ChatIdKeyPtr id_key = NULL;
+					err = chat_id_key_find(us->chat_privkey_list, chat_context_get_accountname(ctx), chat_context_get_protocol(ctx), &id_key);
+					if(err) { goto error_with_msg; }
 
-					chat_context_set_identity_key(ctx, idkey);
+					if(!id_key) {
+						ops->chat_privkey_create(NULL, chat_context_get_accountname(ctx), chat_context_get_protocol(ctx));
+						err = chat_id_key_find(us->chat_privkey_list, chat_context_get_accountname(ctx), chat_context_get_protocol(ctx), &id_key);
+						if(err || NULL == id_key) { goto error_with_msg; }
+					}
+					chat_context_set_identity_key(ctx, id_key);
 
 					// Initiate dske
 					err = chat_dske_init(ctx, &msgToSend);
@@ -746,18 +839,18 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 			}
 			ignore_message = 1;
 
-		// handle DSKE messages
+		// CASE: DSKE Message
 		} else if(chat_dske_is_my_message(msg)) {
-			ChatOfferInfo offer_info = chat_context_get_offer_info(ctx);
-			ChatDSKEInfo dske_info = chat_context_get_dske_info(ctx);
-			ChatGKAInfo gka_info = chat_context_get_gka_info(ctx);
+			ChatOfferInfoPtr offer_info = chat_context_get_offer_info(ctx);
+			ChatDSKEInfoPtr dske_info = chat_context_get_dske_info(ctx);
+			ChatGKAInfoPtr gka_info = chat_context_get_gka_info(ctx);
 
 			if(NULL == dske_info || NULL == offer_info || chat_offer_info_get_state(offer_info) != CHAT_OFFERSTATE_FINISHED) {
 				ispending = 1;
 			} else if(CHAT_DSKESTATE_FINISHED == chat_dske_info_get_state(dske_info)) {
 				// reject
 			} else {
-				err = chat_dske_handle_message(ctx, msg, &msgToSend);
+				err = chat_dske_handle_message(ctx, msg, us->chat_fingerprints, &msgToSend);
 				if(err) { goto error_with_msg; }
 
 				if(msgToSend) {
@@ -770,9 +863,6 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 				// TODO maybe reject messages intended to other recipients before handling them :)
 				if(NULL != dske_info && CHAT_DSKESTATE_FINISHED == chat_dske_info_get_state(dske_info) &&
 						(NULL == gka_info || CHAT_GKASTATE_NONE == chat_gka_info_get_state(gka_info))) {
-
-					err = chat_protocol_check_for_unknown_fingerprints(us, ops, ctx);
-					if(err) { goto error_with_msg; }
 
 					chat_context_set_sign_state(ctx, CHAT_SIGNSTATE_SIGNED);
 
@@ -789,10 +879,10 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 			}
 			ignore_message = 1;
 
-		// handle GKA messages
+		// CASE: GKA Message
 		} else if(chat_gka_is_my_message(msg)) {
-			ChatDSKEInfo dske_info = chat_context_get_dske_info(ctx);
-			ChatGKAInfo gka_info = chat_context_get_gka_info(ctx);
+			ChatDSKEInfoPtr dske_info = chat_context_get_dske_info(ctx);
+			ChatGKAInfoPtr gka_info = chat_context_get_gka_info(ctx);
 
 			if(NULL == dske_info || CHAT_DSKESTATE_FINISHED != chat_dske_info_get_state(dske_info)) {
 				ispending = 1;
@@ -823,11 +913,11 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 
 			ignore_message = 1;
 
-		// handle attest messages
+		// CASE: Attest Message
 		} else if(chat_attest_is_my_message(msg)) {
 
-			ChatGKAInfo gka_info = chat_context_get_gka_info(ctx);
-			ChatAttestInfo attest_info = chat_context_get_attest_info(ctx);
+			ChatGKAInfoPtr gka_info = chat_context_get_gka_info(ctx);
+			ChatAttestInfoPtr attest_info = chat_context_get_attest_info(ctx);
 
 			if(NULL == attest_info || CHAT_GKASTATE_FINISHED != chat_gka_info_get_state(gka_info)) {
 				ispending = 1;
@@ -856,10 +946,10 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 			}
 			ignore_message = 1;
 
-		// handle data messages
+		// CASE: Communication Message
 		} else if(chat_communication_is_my_message(msg)) {
 
-			ChatAttestInfo attest_info = chat_context_get_attest_info(ctx);
+			ChatAttestInfoPtr attest_info = chat_context_get_attest_info(ctx);
 
 			//pending case
 			if(NULL != attest_info && CHAT_ATTESTSTATE_AWAITING == chat_attest_info_get_state(attest_info)) {
@@ -878,15 +968,15 @@ int chat_protocol_handle_message(OtrlUserState us, const OtrlMessageAppOps *ops,
 				*newmessagep = plaintext;
 			}
 
-		// handle shutdown messages
+		// CASE: Shutdown Message
 		} else if (chat_shutdown_is_my_message(msg)) {
 
-			ChatAttestInfo attest_info = chat_context_get_attest_info(ctx);
+			ChatAttestInfoPtr attest_info = chat_context_get_attest_info(ctx);
 
 			if(NULL == attest_info || CHAT_ATTESTSTATE_FINISHED != chat_attest_info_get_state(attest_info)) {
 				// reject
 			} else {
-				ChatShutdownInfo shutdown_info = chat_context_get_shutdown_info(ctx);
+				ChatShutdownInfoPtr shutdown_info = chat_context_get_shutdown_info(ctx);
 				ChatShutdownState prevState = chat_shutdown_info_get_state(shutdown_info);
 
 				err = chat_shutdown_handle_message(ctx, msg, &msgToSend);
@@ -959,10 +1049,10 @@ error:
 	return 1;
 }
 
-int chat_protocol_handle_pending(OtrlUserState us, const OtrlMessageAppOps *ops, ChatContext ctx) {
-	OtrlListIterator iter;
-	OtrlListNode cur;
-	ChatPending pending;
+int chat_protocol_handle_pending(OtrlUserState us, const OtrlMessageAppOps *ops, ChatContextPtr ctx) {
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr cur;
+	ChatPendingPtr pending;
 	unsigned short int flag = 1;
 	int err, ispending, ignore;
 
@@ -1013,7 +1103,7 @@ int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 	const char *sender, otrl_chat_token_t chat_token, const char *message,
 	char **newmessagep,	OtrlTLV **tlvsp)
 {
-	ChatContext ctx;
+	ChatContextPtr ctx;
 	otrl_instag_t instag;
 	int ignore_message = 0; // flag to determine if the message should be ignored
 	int ispending, err;
@@ -1074,7 +1164,7 @@ int otrl_chat_protocol_sending(OtrlUserState us,
 	const char *message, otrl_chat_token_t chat_token, OtrlTLV *tlvs,
 	char **messagep, OtrlFragmentPolicy fragPolicy)
 {
-	ChatContext ctx;
+	ChatContextPtr ctx;
 	otrl_instag_t instag;
 	unsigned char *buf;
 	ChatMessage *msg;
@@ -1138,7 +1228,7 @@ int otrl_chat_protocol_send_query(OtrlUserState us,
 		otrl_chat_token_t chat_token, OtrlFragmentPolicy fragPolicy)
 {
 	ChatMessage *msgToSend;
-	ChatContext ctx;
+	ChatContextPtr ctx;
 	otrl_instag_t instag;
 	int err;
 
@@ -1180,9 +1270,9 @@ int otrl_chat_protocol_shutdown(OtrlUserState us, const OtrlMessageAppOps *ops,
 		const char *accountname, const char *protocol, otrl_chat_token_t chat_token)
 {
 	ChatMessage *msgToSend;
-	ChatContext ctx;
-	ChatShutdownInfo shutdown_info;
-	OtrlList context_list;
+	ChatContextPtr ctx;
+	ChatShutdownInfoPtr shutdown_info;
+	OtrlListPtr context_list;
 	otrl_instag_t instag;
 	int err;
 

@@ -25,13 +25,13 @@ typedef enum {
 	CHAT_DSKESTATE_FINISHED
 } ChatDSKEState;
 
-int chat_dske_init(ChatContext ctx, ChatMessage **msgToSend);
+int chat_dske_init(ChatContextPtr ctx, ChatMessage **msgToSend);
 
-void chat_dske_info_free(ChatDSKEInfo dske_info);
+void chat_dske_info_free(ChatDSKEInfoPtr dske_info);
 
-ChatDSKEState chat_dske_info_get_state(ChatDSKEInfo dske_info);
+ChatDSKEState chat_dske_info_get_state(ChatDSKEInfoPtr dske_info);
 
 int chat_dske_is_my_message(const ChatMessage *msg);
 
-int chat_dske_handle_message(ChatContext ctx, ChatMessage *msg,
-                             ChatMessage **msgToSend);
+int chat_dske_handle_message(ChatContextPtr ctx, ChatMessage *msg,
+		OtrlListPtr fnprnt_list, ChatMessage **msgToSend);

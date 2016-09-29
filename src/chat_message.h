@@ -43,28 +43,28 @@ int chat_message_parse_sid(const unsigned char *message, const size_t messagelen
 
 ChatMessage * chat_message_parse(const unsigned char *message, const size_t messagelen, const char *accountname);
 
-ChatMessage * chat_message_offer_new(ChatContext ctx, unsigned char *sid_contribution, unsigned int position);
+ChatMessage * chat_message_offer_new(ChatContextPtr ctx, unsigned char *sid_contribution, unsigned int position);
 
-ChatMessage * chat_message_dake_handshake_new(ChatContext ctx, DAKE_handshake_message_data *data);
+ChatMessage * chat_message_dake_handshake_new(ChatContextPtr ctx, DAKE_handshake_message_data *data);
 
-ChatMessage * chat_message_dake_confirm_new(ChatContext ctx, unsigned int recipient, DAKE_confirm_message_data *data);
+ChatMessage * chat_message_dake_confirm_new(ChatContextPtr ctx, unsigned int recipient, DAKE_confirm_message_data *data);
 
-ChatMessage * chat_message_dake_key_new(ChatContext ctx, unsigned int recipient, DAKE_key_message_data *data);
+ChatMessage * chat_message_dake_key_new(ChatContextPtr ctx, unsigned int recipient, DAKE_key_message_data *data);
 
-ChatMessage * chat_message_gka_upflow_new(ChatContext ctx, OtrlList interKeys, unsigned int recipient);
+ChatMessage * chat_message_gka_upflow_new(ChatContextPtr ctx, OtrlListPtr interKeys, unsigned int recipient);
 
-ChatMessage * chat_message_gka_downflow_new(ChatContext ctx, OtrlList interKeys);
+ChatMessage * chat_message_gka_downflow_new(ChatContextPtr ctx, OtrlListPtr interKeys);
 
-ChatMessage * chat_message_attest_new(ChatContext ctx, unsigned char *sid, unsigned char *assoctable_hash);
+ChatMessage * chat_message_attest_new(ChatContextPtr ctx, unsigned char *sid, unsigned char *assoctable_hash);
 
-ChatMessage * chat_message_data_new(ChatContext ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
+ChatMessage * chat_message_data_new(ChatContextPtr ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
 
-ChatMessage * chat_message_shutdown_shutdown_new(ChatContext ctx, unsigned char *shutdown_hash);
+ChatMessage * chat_message_shutdown_shutdown_new(ChatContextPtr ctx, unsigned char *shutdown_hash);
 
-ChatMessage * chat_message_shutdown_digest_new(ChatContext ctx, unsigned char *digest);
+ChatMessage * chat_message_shutdown_digest_new(ChatContextPtr ctx, unsigned char *digest);
 
-ChatMessage * chat_message_shutdown_end_new(ChatContext ctx);
+ChatMessage * chat_message_shutdown_end_new(ChatContextPtr ctx);
 
-ChatMessage * chat_message_shutdown_keyrelease_new(ChatContext ctx, unsigned char *key, size_t keylen);
+ChatMessage * chat_message_shutdown_keyrelease_new(ChatContextPtr ctx, unsigned char *key, size_t keylen);
 
 #endif /* CHAT_MESSAGE_H_ */

@@ -22,44 +22,44 @@
 
 #include <stddef.h>
 
-typedef void * OtrlListPayload;
-typedef struct OtrlListNodeStruct * OtrlListNode;
-typedef struct OtrlListStruct * OtrlList;
-typedef struct OtrlListIteratorStruct * OtrlListIterator;
+typedef void * OtrlListPayloadPtr;
+typedef struct OtrlListNode * OtrlListNodePtr;
+typedef struct OtrlList * OtrlListPtr;
+typedef struct OtrlListIterator * OtrlListIteratorPtr;
 
 struct OtrlListOpsStruct {
-	int (*compar)(OtrlListPayload, OtrlListPayload);  	/* function for comparing elements */
+	int (*compar)(OtrlListPayloadPtr, OtrlListPayloadPtr);  	/* function for comparing elements */
 
 	/* TODO
 	 * Why does this function accepts a list
 	 * node and not a payload like the rest? Maybe
 	 * refactor?
 	 */
-	void (*print)(OtrlListNode);             /* Prints element on stderr */
-	void (*payload_free)(OtrlListPayload);
+	void (*print)(OtrlListNodePtr);             /* Prints element on stderr */
+	void (*payload_free)(OtrlListPayloadPtr);
 };
 
-OtrlListPayload otrl_list_node_get_payload(OtrlListNode node);
+OtrlListPayloadPtr otrl_list_node_get_payload(OtrlListNodePtr node);
 
-OtrlList otrl_list_new(struct OtrlListOpsStruct *ops, size_t payload_size);
-OtrlListNode otrl_list_get_head(OtrlList list);
-OtrlListNode otrl_list_get_tail(OtrlList list);
-OtrlListNode otrl_list_insert(OtrlList list, const OtrlListPayload payload);
-OtrlListNode otrl_list_prepend(OtrlList list, OtrlListPayload payload);
-OtrlListNode otrl_list_append(OtrlList list, OtrlListPayload payload);
-void otrl_list_remove(OtrlList list, OtrlListNode node);
-void otrl_list_remove_and_free(OtrlList list, OtrlListNode node);
-void otrl_list_clear(OtrlList list);
-void otrl_list_free(OtrlList list);
-OtrlListNode otrl_list_find(OtrlList list, OtrlListPayload target);
-unsigned int otrl_list_size(OtrlList list);
-OtrlListNode otrl_list_get(OtrlList list, unsigned int i);
-void otrl_list_foreach(OtrlList list, void (*fun)(OtrlListNode));
-void otrl_list_dump(OtrlList list);
+OtrlListPtr otrl_list_new(struct OtrlListOpsStruct *ops, size_t payload_size);
+OtrlListNodePtr otrl_list_get_head(OtrlListPtr list);
+OtrlListNodePtr otrl_list_get_tail(OtrlListPtr list);
+OtrlListNodePtr otrl_list_insert(OtrlListPtr list, const OtrlListPayloadPtr payload);
+OtrlListNodePtr otrl_list_prepend(OtrlListPtr list, OtrlListPayloadPtr payload);
+OtrlListNodePtr otrl_list_append(OtrlListPtr list, OtrlListPayloadPtr payload);
+void otrl_list_remove(OtrlListPtr list, OtrlListNodePtr node);
+void otrl_list_remove_and_free(OtrlListPtr list, OtrlListNodePtr node);
+void otrl_list_clear(OtrlListPtr list);
+void otrl_list_free(OtrlListPtr list);
+OtrlListNodePtr otrl_list_find(OtrlListPtr list, OtrlListPayloadPtr target);
+unsigned int otrl_list_size(OtrlListPtr list);
+OtrlListNodePtr otrl_list_get(OtrlListPtr list, unsigned int i);
+void otrl_list_foreach(OtrlListPtr list, void (*fun)(OtrlListNodePtr));
+void otrl_list_dump(OtrlListPtr list);
 
-OtrlListIterator otrl_list_iterator_new(OtrlList list);
-void otrl_list_iterator_free(OtrlListIterator iter);
-int otrl_list_iterator_has_next(OtrlListIterator iter);
-OtrlListNode otrl_list_iterator_next(OtrlListIterator iter);
+OtrlListIteratorPtr otrl_list_iterator_new(OtrlListPtr list);
+void otrl_list_iterator_free(OtrlListIteratorPtr iter);
+int otrl_list_iterator_has_next(OtrlListIteratorPtr iter);
+OtrlListNodePtr otrl_list_iterator_next(OtrlListIteratorPtr iter);
 
 #endif /* LIST_H_ */

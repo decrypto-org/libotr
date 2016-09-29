@@ -28,13 +28,13 @@ typedef enum {
     CHAT_ATTESTSTATE_FINISHED
 } ChatAttestState;
 
-ChatAttestState chat_attest_info_get_state(ChatAttestInfo attest_info);
+ChatAttestState chat_attest_info_get_state(ChatAttestInfoPtr attest_info);
 
-void chat_attest_info_free(ChatAttestInfo attest_info);
+void chat_attest_info_free(ChatAttestInfoPtr attest_info);
 
-int chat_attest_init(ChatContext ctx, ChatMessage **msgToSend);
+int chat_attest_init(ChatContextPtr ctx, ChatMessage **msgToSend);
 
-int chat_attest_handle_message(ChatContext ctx, const ChatMessage *msg, ChatMessage **msgToSend);
+int chat_attest_handle_message(ChatContextPtr ctx, const ChatMessage *msg, ChatMessage **msgToSend);
 
 int chat_attest_is_my_message(ChatMessage *msg);
 

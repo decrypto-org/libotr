@@ -27,7 +27,8 @@
 #include "userstate.h"
 #include "chat_context.h" 		/* DIKOMAS */
 #include "list.h" 				/* DIKOMAS */
-#include "chat_idkey.h" 		/* DIKOMAS */
+#include "chat_id_key.h"			/* DIKOMAS */
+//#include "chat_idkey.h" 		/* DIKOMAS */
 #include "chat_fingerprint.h" 	/* DIKOMAS */
 
 /* Create a new OtrlUserState.  Most clients will only need one of
@@ -47,7 +48,7 @@ OtrlUserState otrl_userstate_create(void)
     us->chat_context_list = otrl_list_new(&chat_context_listOps, chat_context_size());
     if(!us->chat_context_list) { goto error; }
 
-    us->chat_privkey_list = otrl_list_new(&chat_idkey_listOps, sizeof(ChatIdKey));
+    us->chat_privkey_list = otrl_list_new(&chat_id_key_listOps, chat_id_key_size());
     if(!us->chat_privkey_list) { goto error_with_chat_context_list; }
 
     us->chat_fingerprints = otrl_list_new(&chat_fingerprint_listOps, chat_fingerprint_size());

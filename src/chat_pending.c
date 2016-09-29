@@ -24,7 +24,7 @@
 #include <list.h>
 #include "chat_pending.h"
 
-struct ChatPendingStruct {
+struct ChatPending  {
 	char *sender;
 	unsigned char *msg;
 	size_t msglen;
@@ -32,12 +32,12 @@ struct ChatPendingStruct {
 
 size_t chat_pending_size()
 {
-	return sizeof(struct ChatPendingStruct);
+	return sizeof(struct ChatPending );
 }
 
-ChatPending chat_pending_new(const char *sender, const unsigned char *msg, size_t msglen)
+ChatPendingPtr chat_pending_new(const char *sender, const unsigned char *msg, size_t msglen)
 {
-	ChatPending pending;
+	ChatPendingPtr pending;
 
 	pending = malloc(sizeof *pending);
 	if(!pending) { goto error; }
@@ -61,7 +61,7 @@ error:
 	return NULL;
 }
 
-void chat_pending_free(ChatPending pending)
+void chat_pending_free(ChatPendingPtr pending)
 {
 	if(pending) {
 		free(pending->sender);
@@ -70,26 +70,26 @@ void chat_pending_free(ChatPending pending)
     free(pending);
 }
 
-char *chat_pending_get_sender(ChatPending pending)
+char *chat_pending_get_sender(ChatPendingPtr pending)
 {
 	assert(pending && "Is validated by the caller");
 	return pending->sender;
 }
 
-unsigned char *chat_pending_get_msg(ChatPending pending)
+unsigned char *chat_pending_get_msg(ChatPendingPtr pending)
 {
 	assert(pending && "Is validated by the caller");
 	return pending->msg;
 }
 
-size_t chat_pending_get_msglen(ChatPending pending)
+size_t chat_pending_get_msglen(ChatPendingPtr pending)
 {
 	assert(pending && "Is validated by the caller");
 	return pending->msglen;
 }
 
 
-int chat_pending_compare(ChatPending a, ChatPending b)
+int chat_pending_compare(ChatPendingPtr a, ChatPendingPtr b)
 {
 	int eq;
 	size_t minlen;
@@ -109,7 +109,7 @@ int chat_pending_compare(ChatPending a, ChatPending b)
 	return eq;
 }
 
-void chat_pending_print(ChatPending pending)
+void chat_pending_print(ChatPendingPtr pending)
 {
 	assert(pending && "Is validated by the caller");
 
@@ -122,23 +122,23 @@ void chat_pending_print(ChatPending pending)
 	fprintf(stderr, "\n");
 }
 
-int chat_pending_compareOp(OtrlListPayload a, OtrlListPayload b)
+int chat_pending_compareOp(OtrlListPayloadPtr a, OtrlListPayloadPtr b)
 {
-	ChatPending a1 = a, b1 = b;
+	ChatPendingPtr a1 = a, b1 = b;
 	return chat_pending_compare(a1, b1);
 }
 
-void chat_pending_printOp(OtrlListNode a)
+void chat_pending_printOp(OtrlListNodePtr a)
 {
-	ChatPending pending;
+	ChatPendingPtr pending;
 
 	pending = otrl_list_node_get_payload(a);
 	chat_pending_print(pending);
 }
 
-void chat_pending_freeOp(OtrlListPayload a)
+void chat_pending_freeOp(OtrlListPayloadPtr a)
 {
-	ChatPending pending = a;
+	ChatPendingPtr pending = a;
 	chat_pending_free(pending);
 }
 
