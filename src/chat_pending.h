@@ -20,14 +20,14 @@
 #ifndef CHAT_PENDING_H_
 #define CHAT_PENDING_H_
 
-typedef struct ChatPending* ChatPendingPtr;
+typedef struct ChatPendingStruct* ChatPending;
 
 size_t chat_pending_size();
-ChatPendingPtr chat_pending_create(const char *sender, const unsigned char *msg, size_t msglen);
-void chat_pending_free(ChatPendingPtr pending);
-char *chat_pending_get_sender(ChatPendingPtr pending);
-unsigned char *chat_pending_get_msg(ChatPendingPtr pending);
-size_t chat_pending_get_msglen(ChatPendingPtr pending);
+ChatPending chat_pending_new(const char *sender, const unsigned char *msg, size_t msglen);
+void chat_pending_free(ChatPending pending);
+char *chat_pending_get_sender(ChatPending pending);
+unsigned char *chat_pending_get_msg(ChatPending pending);
+size_t chat_pending_get_msglen(ChatPending pending);
 
 struct OtrlListOpsStruct chat_pending_listOps;
 

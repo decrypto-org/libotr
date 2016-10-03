@@ -17,8 +17,11 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-//typedef const char* otrl_chat_token_t;
+#ifndef CHAT_TOKEN_H
+#define CHAT_TOKEN_H
+
 #include "chat_types.h"
+
 /* Function: chat_token_compare
  * -----------------------------
  * Compare function for chat token type
@@ -29,3 +32,5 @@
  * returns: negative value if a<b, zero if a==b, positive value if a>b
  */
 int chat_token_compare(otrl_chat_token_t a, otrl_chat_token_t b);
+
+#endif /* CHAT_TOKEN_H */

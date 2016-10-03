@@ -125,7 +125,7 @@ void chat_sign_destroy_key(SignKey *key);
 
  @param signature The signature to be destroyed
 */
-void chat_sign_destroy_signature(Signature *sign);
+void chat_sign_signature_free(Signature *sign);
 
 /**
  Returns the length of a signature

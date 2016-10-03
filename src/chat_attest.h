@@ -22,11 +22,19 @@
 
 #include "chat_types.h"
 
-void chat_attest_info_free(ChatAttestInfo *info);
+typedef enum {
+    CHAT_ATTESTSTATE_NONE,
+    CHAT_ATTESTSTATE_AWAITING,
+    CHAT_ATTESTSTATE_FINISHED
+} ChatAttestState;
 
-int chat_attest_init(OtrlChatContext *ctx, ChatMessage **msgToSend);
+ChatAttestState chat_attest_info_get_state(ChatAttestInfo attest_info);
 
-int chat_attest_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, ChatMessage **msgToSend);
+void chat_attest_info_free(ChatAttestInfo attest_info);
+
+int chat_attest_init(ChatContext ctx, ChatMessage **msgToSend);
+
+int chat_attest_handle_message(ChatContext ctx, const ChatMessage *msg, ChatMessage **msgToSend);
 
 int chat_attest_is_my_message(ChatMessage *msg);
 

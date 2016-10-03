@@ -21,7 +21,7 @@
 #define CHAT_ENC_H
 
 #include <gcrypt.h>
-//#include "chat_auth.h"
+//#include "chat_gka.h"
 //#include "chat_context.h"
 #include "chat_types.h"
 //typedef struct ChatEncInfoStruct {
@@ -46,7 +46,7 @@
 
   @param enc_info a pointer to the struct to be initialized
  */
-OtrlChatEncInfo* chat_enc_info_new();
+ChatEncInfo* chat_enc_info_new();
 
 /**
   Destroys an OtrlChatEncInfo struct. It does not free the enc_info struct
@@ -54,7 +54,7 @@ OtrlChatEncInfo* chat_enc_info_new();
 
   @param enc_info a pointer to the struct to be destroyed
  */
-void chat_enc_info_free(OtrlChatEncInfo *enc_info);
+void chat_enc_info_free(ChatEncInfo *enc_info);
 
 /**
   Generates the shared secret
@@ -69,18 +69,18 @@ void chat_enc_info_free(OtrlChatEncInfo *enc_info);
    failed. Other gpg errors returned by gcry functions if there were other errors.
  */
 
-gcry_error_t chat_enc_create_secret(OtrlChatEncInfo *enc_info ,gcry_mpi_t w, DH_keypair *key);
+gcry_error_t chat_enc_create_secret(ChatEncInfo *enc_info ,gcry_mpi_t w, DH_keypair *key);
 
 /* Encrypts data in plaintext using the cipher in ctx. For the time being
  * the plaintext is only textual data and no tlv's or other binaries.
  *
  * TODO add support for encryption of any data, no just text, this might need
  * an extra msglen argument? */
-unsigned char * chat_enc_encrypt(OtrlChatContext *ctx,  const char *plaintext);
+unsigned char * chat_enc_encrypt(ChatContext ctx,  const char *plaintext);
 
 /* Decrypts the data in ciphertext using the cipher information in ctx and
  * top_ctr as the top half (8 bytes) of the AES counter */
-char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphertext,
+char * chat_enc_decrypt(const ChatContext ctx, const unsigned char *ciphertext,
 		size_t datalen, const unsigned char top_ctr[8], const char *sender);
 
 /* Encrypts buffer in to buffer out. The buffers must be already allocated */

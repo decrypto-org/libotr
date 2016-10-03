@@ -19,11 +19,19 @@
 
 #include "chat_types.h"
 
-int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend);
+typedef enum {
+	CHAT_DSKESTATE_NONE,
+	CHAT_DSKESTATE_AWAITING_KEYS,
+	CHAT_DSKESTATE_FINISHED
+} ChatDSKEState;
 
-void chat_dske_info_free(OtrlAuthDSKEInfo *dske_info);
+int chat_dske_init(ChatContext ctx, ChatMessage **msgToSend);
+
+void chat_dske_info_free(ChatDSKEInfo dske_info);
+
+ChatDSKEState chat_dske_info_get_state(ChatDSKEInfo dske_info);
 
 int chat_dske_is_my_message(const ChatMessage *msg);
 
-int chat_dske_handle_message(OtrlChatContext *ctx, ChatMessage *msg,
+int chat_dske_handle_message(ChatContext ctx, ChatMessage *msg,
                              ChatMessage **msgToSend);

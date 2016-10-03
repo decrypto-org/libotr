@@ -17,58 +17,79 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "chat_types.h"
+#include "chat_shutdown.h"
+
+#include "chat_context.h"
 #include "chat_message.h"
-#include "chat_sign.h"
 #include "chat_participant.h"
+#include "chat_sign.h"
+#include "chat_types.h"
+#include "list.h"
 
 #define CONSENSUS_HASH_LEN 64
 
-// TODO Dimtiris: Make better error handling
+struct ChatShutdownInfoStruct{
+	int shutdowns_remaining;
+	int digests_remaining;
+	int ends_remaining;
+	unsigned char *has_send_end;
+	unsigned char *consensus_hash;
+	ChatShutdownState state;
+};
 
-int get_consensus_hash(const OtrlList *participants_list, unsigned char *result)
+int get_consensus_hash(OtrlList participants_list, unsigned char *result)
 {
     gcry_md_hd_t md;
     gcry_error_t err;
-    OtrlListNode *cur = NULL;
-    ChatParticipant *participant = NULL;
+    OtrlListIterator iter;
+    OtrlListNode cur;
+    ChatParticipant participant;
     size_t len;
     unsigned char *hash_result = NULL;
 
     /* Open a digest */
     err = gcry_md_open(&md, GCRY_MD_SHA512, 0);
-    if(err) {
-        return err;
-    }
+    if(err) { goto error; }
 
     /* Iterate over each participant in partipants_list */
-    for(cur = participants_list->head; cur != NULL; cur = cur->next)
-    {
-        participant = cur->payload;
+    iter = otrl_list_iterator_new(participants_list);
+    if(!iter) { goto error_with_md; }
+    while(otrl_list_iterator_has_next(iter)) {
+    	cur = otrl_list_iterator_next(iter);
+        participant = otrl_list_node_get_payload(cur);
         len = MESSAGES_HASH_LEN;
-
         /* Write the participant's messages_hash to the digest */
-        gcry_md_write(md, participant->messages_hash, len);
+        gcry_md_write(md, chat_participant_get_messages_hash(participant), len);
     }
 
     /* Finalize the digest */
     gcry_md_final(md);
     /* And read the calculated hash */
     hash_result = gcry_md_read(md, GCRY_MD_SHA512);
-    if(!hash_result) {
-        gcry_md_close(md);
-        return 1;
-    }
+    if(!hash_result) { goto error_with_iter; }
 
     /* Copy the result in the output buffer */
     memcpy(result, hash_result, gcry_md_get_algo_dlen(GCRY_MD_SHA512));
 
+    otrl_list_iterator_free(iter);
     gcry_md_close(md);
 
     return 0;
+
+error_with_iter:
+	otrl_list_iterator_free(iter);
+error_with_md:
+	gcry_md_close(md);
+error:
+	return 1;
 }
 
-void chat_shutdown_info_free(ShutdownInfo *shutdown_info)
+ChatShutdownState chat_shutdown_info_get_state(ChatShutdownInfo shutdown_info)
+{
+	return shutdown_info->state;
+}
+
+void chat_shutdown_info_free(ChatShutdownInfo shutdown_info)
 {
 	if(shutdown_info) {
 		free(shutdown_info->has_send_end);
@@ -77,249 +98,232 @@ void chat_shutdown_info_free(ShutdownInfo *shutdown_info)
 	free(shutdown_info);
 }
 
-int chat_shutdown_init(OtrlChatContext *ctx)
+int chat_shutdown_init(ChatContext ctx)
 {
+	ChatShutdownInfo shutdown_info;
+
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_init: start\n");
 
-    ctx->shutdown_info = malloc(sizeof *ctx->shutdown_info);
-    if(!ctx->shutdown_info) { goto error; }
+    shutdown_info = malloc(sizeof *shutdown_info);
+    if(!shutdown_info) { goto error; }
 
     /* Initiliaze the state of each participant */
-    ctx->shutdown_info->has_send_end = calloc(otrl_list_length(ctx->participants_list),
-                                             sizeof(*ctx->shutdown_info->has_send_end));
-
-    if(!ctx->shutdown_info->has_send_end){ goto error_with_info; }
+    shutdown_info->has_send_end = calloc(otrl_list_size(chat_context_get_participants_list(ctx)), sizeof *shutdown_info->has_send_end);
+    if(!shutdown_info->has_send_end){ goto error_with_info; }
 
     /* We expect a shutdown/digest/end message from all the participants */
-    ctx->shutdown_info->shutdowns_remaining = otrl_list_length(ctx->participants_list);
-    ctx->shutdown_info->digests_remaining = ctx->shutdown_info->shutdowns_remaining;
-    ctx->shutdown_info->ends_remaining = ctx->shutdown_info->shutdowns_remaining;
+    shutdown_info->shutdowns_remaining = otrl_list_size(chat_context_get_participants_list(ctx));
+    shutdown_info->digests_remaining = shutdown_info->shutdowns_remaining;
+    shutdown_info->ends_remaining = shutdown_info->shutdowns_remaining;
 
     /* The initial state of the protocol is to wait for shutdown messages */
-    ctx->shutdown_info->state = CHAT_SHUTDOWNSTATE_AWAITING_SHUTDOWNS;
+    shutdown_info->state = CHAT_SHUTDOWNSTATE_AWAITING_SHUTDOWNS;
+
+    chat_context_set_shutdown_info(ctx, shutdown_info);
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_init: end\n");
 
     return 0;
 error_with_info:
-	free(ctx->shutdown_info);
+	free(shutdown_info);
 error:
 	return 1;
 }
-
-int chat_shutdown_send_shutdown(OtrlChatContext *ctx, ChatMessage **msgToSend)
+int chat_shutdown_send_shutdown(ChatContext ctx, ChatMessage **msgToSend)
 {
-    ChatParticipant *me;
+	ChatShutdownInfo shutdown_info;
+    ChatParticipant me;
     unsigned int my_pos;
+    int err;
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_shutdown: start\n");
 
+    shutdown_info = chat_context_get_shutdown_info(ctx);
+    if(!shutdown_info) { goto error; }
+
     /* Find us in the participants list */
-    me = chat_participant_find(ctx, ctx->accountname, &my_pos);
-    if(!me) {
-        return 1;
-    }
+    me = chat_participant_find(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &my_pos);
+    if(!me) { goto error; }
 
     /* If we have already sent a shutdown return error */
-    if(1 <= ctx->shutdown_info->has_send_end[my_pos]) {
-        return 1;
-    }
+    if(1 <= shutdown_info->has_send_end[my_pos]) { goto error; }
 
     /* Calculate our messages hash, and store it for later */
-    if(chat_participant_get_messages_hash(me, me->messages_hash)) {
-        return 1;
-    }
+    // TODO Dimitris: here getter plays the role of a setter, maybe refactor this and free in error handling
+    err = chat_participant_calculate_messages_hash(me, chat_participant_get_messages_hash(me));
+    if(err) { goto error; }
 
     /* Create a shutdown message */
-    *msgToSend = chat_message_shutdown_shutdown_create(ctx, me->messages_hash);
-    if(!*msgToSend) {
-    	return 1;
-    }
+    *msgToSend = chat_message_shutdown_shutdown_new(ctx, chat_participant_get_messages_hash(me));
+    if(!*msgToSend) { goto error; }
 
     /* We have sent a shutdown message so update our state */
-    ctx->shutdown_info->has_send_end[my_pos] = 1;
+    shutdown_info->has_send_end[my_pos] = 1;
 
     /* We wait for one less shutdown message since we just sent one */
-    ctx->shutdown_info->shutdowns_remaining -= 1;
+    shutdown_info->shutdowns_remaining -= 1;
 
-    /* If everybode has sent us a shutdown message then we must proceed to the
-     next phase */
-    if(0 ==ctx->shutdown_info->shutdowns_remaining) {
+    /* If everybode has sent us a shutdown message then we must proceed to the next phase */
+    if(0 == shutdown_info->shutdowns_remaining) {
         /* Allocate memory for the consensus hash */
-        ctx->shutdown_info->consensus_hash = malloc(CONSENSUS_HASH_LEN * sizeof(*ctx->shutdown_info->consensus_hash));
-        if(!ctx->shutdown_info->consensus_hash) {
-            return 1;
-        }
+        shutdown_info->consensus_hash = malloc(CONSENSUS_HASH_LEN * sizeof *shutdown_info->consensus_hash);
+        if(!shutdown_info->consensus_hash) { goto error; }
 
         /* And calculate the hash itself */
-        if(get_consensus_hash(ctx->participants_list, ctx->shutdown_info->consensus_hash)) {
-           return 1;
-        }
+        err =  get_consensus_hash(chat_context_get_participants_list(ctx), shutdown_info->consensus_hash);
+        if(err) { goto error_with_consensus_hash; }
 
         /* Set the state to wait for digest messages */
-        ctx->shutdown_info->state = CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS;
+        shutdown_info->state = CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS;
     }
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_shutdown: end\n");
     return 0;
+
+error_with_consensus_hash:
+	free(shutdown_info->consensus_hash);
+error:
+	return 1;
 }
 
-int chat_shutdown_handle_shutdown_message(OtrlChatContext *ctx, ChatMessage *msg,
+int chat_shutdown_handle_shutdown_message(ChatContext ctx, ChatMessage *msg,
                                  ChatMessage **msgToSend)
 {
-    ChatParticipant *sender;
+	ChatShutdownInfo shutdown_info;
+    ChatParticipant sender;
     unsigned int their_pos;
-    int error = 0;
+    int err;
+
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_shutdown: start\n");
 
+    shutdown_info = chat_context_get_shutdown_info(ctx);
+    if(!shutdown_info) { goto error; }
+
     /* Get the sender from the participants list. If not found return error */
-    sender = chat_participant_find(ctx, msg->senderName, &their_pos);
-    if(!sender) {
-        return 1;
-    }
+    sender = chat_participant_find(chat_context_get_participants_list(ctx), msg->senderName, &their_pos);
+    if(!sender) { goto error; }
 
     /* Verify that we expected this message */
-    if(ctx->shutdown_info->state != CHAT_SHUTDOWNSTATE_AWAITING_SHUTDOWNS) {
-        return 1;
-    }
+    if(CHAT_SHUTDOWNSTATE_AWAITING_SHUTDOWNS != shutdown_info->state) { goto error; }
 
     /* If we have already received the shutdown message from this user return
        success */
-    if(1 <= ctx->shutdown_info->has_send_end[their_pos]) {
-        return 1;
-    }
+    if(1 <= shutdown_info->has_send_end[their_pos]) { goto error; }
 
     /* Remember that this user has sent us a shutdown */
-    ctx->shutdown_info->has_send_end[their_pos] = 1; // True
-    ctx->shutdown_info->shutdowns_remaining -= 1;
+    shutdown_info->has_send_end[their_pos] = 1; // True
+    shutdown_info->shutdowns_remaining -= 1;
 
     /* Hash the participants messages and store them in sender */
-    if(chat_participant_get_messages_hash(sender, sender->messages_hash)) {
-        return 1;
-    }
+    //TODO Dimitris: here getter plays the role of a setter, maybe refactor this and free in error handling
+    err = chat_participant_calculate_messages_hash(sender, chat_participant_get_messages_hash(sender));
+    if(err) { goto error; }
 
     /* Check if we have received shutdown messages from everybody.
        If yes then send a digest */
-    if(0 == ctx->shutdown_info->shutdowns_remaining) {
-
+    if(0 == shutdown_info->shutdowns_remaining) {
         /* Allocate memory for the consensus hash */
-        ctx->shutdown_info->consensus_hash = malloc(CONSENSUS_HASH_LEN * sizeof(*ctx->shutdown_info->consensus_hash));
-        if(!ctx->shutdown_info->consensus_hash) {
-            return 1;
-        }
+        shutdown_info->consensus_hash = malloc(CONSENSUS_HASH_LEN * sizeof *shutdown_info->consensus_hash);
+        if(!shutdown_info->consensus_hash) { goto error; }
 
         /* And calculate it */
-        if(get_consensus_hash(ctx->participants_list, ctx->shutdown_info->consensus_hash)) {
-           return 1;
-        }
+        err = get_consensus_hash(chat_context_get_participants_list(ctx), shutdown_info->consensus_hash);
+        if(err) { goto error; }
 
         /* Set the state so that we wait for digest messages */
-        ctx->shutdown_info->state = CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS;
-    }
+        shutdown_info->state = CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS;
+
     /* If not then we maybe have to send a shutdown message */
-    else {
-        fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_shutdown: send shutdown");
-        error = chat_shutdown_send_shutdown(ctx, msgToSend);
-        if(error) {
-            return 1;
-        }
+    } else {
+        err = chat_shutdown_send_shutdown(ctx, msgToSend);
+        if(err) { goto error; }
     }
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_shutdown: end\n");
     return 0;
+
+error:
+	return 1;
 }
 
-int chat_shutdown_send_digest(OtrlChatContext *ctx, ChatMessage **msgToSend)
+int chat_shutdown_send_digest(ChatContext ctx, ChatMessage **msgToSend)
 {
-    ChatParticipant *me;
+	ChatShutdownInfo shutdown_info;
+    ChatParticipant me;
     unsigned int my_pos;
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_digest: start\n");
 
-    /* Find us in the participants list */
-    me = chat_participant_find(ctx, ctx->accountname, &my_pos);
-    if(!me) {
-    fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_digest: me not found\n");
-        return 1;
-    }
+    shutdown_info = chat_context_get_shutdown_info(ctx);
+    if(!shutdown_info) { goto error; }
 
-    fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_digest: after find\n");
+    /* Find us in the participants list */
+    me = chat_participant_find(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &my_pos);
+    if(!me) { goto error; }
 
     /* If we already sent a digest message return error */
-    if(2 <= ctx->shutdown_info->has_send_end[my_pos]) {
-        return 1;
-    }
-
-    fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_digest: after has_send check\n");
+    if(2 <= shutdown_info->has_send_end[my_pos]) { goto error; }
 
     /* Create a digest message to send */
-    *msgToSend = chat_message_shutdown_digest_create(ctx, ctx->shutdown_info->consensus_hash);
-    if(!*msgToSend) {
-    	return 1;
-    }
-
-    fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_digest: after create\n");
+    *msgToSend = chat_message_shutdown_digest_new(ctx, shutdown_info->consensus_hash);
+    if(!*msgToSend) { goto error; }
 
     /* Remember that we sent a digest */
-    ctx->shutdown_info->has_send_end[my_pos] = 2;
+    shutdown_info->has_send_end[my_pos] = 2;
 
     /* And we now wait for one less shutdown */
-    ctx->shutdown_info->digests_remaining -= 1;
+    shutdown_info->digests_remaining -= 1;
 
     /* If there are no more digest messages pending then update the state */
-    if(0 ==ctx->shutdown_info->digests_remaining) {
-    fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_digest: waiting ends\n");
-
+    if(0 == shutdown_info->digests_remaining) {
         /* We now wait for end messages */
-        ctx->shutdown_info->state = CHAT_SHUTDOWNSTATE_AWAITING_ENDS;
+        shutdown_info->state = CHAT_SHUTDOWNSTATE_AWAITING_ENDS;
     }
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_digest: end\n");
     return 0;
+
+error:
+	return 1;
 }
 
-int chat_shutdown_handle_digest_message(OtrlChatContext *ctx, ChatMessage *msg, ChatMessage **msgToSend)
+int chat_shutdown_handle_digest_message(ChatContext ctx, ChatMessage *msg, ChatMessage **msgToSend)
 {
+	ChatShutdownInfo shutdown_info;
     ChatMessagePayloadShutdownDigest *digest_msg = msg->payload;
-    ChatParticipant *sender;
+    ChatParticipant sender;
+    int consensus;
     unsigned int their_pos;
-
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_digest_message: start\n");
 
+    shutdown_info = chat_context_get_shutdown_info(ctx);
+    if(!shutdown_info) { goto error; }
+
     /* Get the sender from the participants list. If not found return error */
-    sender = chat_participant_find(ctx, msg->senderName, &their_pos);
-    if(!sender) {
-        return 1;
-    }
+    sender = chat_participant_find(chat_context_get_participants_list(ctx), msg->senderName, &their_pos);
+    if(!sender) { goto error; }
 
-    fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_digest_message: after sender find\n");
     /* Verify that we expected this message */
-    if(ctx->shutdown_info->state != CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS) {
-        return 1;
-    }
+    if(CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS != shutdown_info->state) { goto error; }
 
-    fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_digest_message: after state check\n");
     /* If we have already received the shutdown message from this user return
        success */
-    if(2 <= ctx->shutdown_info->has_send_end[their_pos]) {
-        return 1;
-    }
-
-    fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_digest_message: after has_send check\n");
+    if(2 <= shutdown_info->has_send_end[their_pos]) { goto error; }
 
     /* Remember that this user has sent us a digest */
-    ctx->shutdown_info->has_send_end[their_pos] = 2; // True
+    shutdown_info->has_send_end[their_pos] = 2; // True
 
     /* We need to wait for one less digest message now */
-    ctx->shutdown_info->digests_remaining -= 1;
+    shutdown_info->digests_remaining -= 1;
 
     /* Determine consensus with this user */
-    sender->consensus = memcmp(digest_msg->digest, ctx->shutdown_info->consensus_hash, CONSENSUS_HASH_LEN) ? 0 : 1;
+    consensus = memcmp(digest_msg->digest, shutdown_info->consensus_hash, CONSENSUS_HASH_LEN) ? 0 : 1;
+    chat_participant_set_consensus(sender, consensus);
 
     fprintf(stderr, "libotr-mpOTR: local digest: ");
     for(int i = 0; i < CONSENSUS_HASH_LEN; i++)
-        fprintf(stderr, "%0X", ctx->shutdown_info->consensus_hash[i]);
+        fprintf(stderr, "%0X", shutdown_info->consensus_hash[i]);
     fprintf(stderr, "\nlibotr-mpOTR: received digest: ");
     for(int i = 0; i < CONSENSUS_HASH_LEN; i++)
         fprintf(stderr, "%0X", digest_msg->digest[i]);
@@ -327,123 +331,126 @@ int chat_shutdown_handle_digest_message(OtrlChatContext *ctx, ChatMessage *msg, 
 
 
     /* If there are no more pending digest messages update the state */
-    if(0 == ctx->shutdown_info->digests_remaining) {
-        fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_digest_message: waiting ends\n");
+    if(0 == shutdown_info->digests_remaining) {
         /* We now wait for end messages */
-        ctx->shutdown_info->state = CHAT_SHUTDOWNSTATE_AWAITING_ENDS;
+        shutdown_info->state = CHAT_SHUTDOWNSTATE_AWAITING_ENDS;
     }
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_digest_message: end\n");
     return 0;
 
+error:
+	return 1;
 }
 
-int chat_shutdown_send_end(OtrlChatContext *ctx, ChatMessage **msgToSend)
+int chat_shutdown_send_end(ChatContext ctx, ChatMessage **msgToSend)
 {
-    ChatParticipant *me = NULL;
+	ChatShutdownInfo shutdown_info;
+    ChatParticipant me;
     unsigned int my_pos;
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_end: start\n");
 
+    shutdown_info = chat_context_get_shutdown_info(ctx);
+    if(!shutdown_info) { goto error; }
+
     /* Find us in the participant list */
-    me = chat_participant_find(ctx, ctx->accountname, &my_pos);
-    if(!me) {
-        return 1;
-    }
+    me = chat_participant_find(chat_context_get_participants_list(ctx), chat_context_get_accountname(ctx), &my_pos);
+    if(!me) { goto error; }
 
     /* If we already sent an end message return error */
-    if(3 <= ctx->shutdown_info->has_send_end[my_pos]) {
-        return 0;
-    }
+    if(3 <= shutdown_info->has_send_end[my_pos]) { goto error; }
 
     /* Create an end message to send */
-    *msgToSend = chat_message_shutdown_end_create(ctx);
-    if(!*msgToSend) {
-        return 1;
-    }
+    *msgToSend = chat_message_shutdown_end_new(ctx);
+    if(!*msgToSend) { goto error; }
 
     /* Remember that we sent an end message */
-    ctx->shutdown_info->has_send_end[my_pos] = 3;
+    shutdown_info->has_send_end[my_pos] = 3;
 
     /* Decrement the pending end messages */
-    ctx->shutdown_info->ends_remaining -= 1;
+    shutdown_info->ends_remaining -= 1;
 
     /* If there are no more pending messages then update the state */
-    if(0 == ctx->shutdown_info->ends_remaining){
+    if(0 == shutdown_info->ends_remaining){
         /* We have finished the shutdown subprotocol */
-        ctx->shutdown_info->state = CHAT_SHUTDOWNSTATE_FINISHED;
+    	shutdown_info->state = CHAT_SHUTDOWNSTATE_FINISHED;
     }
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_end: start\n");
     return 0;
+
+error:
+	return 1;
 }
 
-int chat_shutdown_handle_end_message(OtrlChatContext *ctx, ChatMessage *msg, ChatMessage **msgToSend)
+int chat_shutdown_handle_end_message(ChatContext ctx, ChatMessage *msg, ChatMessage **msgToSend)
 {
-    ChatParticipant *sender;
+	ChatShutdownInfo shutdown_info;
+    ChatParticipant sender;
     unsigned int their_pos;
-
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_end_message: start\n");
 
+    shutdown_info = chat_context_get_shutdown_info(ctx);
+    if(!shutdown_info) { goto error; }
+
     /* Get the sender from the participants list. If not found return error */
-    sender = chat_participant_find(ctx, msg->senderName, &their_pos);
-    if(!sender) {
-        return 1;
-    }
+    sender = chat_participant_find(chat_context_get_participants_list(ctx), msg->senderName, &their_pos);
+    if(!sender) { goto error; }
 
     /* Verify that we expected this message */
-    if(ctx->shutdown_info->state != CHAT_SHUTDOWNSTATE_AWAITING_ENDS) {
-        return 1;
-    }
+    if(CHAT_SHUTDOWNSTATE_AWAITING_ENDS != shutdown_info->state) { goto error; }
 
     /* If we have already received the shutdown message from this user return
        success */
-    if(3 <= ctx->shutdown_info->has_send_end[their_pos]) {
-        return 1;
-    }
+    if(3 <= shutdown_info->has_send_end[their_pos]) { goto error; }
 
     /* Hash the participants messages and store them in sender */
-    if(chat_participant_get_messages_hash(sender, sender->messages_hash)) {
-        return 1;
-    }
+    //TODO Dimtiris: here getter plays the role of a setter, maybe refactor this and free in error handling
+    if(chat_participant_calculate_messages_hash(sender, chat_participant_get_messages_hash(sender))) { goto error;  }
+
     /* Remember that this user has sent us a digest */
-    ctx->shutdown_info->has_send_end[their_pos] = 3; // True
-    ctx->shutdown_info->ends_remaining -= 1;
+    shutdown_info->has_send_end[their_pos] = 3; // True
+    shutdown_info->ends_remaining -= 1;
 
     /* If there are no more pending messages update the state */
-    if(0 == ctx->shutdown_info->ends_remaining){
+    if(0 == shutdown_info->ends_remaining){
         /* We have finished the shutdown protocol */
-        ctx->shutdown_info->state = CHAT_SHUTDOWNSTATE_FINISHED;
+    	shutdown_info->state = CHAT_SHUTDOWNSTATE_FINISHED;
     }
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_end_message: start\n");
     return 0;
+
+error:
+	return 1;
 }
 
-int chat_shutdown_release_secrets(OtrlChatContext *ctx, ChatMessage **msgToSend)
+int chat_shutdown_release_secrets(ChatContext ctx, ChatMessage **msgToSend)
 {
-    unsigned char *key_bytes;
+    unsigned char *key_bytes = NULL;
     size_t keylen;
     int error = 0;
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_release_secrets: start\n");
 
     /* Serialize the private part of the signing key */
-    error = chat_sign_serialize_privkey(ctx->signing_key, &key_bytes, &keylen);
-    if(error) {
-        return 1;
-    }
+    error = chat_sign_serialize_privkey(chat_context_get_signing_key(ctx), &key_bytes, &keylen);
+    if(error) { goto error; }
 
     /* Create a key release message */
-	*msgToSend = chat_message_shutdown_keyrelease_create(ctx, key_bytes, keylen);
-	if(!*msgToSend) {
-		return 1;
-	}
+	*msgToSend = chat_message_shutdown_keyrelease_new(ctx, key_bytes, keylen);
+	if(!*msgToSend) { goto error_with_key_bytes; }
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_release_secrets: end\n");
 
 	return 0;
+
+error_with_key_bytes:
+	free(key_bytes);
+error:
+	return 1;
 }
 
 int chat_shutdown_is_my_message(const ChatMessage *msg)
@@ -460,7 +467,7 @@ int chat_shutdown_is_my_message(const ChatMessage *msg)
     }
 }
 
-int chat_shutdown_handle_message(OtrlChatContext *ctx, ChatMessage *msg,
+int chat_shutdown_handle_message(ChatContext ctx, ChatMessage *msg,
                                  ChatMessage **msgToSend)
 {
 	ChatMessageType msgType = msg->msgType;

@@ -20,7 +20,15 @@
 #ifndef CHAT_PROTOCOL_H_
 #define CHAT_PROTOCOL_H_
 
-int chat_protocol_reset(OtrlChatContext *ctx);
+int otrl_chat_protocol_fingerprints_read_file(OtrlUserState us, FILE *fingerfile);
+
+int otrl_chat_protocol_fingerprints_write_file(OtrlUserState us, FILE *fingerfile);
+
+void otrl_chat_protocol_fingerprint_verify(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint fnprnt);
+
+void otrl_chat_protocol_fingerprint_forget(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint fnprnt);
+
+int chat_protocol_reset(ChatContext ctx);
 
  int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
  	void *opdata, const char *accountname, const char *protocol,

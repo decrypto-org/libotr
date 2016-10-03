@@ -19,6 +19,7 @@
 
 #include "chat_sign.h"
 #include "chat_serial.h"
+#include "debug.h"
 
 #include <gcrypt.h>
 
@@ -41,16 +42,16 @@ SignKey * chat_sign_genkey()
 
     /* Create the sexp using the parameter string */
     err = gcry_sexp_new(&params, parmstr, strlen(parmstr), 0);
-    if(err) { goto error; }
+    if(err) { DEBUG_MSG("error"); goto error; }
 
     /* Generate the keypair */
     err = gcry_pk_genkey(&key, params);
     gcry_sexp_release(params);
-    if(err) { goto error; }
+    if(err) { DEBUG_MSG("error"); goto error; }
 
     /* Allocate a SignKey struct */
     sign_key = malloc(sizeof *sign_key);
-    if(!sign_key) { goto error_with_key; }
+    if(!sign_key) { DEBUG_MSG("error"); goto error_with_key; }
 
     /* And store the generated key in sign_key */
     sign_key->priv_key = gcry_sexp_find_token(key, "private-key", 0);
@@ -72,7 +73,7 @@ SignKey* chat_sign_copy_pub(SignKey* key)
 
     /* Allocate a new SignKey */
     tmp = malloc(sizeof *tmp);
-    if(!tmp) { goto error; }
+    if(!tmp) { DEBUG_MSG("error"); goto error; }
 
     /* Copy the public part */
     tmp->pub_key = gcry_sexp_find_token(key->pub_key, "public-key", 0);
@@ -95,9 +96,7 @@ int chat_sign_get_data_hash(const unsigned char *data, size_t datalen, unsigned 
 
     /* Open a digest */
     err = gcry_md_open(&md, GCRY_MD_SHA512, 0);
-    if(err){
-        return 1;
-    }
+    if(err){ DEBUG_MSG("error"); goto error; }
 
     /* Write the data in it */
     gcry_md_write(md, data, datalen);
@@ -109,6 +108,8 @@ int chat_sign_get_data_hash(const unsigned char *data, size_t datalen, unsigned 
 
     fprintf(stderr,"libotr-mpOTR: chat_sign_get_data_hash: end\n");
     return 0;
+error:
+	return 1;
 }
 
 Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datalen)
@@ -126,34 +127,28 @@ Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datal
 
     /* Allocate a Signature struct */
     signature = malloc(sizeof *signature);
-    if(!signature){
-        return NULL;
-    }
+    if(!signature){ DEBUG_MSG("error"); goto error; }
+
+    signature->r = NULL;
+    signature->rlen = 0;
+    signature->s = NULL;
+    signature->slen = 0;
 
     /* Hash the data to be signed, Gcrypt requires the signed data to be
      * small, so we hash them and then sign the hash */
-    if(chat_sign_get_data_hash(data, datalen, hash)) {
-        free(signature);
-        return NULL;
-    }
+    if(chat_sign_get_data_hash(data, datalen, hash)) { DEBUG_MSG("error"); goto error_with_signature; }
     /* Store the hash in an mpi */
     gcry_mpi_scan(&datampi, GCRYMPI_FMT_USG, hash, SIGN_HASH_SIZE, NULL);
 
     /* Build an s-expression requesting to sign the hash stored in datampi */
     err = gcry_sexp_build(&datas, NULL, datastr, datampi);
     gcry_mpi_release(datampi);
-    if(err) {
-        free(signature);
-        return NULL;
-    }
+    if(err) {DEBUG_MSG("error"); goto error_with_signature; }
 
     /* Sign the hash of the data */
     err = gcry_pk_sign(&sigs, datas, key->priv_key);
     gcry_sexp_release(datas);
-    if(err) {
-        free(signature);
-        return NULL;
-    }
+    if(err) { DEBUG_MSG("error"); goto error_with_signature; }
 
 
     /* Get the sexpression containing the r and s sexpressions */
@@ -168,21 +163,11 @@ Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datal
 
     /* Get the r value */
     token = gcry_sexp_nth_data(r, 1, &tokenlen);
-    if(!token) {
-        gcry_sexp_release(r);
-        gcry_sexp_release(s);
-        free(signature);
-        return NULL;
-    }
+    if(!token) { DEBUG_MSG("error"); goto error_with_r; }
 
     /* Allocate memory for the r value in the signature struct */
     signature->r = malloc(tokenlen * sizeof *(signature->r));
-    if(!signature->r){
-        gcry_sexp_release(r);
-        gcry_sexp_release(s);
-        free(signature);
-        return NULL;
-    }
+    if(!signature->r) { DEBUG_MSG("error"); goto error_with_r; }
 
     /* And copy the r value in the signature */
     memcpy(signature->r, token, tokenlen);
@@ -192,27 +177,26 @@ Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datal
 
     /* Finaly we do the same for the s value */
     token = gcry_sexp_nth_data(s, 1, &tokenlen);
-    if(!token) {
-        gcry_sexp_release(s);
-        free(signature->r);
-        free(signature);
-        return NULL;
-    }
+    if(!token) { DEBUG_MSG("error"); goto error_with_s; }
 
 
     signature->s = malloc(tokenlen * sizeof *(signature->s));
-    if(!signature->s) {
-        gcry_sexp_release(s);
-        free(signature->r);
-        free(signature);
-        return NULL;
-    }
+    if(!signature->s) { DEBUG_MSG("error"); goto error_with_s; }
     memcpy(signature->s, token, tokenlen);
     signature->slen = tokenlen;
     gcry_sexp_release(s);
 
     fprintf(stderr,"\nlibotr-mpOTR: chat_sign_sign: end\n");
     return signature;
+
+error_with_r:
+	gcry_sexp_release(r);
+error_with_s:
+	gcry_sexp_release(s);
+error_with_signature:
+	chat_sign_signature_free(signature);
+error:
+	return NULL;
 }
 
 int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Signature *signature)
@@ -230,7 +214,7 @@ int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Si
     /* Check if there are data to be verified */
     if (datalen) {
         /* If there are, hash the data */
-        if(chat_sign_get_data_hash(data, datalen, hash)) { goto error; }
+        if(chat_sign_get_data_hash(data, datalen, hash)) { DEBUG_MSG("error"); goto error; }
 
         /* And store the hash in an mpi to build an s-expression later */
     	gcry_mpi_scan(&datampi, GCRYMPI_FMT_USG, hash, SIGN_HASH_SIZE, NULL);
@@ -273,15 +257,12 @@ int chat_sign_serialize_pubkey(SignKey *key, unsigned char **serialized, size_t 
 
     /* An auxiliary variable to hold the actual q data */
     temp = (unsigned char*) gcry_sexp_nth_data(pubvals, 1, serlen);
-    if(!temp) {
-    	fprintf(stderr,"chat_sign_serialize_pubkey: temp not found\n");
-    	goto error;
-    }
+    if(!temp) { DEBUG_MSG("error"); goto error; }
 
 
     /* Allocate memory for the serialized pub key */
     *serialized = malloc(*serlen * sizeof **serialized);
-    if(!*serialized) { goto error; }
+    if(!*serialized) { DEBUG_MSG("error"); goto error; }
 
     /* And copy the q data in the buffer */
     memcpy(*serialized, temp, *serlen);
@@ -308,11 +289,11 @@ int chat_sign_serialize_privkey(SignKey *key, unsigned char **serialized, size_t
     privvals = gcry_sexp_find_token(temps, "d", 0);
 
     temp = (unsigned char*) gcry_sexp_nth_data(privvals, 1, serlen);
-    if(!temp) { goto error; }
+    if(!temp) { DEBUG_MSG("error"); goto error; }
 
 
     *serialized = malloc(*serlen * sizeof **serialized);
-    if(!*serialized) { goto error; }
+    if(!*serialized) { DEBUG_MSG("error"); goto error; }
 
     memcpy(*serialized, temp, *serlen);
 
@@ -335,15 +316,16 @@ SignKey * chat_sign_parse_pubkey(const unsigned char *serialized, size_t serlen)
 
     /* Allocate a SignKey struct */
 	key = malloc(sizeof *key);
-	if(!key) {
-		return NULL;
-	}
+	if(!key) { DEBUG_MSG("error"); goto error; }
 
     /* Build an s-expression that contains the read priv_key */
 	gcry_sexp_build(&key->pub_key, NULL, datastr, serlen, serialized);
 	key->priv_key = NULL;
 
 	return key;
+
+error:
+	return NULL;
 }
 
 void chat_sign_destroy_key(SignKey *key)
@@ -360,16 +342,14 @@ void chat_sign_destroy_key(SignKey *key)
     fprintf(stderr, "libotr-mpOTR: chat_sign_destroy_key: key destroyed\n");
 }
 
-void chat_sign_destroy_signature(Signature *sign)
+void chat_sign_signature_free(Signature *sign)
 {
-    fprintf(stderr, "libotr-mpOTR: chat_sign_destroy_signature: start\n");
-
-	free(sign->r);
-	free(sign->s);
+	if(sign) {
+		free(sign->r);
+		free(sign->s);
+	}
 
 	free(sign);
-
-    fprintf(stderr, "libotr-mpOTR: chat_sign_destroy_signature: end\n");
 }
 
 
@@ -397,9 +377,7 @@ int chat_sign_signature_serialize(Signature *sig, unsigned char **buf, size_t *l
 
     /* And allocate a buffer of the apropriate length */
 	*buf = malloc(temp * sizeof **buf);
-	if(!*buf) {
-		return 1;
-	}
+	if(!*buf) { DEBUG_MSG("error"); goto error; }
 
     /* Serialize the rlen variable and place the output in buffer */
     chat_serial_int_to_string(sig->rlen, *buf + base);
@@ -418,6 +396,9 @@ int chat_sign_signature_serialize(Signature *sig, unsigned char **buf, size_t *l
 
     *len = temp;
 	return 0;
+
+error:
+	return 1;
 }
 
 int chat_sign_signature_parse(const unsigned char *buf, Signature **sig)
@@ -426,26 +407,19 @@ int chat_sign_signature_parse(const unsigned char *buf, Signature **sig)
 
     fprintf(stderr, "libotr-mpOTR: chat_sign_signature_parse: start\n");
 
-	if(!buf) {
-		return 1;
-	}
+	if(!buf) { DEBUG_MSG("error"); goto error;}
 
 
     /* Allocate a Signature struct */
 	*sig = malloc(sizeof **sig);
-	if(!*sig) {
-		return 1;
-	}
+	if(!*sig) { DEBUG_MSG("error"); goto error;}
 
     /* Parse the rlen */
     (*sig)->rlen = chat_serial_string_to_int(buf + base);
 
     /*Allocate memory for rlen*/
 	(*sig)->r = malloc((*sig)->rlen * sizeof *((*sig)->r));
-	if(!(*sig)->r){
-		free(*sig);
-		return 1;
-	}
+	if(!(*sig)->r) { DEBUG_MSG("error"); goto error_with_sig; }
 	base += 4*sizeof(char);
 
     /* And copy the r data in (*sig)->r */
@@ -456,11 +430,7 @@ int chat_sign_signature_parse(const unsigned char *buf, Signature **sig)
     /* Do the same for s */
     (*sig)->slen = chat_serial_string_to_int(buf + base);
 	(*sig)->s = malloc((*sig)->slen * sizeof *((*sig)->s));
-	if(!(*sig)->s){
-		free((*sig)->r);
-		free(*sig);
-		return 1;
-	}
+	if(!(*sig)->s) { DEBUG_MSG("error");  goto error_with_r; }
 	base += 4*sizeof(char);
 
 	memcpy((*sig)->s, buf + base, (*sig)->slen * sizeof(char));
@@ -468,4 +438,11 @@ int chat_sign_signature_parse(const unsigned char *buf, Signature **sig)
 
     fprintf(stderr, "libotr-mpOTR: chat_sign_signature_parse: end\n");
 	return 0;
+
+error_with_r:
+	free((*sig)->r);
+error_with_sig:
+	free(*sig);
+error:
+	return 1;
 }

@@ -29,6 +29,7 @@
 #include "privkey.h"
 #include "chat_idkey.h"
 #include "message.h"
+#include "list.h"
 
 static gcry_error_t chat_privkeydh_sexp_write(FILE *privf, gcry_sexp_t sexp)
 {
@@ -63,7 +64,7 @@ gcry_error_t otrl_chat_privkeydh_read_FILEp(OtrlUserState us, FILE *privf)
                           //Its not plural
     gcry_sexp_t allkeys;
     int i;
-    OtrlListNode *node;
+    OtrlListNode node;
     ChatIdKey *key;
 
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_read_FILEp: start\n");
@@ -203,58 +204,61 @@ error:
 
 gcry_error_t chat_privkeydh_generate_finish(OtrlUserState us, ChatIdKey *newkey, FILE *privf)
 {
-    OtrlListNode *cur, *next;
-    OtrlListNode *node = NULL;
+	OtrlListIterator iter;
+    OtrlListNode cur, node;
     ChatIdKey *k;
     gcry_error_t err = gcry_error(GPG_ERR_NO_ERROR);
 
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: start\n");
 
-    if(newkey && us && privf) {
-        /* Print the starting parenthesis of the s expression along with its
-        name */
-        fprintf(privf, "(chat_privkeys\n");
+    if(!newkey || !us || !privf) { goto error; }
 
-        /* We iterate over every key in the privkey list */
-        cur = us->chat_privkey_list->head;
-        while(cur != NULL) {
-            next = cur->next;
-            k = cur->payload;
+	/* Print the starting parenthesis of the s expression along with its
+	name */
+	fprintf(privf, "(chat_privkeys\n");
 
-            /* If the current element is for the same account as the newley
-             created key then pass on to the next list element. This means
-             that if there is an older key in the list for the same account
-             we will forget about it, and write only the new key */
-            if(!strcmp(k->accountname, newkey->accountname) &&
-               !strcmp(k->protocol, newkey->protocol)) {
+	/* We iterate over every key in the privkey list */
+	iter = otrl_list_iterator_new(us->chat_privkey_list);
+	if(!iter) { goto error; }
+	while(otrl_list_iterator_has_next(iter)) {
+		cur = otrl_list_iterator_next(iter);
+		k = otrl_list_node_get_payload(cur);
 
-                /* Remove the old key from the list */
-                otrl_list_remove_and_free(us->chat_privkey_list, cur);
-            }
-            else {
-                /* If this is not an old key write it in the key file */
-                chat_privkeydh_account_write(privf, k);
-            }
+		/* If the current element is for the same account as the newley
+		 created key then pass on to the next list element. This means
+		 that if there is an older key in the list for the same account
+		 we will forget about it, and write only the new key */
+		if(!strcmp(k->accountname, newkey->accountname) &&
+		   !strcmp(k->protocol, newkey->protocol)) {
 
-            cur = next;
-        }
+			/* Remove the old key from the list */
+			otrl_list_remove_and_free(us->chat_privkey_list, cur);
+		}
+		else {
+			// TODO Dimitris error handling
+			/* If this is not an old key write it in the key file */
+			chat_privkeydh_account_write(privf, k);
+		}
+	}
 
-        /* Write the new key in the file */
-        chat_privkeydh_account_write(privf,newkey);
-        fprintf(privf, ")\n");
+	/* Write the new key in the file */
+	// TODO Dimitris error handling
+	chat_privkeydh_account_write(privf,newkey);
+	fprintf(privf, ")\n");
 
-        //TODO maybe append instead of inserting to be more efficient? This will break the find call on the list though
-        /* If the append is not successfull then destroy the key and return error */
-        node = otrl_list_insert(us->chat_privkey_list, newkey);
-        if(!node){ goto append_failed; }
+	//TODO maybe append instead of inserting to be more efficient? This will break the find call on the list though
+	/* If the append is not successfull then destroy the key and return error */
+	node = otrl_list_insert(us->chat_privkey_list, newkey);
+	if(!node){ goto error_with_iter; }
 
+	otrl_list_iterator_free(iter);
 
-    }
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: end\n");
     return err;
 
-append_failed:
-    chat_id_key_manager.destroy_key(newkey);
+error_with_iter:
+    otrl_list_iterator_free(iter);
+error:
     return 1;
 }
 
@@ -313,20 +317,26 @@ ChatIdKey * chat_privkeydh_find_or_generate(OtrlUserState us, const OtrlMessageA
 
 int chat_privkeydh_key_exists(OtrlUserState us, const char *accountname, const char *protocol)
 {
-	OtrlListNode *cur;
+	OtrlListIterator iter;
+	OtrlListNode cur;
 	ChatIdKey *k;
+	int res = 0;
 
     /* Iterate over every key in the privkey list */
-	for(cur = us->chat_privkey_list->head; cur != NULL; cur = cur->next) {
-		k = cur->payload;
+	iter = otrl_list_iterator_new(us->chat_privkey_list);
+	while(!res && otrl_list_iterator_has_next(iter)) {
+		cur = otrl_list_iterator_next(iter);
+		k = otrl_list_node_get_payload(cur);
 
         /* Check if we are on the requested key, and if yes return TRUE */
 		if(strcmp(k->accountname, accountname) == 0 && strcmp(k->protocol, protocol) == 0 ) {
-			return 1;
+			res = 1;
 		}
 	}
 
-	return 0;
+	otrl_list_iterator_free(iter);
+
+	return res;
 }
 
 //TODO this function should probably accept a SignKey parameter isntead of

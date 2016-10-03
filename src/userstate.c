@@ -44,13 +44,13 @@ OtrlUserState otrl_userstate_create(void)
     us->context_root = NULL;
 
     /* DIKOMAS */
-    us->chat_context_list = otrl_list_create(&chat_context_listOps, sizeof(OtrlChatContext));
+    us->chat_context_list = otrl_list_new(&chat_context_listOps, chat_context_size());
     if(!us->chat_context_list) { goto error; }
 
-    us->chat_privkey_list = otrl_list_create(&chat_idkey_listOps, sizeof(ChatIdKey));
+    us->chat_privkey_list = otrl_list_new(&chat_idkey_listOps, sizeof(ChatIdKey));
     if(!us->chat_privkey_list) { goto error_with_chat_context_list; }
 
-    us->chat_fingerprints = otrl_list_create(&chat_fingerprint_listOps, sizeof(OtrlChatFingerprint));
+    us->chat_fingerprints = otrl_list_new(&chat_fingerprint_listOps, chat_fingerprint_size());
     if(!us->chat_fingerprints) { goto error_with_chat_privkey_list; }
     /* ******* */
 

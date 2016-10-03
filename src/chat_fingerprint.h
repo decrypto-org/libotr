@@ -20,29 +20,30 @@
 #ifndef CHAT_FINGERPRINT_H_
 #define CHAT_FINGERPRINT_H_
 
-#include "stdio.h"
-#include "userstate.h"
-#include "message.h"
+#include <stdio.h>
+
+#include "list.h"
 
 #define CHAT_FINGERPRINT_BUFSIZE 1024
 
+typedef struct OtrlChatFingerprintStruct * OtrlChatFingerprint;
+
 char *otrl_chat_fingerprint_bytes_to_hex(const unsigned char *fingerprint);
-
-OtrlChatFingerprint *chat_fingerprint_find(OtrlUserState us, char *accountname , char *protocol, char *username, unsigned char *fingerprint);
-
-OtrlChatFingerprint *chat_fingerprint_new(char *accountname, char *protocol, char *username, unsigned char *fingerprint, unsigned char isTrusted);
-
-void chat_fingerprint_free(OtrlChatFingerprint *fingerprint);
-
-int chat_fingerprint_add(OtrlUserState us, OtrlChatFingerprint *finger);
-
-int otrl_chat_fingerprint_verify(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint *finger);
-
-int otrl_chat_fingerprint_forget(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint *finger);
-
-int otrl_chat_fingerprint_read_FILEp(OtrlUserState us, FILE *fingerfile);
-
-int otrl_chat_fingerprint_write_FILEp(OtrlUserState us, FILE *fingerFile);
+size_t chat_fingerprint_size();
+OtrlChatFingerprint chat_fingerprint_new(char *accountname, char *protocol, char *username, unsigned char *bytes, int isTrusted);
+void chat_fingerprint_free(OtrlChatFingerprint fnprnt);
+char * otrl_chat_fingerprint_get_accountname(OtrlChatFingerprint fnprnt);
+char * otrl_chat_fingerprint_get_protocol(OtrlChatFingerprint fnprnt);
+char * otrl_chat_fingerprint_get_username(OtrlChatFingerprint fnprnt);
+unsigned char * otrl_chat_fingerprint_get_bytes(OtrlChatFingerprint fnprnt);
+int otrl_chat_fingerprint_is_trusted(OtrlChatFingerprint fnprnt);
+OtrlChatFingerprint chat_fingerprint_find(OtrlList fingerlist, char *accountname , char *protocol, char *username, unsigned char *bytes);
+int chat_fingerprint_add(OtrlList fingerlist, OtrlChatFingerprint fnprnt);
+int chat_fingerprint_remove(OtrlList fingerlist, OtrlChatFingerprint fnprnt);
+void chat_fingerprint_verify(OtrlChatFingerprint fnprnt);
+void chat_fingerprint_forget(OtrlList fingerlist, OtrlChatFingerprint fnprnt);
+int chat_fingerprint_read_FILEp(OtrlList fingerlist, FILE *fingerfile);
+int chat_fingerprint_write_FILEp(OtrlList fingerlist, FILE *fingerFile);
 
 struct OtrlListOpsStruct chat_fingerprint_listOps;
 

@@ -22,17 +22,22 @@
 
 #include "chat_types.h"
 
-/**
- Returns a pointer to a newly allocated and initialized
- OtrlChatInfo struct.
+typedef enum {
+	OTRL_CHAT_PRIVACY_LEVEL_NONE,
+	OTRL_CHAT_PRIVACY_LEVEL_UNVERIFIED,
+	OTRL_CHAT_PRIVACY_LEVEL_PRIVATE,
+	OTRL_CHAT_PRIVACY_LEVEL_FINISHED,
+	OTRL_CHAT_PRIVACY_LEVEL_UNKNOWN
+} OtrlChatPrivacyLevel;
 
- @param ctx The context
- @return A pointer to the new struct.
-*/
-OtrlChatInfo *chat_info_create(const OtrlChatContext *ctx);
+typedef struct OtrlChatInfoStruct * OtrlChatInfo;
 
-OtrlChatInfo *chat_info_create_with_level(const OtrlChatContext *ctx);
-
-void chat_info_free(OtrlChatInfo *info);
+OtrlChatInfo chat_info_new(const ChatContext ctx);
+OtrlChatInfo chat_info_new_with_level(const ChatContext ctx);
+void chat_info_free(OtrlChatInfo info);
+char * otrl_chat_info_get_accountname(OtrlChatInfo info);
+char * otrl_chat_info_get_protocol(OtrlChatInfo info);
+otrl_chat_token_t otrl_chat_info_get_chat_token(OtrlChatInfo info);
+OtrlChatPrivacyLevel otrl_chat_info_get_privacy_level(OtrlChatInfo info);
 
 #endif /* CHAT_INFO_H */

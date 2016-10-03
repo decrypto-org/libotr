@@ -22,30 +22,24 @@
 
 #define MESSAGES_HASH_LEN 64
 
-/**
- Compare two participants
+#include "chat_dake.h"
+#include "chat_fingerprint.h"
+#include "chat_sign.h"
+#include "list.h"
 
- This function compares two participants a and b which are passed as
- payload pointers. It returns a < b.
+typedef enum {
+	SHUTDOWN_WAITING_END,
+	SHUTDOWN_FINISHED
+} ChatParticipantShutdownState;
 
- @param a the first participant to compare
- @param b the second participant to compare
+typedef struct {
+	ChatParticipantShutdownState state;
+} ChatParticipantShutdown;
 
- @return 0 on equality, 1 if a < b and -1 if a >= b
- */
-int chat_participant_compare(PayloadPtr a, PayloadPtr b);
+typedef struct ChatParticipantStruct * ChatParticipant;
 
-/**
-  Free a pariticpant
-
-  This function frees the participant a, and any data
-  within the participant
-
-  @param participant The participant to be free'd
-
-  @return void
- */
-void chat_participant_free(ChatParticipant *participant);
+/* TODO docstring */
+size_t chat_participant_size();
 
 /**
   Create a new participant
@@ -58,7 +52,55 @@ void chat_participant_free(ChatParticipant *participant);
 
   @return A pointer to the newly created participant
  */
-ChatParticipant* chat_participant_create(const char *username, gcry_mpi_t pub_key);
+ChatParticipant chat_participant_new(const char *username, SignKey *pub_key);
+
+/* TODO docstring */
+char * chat_participant_get_username(ChatParticipant participant);
+
+/* TODO docstring */
+SignKey * chat_participant_get_sign_key(ChatParticipant participant);
+
+/* TODO docstring */
+void chat_participant_set_sign_key(ChatParticipant participant, SignKey *sign_key);
+
+/* TODO docstring */
+OtrlChatFingerprint chat_participant_get_fingerprint(ChatParticipant participant);
+
+/* TODO docstring */
+void chat_participant_set_fingerprint(ChatParticipant participant, OtrlChatFingerprint fingerprint);
+
+/* TODO docstring */
+OtrlList chat_participant_get_fingerprints(ChatParticipant participant);
+
+/* TODO docstring */
+DAKE * chat_participant_get_dake(ChatParticipant participant);
+
+/* TODO docstring */
+void chat_participant_set_dake(ChatParticipant participant, DAKE *dake);
+
+/* TODO docstring */
+OtrlList chat_participant_get_messages(ChatParticipant participant);
+
+/* TODO docstring */
+unsigned char * chat_participant_get_messages_hash(ChatParticipant participant);
+
+/* TODO docstring */
+int chat_participant_get_consensus(ChatParticipant participant);
+
+/* TODO docstring */
+void chat_participant_set_consensus(ChatParticipant participant, int consesnus);
+
+/**
+  Free a pariticpant
+
+  This function frees the participant a, and any data
+  within the participant
+
+  @param participant The participant to be free'd
+
+  @return void
+ */
+void chat_participant_free(ChatParticipant participant);
 
 /**
   Find a participant in the ctx context's participants list
@@ -66,38 +108,38 @@ ChatParticipant* chat_participant_create(const char *username, gcry_mpi_t pub_ke
   This function searches the participants list in ctx to find the user with the specifed
   user name
 
-  @param ctx The context where the user will be searched
-  @param username The user name of the user to be searced
-  @param position If the user is found the position contains his position in the list
+  @param participants_list  The list where the user will be searched
+  @param username 			The user name of the user to be searced
+  @param position 			If the user is found the position contains his position in the list
 
   @return If the user is found a pointer to it will be returned. Otherwise NULL
  */
-ChatParticipant* chat_participant_find(const OtrlChatContext *ctx, const char *username, unsigned int *position);
+ChatParticipant chat_participant_find(OtrlList participants_list, const char *username, unsigned int *position);
 
 /**
   Add a user to the ctx's participants list
 
   This function will add a new user defined in participant in the ctx's participants list
 
-  @param ctx The context where we will add the user
-  @param participan The user to be added
+  @param participants_list 	The list where we will add the user
+  @param participan 		The user to be added
 
   @return 1 if the user was sucessfully added. 0 otherwise.
  */
-int chat_participant_add(OtrlChatContext ctx,const ChatParticipant *participant);
+int chat_participant_add(OtrlList participants_list, const ChatParticipant participant);
 
 /**
  Add a group of usernames in a list
 
  This function takes a participant list and adds usernames_size usernames contained in usernames
 
- @param participants The list where the participants will be added
+ @param participants_list The list where the participants will be added
  @param usernames An array of null termintated user names
  @param usernames_size the lenght of the usernames array
 
  @return 0 if there was no error. 1 otherwise
  */
-int chat_participant_list_from_usernames(OtrlList *participants, char **usernames, unsigned int usernames_size);
+int chat_participant_list_from_usernames(OtrlList participants_list, char **usernames, unsigned int usernames_size);
 
 
 /**
@@ -109,10 +151,10 @@ int chat_participant_list_from_usernames(OtrlList *participants, char **username
 
  @return 0 if found. -1 otherwise
  */
-int chat_participant_get_position(const OtrlList *participants, const char *accountname, unsigned int *position);
+int chat_participant_get_position(OtrlList participants_list, const char *accountname, unsigned int *position);
 
 //TODO Dimitris: write docstring
-int chat_participant_get_me_next_position(const char *accountname, const OtrlList *participants, unsigned int *me_next);
+int chat_participant_get_me_next_position(const char *accountname, OtrlList participants_list, unsigned int *me_next);
 
 /**
  Destroys the participants list of ctx
@@ -123,7 +165,7 @@ int chat_participant_get_me_next_position(const char *accountname, const OtrlLis
  @param ctx The context whose participants list we wish to destroy
  @return void
  */
-void chat_participant_list_destroy(OtrlListNode ctx);
+//void chat_participant_list_destroy(OtrlListNodeType ctx);
 
 /**
  Calculates the hash of all the messages sent by a participant
@@ -134,7 +176,7 @@ void chat_participant_list_destroy(OtrlListNode ctx);
 
  @return 0 if no error occured. Non zero otherwise.
  */
-int chat_participant_get_messages_hash(ChatParticipant *participant, unsigned char* result);
+int chat_participant_calculate_messages_hash(ChatParticipant participant, unsigned char* result);
 
 struct OtrlListOpsStruct chat_participant_listOps;
 

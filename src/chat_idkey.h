@@ -89,7 +89,7 @@ typedef struct {
 	gcry_error_t (*serialize)(ChatIdKey* key, gcry_sexp_t* s );
 
 
-	ChatIdKey * (*find_key)(OtrlList *key_list, const char *accountname, const char *protocol);
+	ChatIdKey * (*find_key)(OtrlList key_list, const char *accountname, const char *protocol);
 } ChatIdKeyManager;
 
 /* The exported operations on an idkey list */
@@ -100,5 +100,5 @@ ChatIdKeyManager chat_id_key_manager;
 
 void chat_idkey_print(ChatIdKey *key);
 
-ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const char *protocol);
+ChatIdKey * chat_idkey_find(OtrlList key_list, const char *accountname, const char *protocol);
 #endif /* CHAT_IDKEY_H */

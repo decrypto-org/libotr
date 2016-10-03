@@ -39,8 +39,9 @@
 #include "tlv.h"
 #include "dh.h"
 #include "instag.h"
-#include "chat_idkey.h"
 #include "chat_dake.h"
+#include "chat_fingerprint.h"
+#include "chat_idkey.h"
 #include "chat_sign.h"
 #include "list.h"
 
@@ -99,11 +100,11 @@ typedef struct ChatMessagePayloadDAKEKeyStruct {
 
 typedef struct ChatMessagePayloadGKAUpflowStruct {
 		unsigned int recipient;
-		OtrlList *interKeys;
+		OtrlList interKeys;
 } ChatMessagePayloadGKAUpflow;
 
 typedef struct ChatMessagePayloadGKADownflowStruct {
-		OtrlList *interKeys;
+		OtrlList interKeys;
 } ChatMessagePayloadGKADownflow;
 
 typedef struct ChatMessagePayloadAttestStruct {
@@ -130,216 +131,24 @@ typedef struct ChatMessagePayloadShutdownKeyReleaseStruct {
 		unsigned char *key;
 } ChatMessagePayloadShutdownKeyRelease;
 
-typedef enum {
-	CHAT_OFFERSTATE_NONE,
-	CHAT_OFFERSTATE_AWAITING,
-	CHAT_OFFERSTATE_FINISHED
-} ChatOfferState;
+typedef struct ChatOfferInfoStruct * ChatOfferInfo;
+typedef struct ChatDSKEInfoStruct * ChatDSKEInfo;
+typedef struct ChatGKAInfoStruct * ChatGKAInfo;
+typedef struct ChatAttestInfoStruct * ChatAttestInfo;
+typedef struct ChatShutdownInfoStruct * ChatShutdownInfo;
 
-typedef struct ChatOfferInfoStruct {
-		size_t size;
-		size_t added;
-		unsigned char **sid_contributions;
-		ChatOfferState state;
-} ChatOfferInfo;
-
-typedef enum {
-    CHAT_ATTESTSTATE_NONE,
-    CHAT_ATTESTSTATE_AWAITING,
-    CHAT_ATTESTSTATE_FINISHED
-} ChatAttestState;
-
-typedef struct ChatAttestInfoStruct {
-	size_t size;
-	size_t checked_count;
-	unsigned short int *checked;
-	ChatAttestState state;
-} ChatAttestInfo;
-
-typedef enum {
-	CHAT_SINGSTATE_NONE,
-	CHAT_SINGSTATE_SINGED
-} ChatSignState;
-
-/* Chat encryption type declarations */
-typedef struct ChatEncInfoStruct {
-        unsigned char ctr[16];	/* our counter */
-
-        unsigned char *key;	/* the shared secret */
-} OtrlChatEncInfo;
-
-
-typedef enum {
-	CHAT_DSKESTATE_NONE,
-	CHAT_DSKESTATE_AWAITING_KEYS,
-	CHAT_DSKESTATE_FINISHED
-} ChatDSKEState;
-
-/* Chat auth type declaration */
-typedef enum {
-        CHAT_GKASTATE_NONE,
-        CHAT_GKASTATE_AWAITING_UPFLOW,
-        CHAT_GKASTATE_AWAITING_DOWNFLOW,
-        CHAT_GKASTATE_FINISHED
-} OtrlChatGKAState;
-
-typedef struct {
-        OtrlChatGKAState state;  /* the gka state */
-
-        unsigned int position;      /* Our position in the participants order starting from the gka initiator */
-
-        DH_keypair *keypair;		/* The keypair used for the gka */
-
-        unsigned char participants_hash[CHAT_PARTICIPANTS_HASH_LENGTH];
-} OtrlAuthGKAInfo;
-
-
-typedef struct {
-	ChatDSKEState state;
-
-	DAKEInfo dake_info;
-
-	unsigned int remaining;
-} OtrlAuthDSKEInfo;
-
-typedef enum {
-	SHUTDOWN_WAITING_END,
-	SHUTDOWN_FINISHED
-} ShutdownState;
-
-typedef struct {
-	ShutdownState state;
-} Shutdown;
-
-typedef enum {
-	CHAT_SHUTDOWNSTATE_NONE,
-	CHAT_SHUTDOWNSTATE_AWAITING_SHUTDOWNS,
-	CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS,
-	CHAT_SHUTDOWNSTATE_AWAITING_ENDS,
-	CHAT_SHUTDOWNSTATE_FINISHED
-} ChatShutdownState;
-
-typedef struct {
-	int shutdowns_remaining;
-	int digests_remaining;
-	int ends_remaining;
-	unsigned char *has_send_end;
-	unsigned char *consensus_hash;
-	ChatShutdownState state;
-} ShutdownInfo;
-
-/* Chat token type declerations */
 typedef int otrl_chat_token_t;
 
-
-/* Chat context type declerations */
-typedef struct OtrlChatContextStruct {
-        /* Context information that is meant for application use */
-
-        char * accountname;                /* The username is relative to this account... */
-        char * protocol;                   /* ... and this protocol */
-
-        unsigned int id;				   /* Our id in this chat */
-
-        otrl_instag_t our_instance;        /* Our instance tag for this computer*/
-        otrl_chat_token_t the_chat_token;  /* The token of the chat */
-
-        OtrlList *participants_list;       /* The users in this chatroom */
-
-        OtrlList *pending_list; 			   /* The pending messages */
-
-        ChatOfferInfo *offer_info;
-
-        ChatAttestInfo *attest_info;
-
-        OtrlChatEncInfo *enc_info;          /* Info needed for encrypting messages */
-
-        OtrlAuthGKAInfo *gka_info;          /* Info needed for the GKA */
-
-        OtrlAuthDSKEInfo *dske_info;	  	   /* Info needed for the DSKE */
-
-        ShutdownInfo *shutdown_info;
-
-        OtrlMessageState msg_state;
-
-        ChatSignState sign_state;
-
-        SignKey *signing_key;		   /* The signing key */
-        ChatIdKey *identity_key;
-		unsigned char sid[CHAT_OFFER_SID_LENGTH];
-
-        unsigned int protocol_version;     /* The version of OTR in use */
-
-        /* Application data to be associated with this context */
-        void *app_data;
-        /* A function to free the above data when we forget this context */
-        void (*app_data_free)(void *);
-} OtrlChatContext;
-
-
-typedef struct OtrlChatFingerprintStruct {
-	unsigned char *fingerprint;
-	char *username;     	 /* the username that the fingerprint corresponds to */
-	char *accountname;  	 /* the account name we have trusted with */
-	char *protocol;			 /* the protocol we have trusted the user with */
-	unsigned char isTrusted; /* boolean value showing if the user has verified the fingerprint */
-} OtrlChatFingerprint;
-
-typedef  struct ChatParticipantStruct {
-        char *username; // This users username
-        SignKey *sign_key; //This users signing key
-        OtrlChatFingerprint *fingerprint;
-        OtrlList *fingerprints;
-        DAKE *dake;
-	//TODO move these in Shutdown struct and release them
-	Shutdown *shutdown;
-	OtrlList *messages;
-	unsigned char messages_hash[CHAT_PARTICIPANTS_HASH_LENGTH];
-	char consensus; //TODO check if there is consensus or not
-
-} ChatParticipant;
-
 typedef enum {
-	LEVEL_NONE,
-	LEVEL_UNVERIFIED,
-	LEVEL_PRIVATE,
-	LEVEL_FINISHED
-} OtrlChatInfoPrivacyLevel;
+	CHAT_SIGNSTATE_NONE,
+	CHAT_SIGNSTATE_SIGNED
+} ChatSignState;
 
-//TODO write a function that creates an instance of this struct based on the current context
-typedef struct OtrlChatInfoStruct {
-	char *accountname;
-	char *protocol;
-	otrl_chat_token_t chat_token;
-	OtrlChatInfoPrivacyLevel level;
-} OtrlChatInfo;
+typedef struct ChatEncInfoStruct {
+        unsigned char ctr[16];	/* our counter */
+        unsigned char *key;	/* the shared secret */
+} ChatEncInfo;
 
-typedef enum {
-	OTRL_CHAT_EVENT_OFFER_RECEIVED, 		/* emitted when we received an offer */
-	OTRL_CHAT_EVENT_STARTING,				/* emitted when the protocol attempts to start a private session */
-	OTRL_CHAT_EVENT_STARTED,				/* emitted when the private session has started */
-	OTRL_CHAT_EVENT_UNVERIFIED_PARTICIPANT,	/* emitted when the private session has started with an unverified participant in it */
-	OTRL_CHAT_EVENT_PLAINTEXT_RECEIVED,		/* emitted when we receive a plaintext message while in a private session */
-	OTRL_CHAT_EVENT_PRIVATE_RECEIVED,		/* emitted when we receive a private message while NOT in a private session */
-	OTRL_CHAT_EVENT_CONSENSUS_BROKEN, 		/* emitted when there was no consensus with a participant */
-	OTRL_CHAT_EVENT_FINISHED				/* emitted when a private session was finished */
-} OtrlChatEventType;
-
-typedef void * OtrlChatEventDataPtr;
-
-typedef struct OtrlChatEventStruct {
-	OtrlChatEventType type;
-	void *data;
-	void (*data_free)(OtrlChatEventDataPtr);
-} OtrlChatEvent;
-
-typedef struct OtrlChatEventParticipantData {
-	char *username;
-} OtrlChatEventParticipantData;
-
-typedef struct OtrlChatEventMessageDataStruct {
-	char *username;
-	char *message;
-} OtrlChatEventMessageData;
+typedef struct ChatContextStruct * ChatContext;
 
 #endif /* CHAT_TYPES_H */
