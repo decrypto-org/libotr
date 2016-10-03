@@ -21,7 +21,6 @@
 #include <stddef.h>
 #include <gcrypt.h>
 
-// TODO allocate memory inside functions
 void chat_serial_int16_to_string(int16_t input, unsigned char *output)
 {
 	output[0] = (input >> 8) & 0xff;
@@ -70,13 +69,11 @@ int chat_serial_mpi_to_string(gcry_mpi_t w, unsigned char** output, size_t *size
     return 0;
 }
 
-//TODO what does size do?
+//TODO what does size do? In case that the mpi format is changed, size is needed to tell
+//gcry_mpi_scan how big the buffer is.
 int chat_serial_string_to_mpi(const unsigned char* input, gcry_mpi_t *output, size_t size)
 {
 	gcry_error_t err;
-
-	//TODO commenting this out to check if scan allocates a new mpi. remove this if it does.
-	//*output = gcry_mpi_new(320);
 
 	err = gcry_mpi_scan(output, GCRYMPI_FMT_HEX, input, 0, NULL);
 	if(err)

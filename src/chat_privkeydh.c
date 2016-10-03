@@ -62,6 +62,8 @@ gcry_error_t otrl_chat_privkeydh_read_FILEp(OtrlUserState us, FILE *privf)
 	gcry_sexp_t accounts;
     gcry_sexp_t allkeys;
     int i;
+    OtrlListNode *node;
+    ChatIdKey *key;
 
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_read_FILEp: start\n");
 
@@ -91,7 +93,7 @@ gcry_error_t otrl_chat_privkeydh_read_FILEp(OtrlUserState us, FILE *privf)
     err = gcry_sexp_new(&allkeys, buf, st.st_size, 0);
     free(buf);
     if (err) {
-	return err;
+	    return err;
     }
     fprintf(stderr,"libotr-mpOTR: otrl_chat_privkeydh_read_FILEp: before nth_data \n");
     token = gcry_sexp_nth_data(allkeys, 0, &tokenlen);
@@ -103,7 +105,6 @@ gcry_error_t otrl_chat_privkeydh_read_FILEp(OtrlUserState us, FILE *privf)
     fprintf(stderr,"libotr-mpOTR: otrl_chat_privkeydh_read_FILEp: before for\n");
     /* Get each account */
     for(i=1; i<gcry_sexp_length(allkeys); ++i) {
-    	ChatIdKey *key;
 
     	/* Get the ith "account" S-exp */
     	accounts = gcry_sexp_nth(allkeys, i);
@@ -117,8 +118,11 @@ gcry_error_t otrl_chat_privkeydh_read_FILEp(OtrlUserState us, FILE *privf)
     	}
     	*/
     	key = chat_id_key_manager.parse(accounts);
-    	if(!key) goto err;
-    	otrl_list_append(us->chat_privkey_list, key);
+    	if(!key) goto error;
+
+    	node = otrl_list_append(us->chat_privkey_list, key);
+        if(!node) {goto error_with_key; }
+
     	gcry_sexp_release(accounts);
 	}
     gcry_sexp_release(allkeys);
@@ -127,7 +131,9 @@ gcry_error_t otrl_chat_privkeydh_read_FILEp(OtrlUserState us, FILE *privf)
     otrl_list_dump(us->chat_privkey_list);
     return gcry_error(GPG_ERR_NO_ERROR);
 
-err:
+error_with_key:
+    chat_id_key_manager.destroy_key(key);
+error:
 	otrl_list_clear(us->chat_privkey_list);
 	gcry_sexp_release(accounts);
 	gcry_sexp_release(allkeys);
@@ -139,20 +145,33 @@ gcry_error_t chat_privkeydh_generate_start(OtrlUserState us, const char* account
                                       const char* protocol, ChatIdKey **newkey)
 {
     gcry_error_t err;
+    ChatIdKey *key;
 
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_start: start\n");
-    err = chat_id_key_manager.generate_key(newkey);
-    if(err || !*newkey)
-        return 1;
 
-    fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_start: before strdup\n");
-    (*newkey)->accountname = strdup(accountname);
-    fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_start: before second strdup\n");
-    (*newkey)->protocol = strdup(protocol);
+    err = chat_id_key_manager.generate_key(&key);
+    if(err || !key) { goto error; }
+
+    key->accountname = strdup(accountname);
+    if(!key->accountname) { goto error_with_key; }
+
+    key->protocol = strdup(protocol);
+    if(!key->protocol) { goto error_with_accountname; }
 
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_start: end\n");
+
+    *newkey = key;
     return gcry_error(GPG_ERR_NO_ERROR);
 
+error_with_accountname:
+	fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_start: error_with_accountname\n");
+    free((key)->accountname);
+error_with_key:
+	fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_start: error_with_key\n");
+    chat_id_key_manager.destroy_key(key);
+error:
+	fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_start: error\n");
+    return 1;
 }
 
 gcry_error_t chat_privkeydh_account_write(FILE *privf, ChatIdKey *k)
@@ -177,6 +196,7 @@ gcry_error_t chat_privkeydh_account_write(FILE *privf, ChatIdKey *k)
 gcry_error_t chat_privkeydh_generate_finish(OtrlUserState us, ChatIdKey *newkey, FILE *privf)
 {
     OtrlListNode *cur;
+    OtrlListNode *node = NULL;
     ChatIdKey *k;
     gcry_error_t err = gcry_error(GPG_ERR_NO_ERROR);
 
@@ -203,13 +223,20 @@ gcry_error_t chat_privkeydh_generate_finish(OtrlUserState us, ChatIdKey *newkey,
 
         //fseek(privf, 0, SEEK_SET);
         fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: before append\n");
-        //TODO add code to check if append succeded
+
         //TODO maybe append instead of inserting to be more efficient? This will break the find call on the list though
-        otrl_list_insert(us->chat_privkey_list, newkey);
+        /* If the append is not successfull then destroy the key and return error */
+        node = otrl_list_insert(us->chat_privkey_list, newkey);
+        if(!node){ goto append_failed; }
+
 
     }
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: end\n");
     return err;
+
+append_failed:
+    chat_id_key_manager.destroy_key(newkey);
+    return 1;
 }
 
 int otrl_chat_privkeydh_generate_FILEp(OtrlUserState us, FILE *privf,

@@ -207,8 +207,6 @@ Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datal
     return signature;
 }
 
-//TODO there is a bug in this function that causes it to segfault randomly (?) so let
-//the error messages be
 int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Signature *signature)
 {
 
@@ -264,16 +262,15 @@ int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Si
     return err;
 }
 
-void chat_sign_serialize_pubkey(SignKey *key, unsigned char **serialized, size_t *serlen)
+int chat_sign_serialize_pubkey(SignKey *key, unsigned char **serialized, size_t *serlen)
 {
     gcry_sexp_t temps, pubvals;
     unsigned char *temp;
 
     temps = gcry_sexp_find_token(key->pub_key, "ecc", 0);
     pubvals = gcry_sexp_find_token(temps, "q", 0);
-    // TODO Dimitris: maybe we should check if the returned value is NULL and do error handling?
+
     temp = (unsigned char*) gcry_sexp_nth_data(pubvals, 1, serlen);
-    //fprintf(stderr,"chat_sign_serialize_pubkey: serlen %lu\n", *serlen);
     if(!temp) {
     	fprintf(stderr,"chat_sign_serialize_pubkey: temp not found\n");
     	goto error;
@@ -285,22 +282,25 @@ void chat_sign_serialize_pubkey(SignKey *key, unsigned char **serialized, size_t
 
     //fprintf(stderr,"chat_sign_serialize_pubkey: serlen %lu\n", *serlen);
     memcpy(*serialized, temp, *serlen);
-    //fprintf(stderr,"chat_sign_serialize_pubkey: serlen %lu\n", *serlen);
+
+    gcry_sexp_release(pubvals);
+	gcry_sexp_release(temps);
+
+    return 0;
 error:
 	gcry_sexp_release(pubvals);
 	gcry_sexp_release(temps);
-
+    *serialized = NULL;
+    return 1;
 }
 
-void chat_sign_serialize_privkey(SignKey *key, unsigned char **serialized, size_t *serlen)
+int chat_sign_serialize_privkey(SignKey *key, unsigned char **serialized, size_t *serlen)
 {
     gcry_sexp_t temps, privvals;
     unsigned char *temp;
 
     temps = gcry_sexp_find_token(key->priv_key, "ecc", 0);
     privvals = gcry_sexp_find_token(temps, "d", 0);
-
-    // TODO Dimitris: maybe we should check if the returned value is NULL and do error handling?
 
     temp = (unsigned char*) gcry_sexp_nth_data(privvals, 1, serlen);
     if(!temp) { goto error; }
@@ -311,9 +311,17 @@ void chat_sign_serialize_privkey(SignKey *key, unsigned char **serialized, size_
 
     memcpy(*serialized, temp, *serlen);
 
-error:
 	gcry_sexp_release(privvals);
 	gcry_sexp_release(temps);
+
+    return 0;
+
+error:
+    *serialized = NULL;
+	gcry_sexp_release(privvals);
+	gcry_sexp_release(temps);
+
+    return 1;
 }
 SignKey * chat_sign_parse_pubkey(const unsigned char *serialized, size_t serlen) {
 	static char *datastr = "(public-key (ecc (curve Ed25519) (flags eddsa) (q  %b)))";
@@ -366,14 +374,15 @@ unsigned int chat_sign_signature_get_length(Signature *sig)
 int chat_sign_signature_serialize(Signature *sig, unsigned char **buf, size_t *len)
 {
 	size_t base = 0;
+    size_t temp = 0;
 	fprintf(stderr, "libotr-mpOTR: chat_sign_signature_serialize: start\n");
 	if(!sig || !sig->s || !sig->r) {
 		return 1;
 	}
 
-    //TODO use a temp value and set *len value only before return
-    *len = chat_sign_signature_get_length(sig);
-	*buf = malloc(*len * sizeof(**buf));
+    //*len = chat_sign_signature_get_length(sig);
+    temp = chat_sign_signature_get_length(sig);
+	*buf = malloc(temp * sizeof(**buf));
 	if(!*buf) {
 		return 1;
 	}
@@ -390,6 +399,8 @@ int chat_sign_signature_serialize(Signature *sig, unsigned char **buf, size_t *l
 	memcpy(*buf + base, sig->s, sig->slen);
 
 	fprintf(stderr, "libotr-mpOTR: chat_sign_signature_serialize: end\n");
+
+    *len = temp;
 	return 0;
 }
 

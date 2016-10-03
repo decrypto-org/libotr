@@ -25,9 +25,7 @@
 #include "instag.h"
 #include "chat_participant.h"
 
-#define OTRL_ENC_KEY_SIZE 32
-
-// TODO change AES256 to AES128
+#define OTRL_ENC_KEY_SIZE 16
 
 void chat_enc_initialize_enc_info(OtrlChatEncInfo *enc_info) {
 
@@ -124,77 +122,6 @@ gcry_error_t chat_enc_create_secret(OtrlChatEncInfo *enc_info ,gcry_mpi_t w, DH_
 	return gcry_error(GPG_ERR_NO_ERROR);
 }
 
-
-/* TODO remove this
-gcry_error_t chat_enc_initialize_cipher(OtrlChatEncInfo *enc_info)
-{
-    gcry_error_t err = gcry_error(GPG_ERR_NO_ERROR);
-    //unsigned char *key = NULL;
-
-    // NOT FOR PRODUCTION
-    // This code is not for production as this is just a dummy way
-    // to generate a secret key with no GKA protocol.
-    // enc_info->key
-    if(enc_info->key)
-	gcry_free(enc_info->key);
-
-    enc_info->key = gcry_random_bytes_secure(OTRL_ENC_KEY_SIZE, GCRY_STRONG_RANDOM);
-    if(!enc_info->key)
-	return gcry_error(GPG_ERR_ENOMEM);
-
-    // TODO
-    // allocate secure memory for key
-    //enc_info->key = gcry_malloc_secure(32);
-
-
-    //fprintf(stderr, "libotr-mpOTR: chat_enc_initialize_cipher: before memcpy\n");
-    //memcpy(enc_info->key, key, OTRL_ENC_KEY_SIZE);
-
-    memset(enc_info->ctr, 0, 16);
-
-    return err;
-
-err:
-    fprintf(stderr, "libotr-mpOTR: chat_enc_initialize_cipher: end err\n");
-    //gcry_cipher_close(enc_info->cipher);
-    return err;
-
-}
-*/
-
-/* TODO remove this
-gcry_error_t chat_enc_sync_key(OtrlChatEncInfo *enc_info,
-			       const OtrlAuthGKAInfo *auth_info)
-{
-    gcry_error_t err = gcry_error(GPG_ERR_NO_ERROR);
-    // TODO
-    // allocate secure memory for key
-
-    if(enc_info->key)
-	gcry_free(enc_info->key);
-
-    enc_info->key = gcry_malloc_secure(32);
-    if(!enc_info->key)
-	return gcry_error(GPG_ERR_ENOMEM);
-
-    // copy the key to the enc_info
-    memcpy(enc_info->key, auth_info->key, OTRL_ENC_KEY_SIZE);
-
-    // copy the key to the enc_info
-    // set the counter
-    memset(enc_info->ctr, 0, 16);
-
-    // copy the key to the enc_info
-    return err;
-
-err:
-
-    fprintf(stderr, "libotr-mpOTR: chat_enc_sync_key: end err\n");
-    // copy the key to the enc_info
-    //gcry_cipher_close(enc_info->cipher);
-    return err;
-}
-*/
 gcry_error_t chat_enc_encrypt_data(gcry_cipher_hd_t cipher, OtrlChatEncInfo *enc_info,
 				   const char *in, size_t inlen,
 				   unsigned char *out, size_t outlen)
@@ -321,8 +248,6 @@ char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphert
 
 	fprintf(stderr,"libotr-mpOTR: chat_enc_decrypt: start\n");
 
-	//TODO this is an ugly hack. In the future when we have a DSKE implemented we will
-	//be able to infer our position based on our public signing keys.
 	if(chat_participant_get_position(ctx->participants_list, ctx->accountname, &our_pos))
 		return NULL;
 	if(chat_participant_get_position(ctx->participants_list, sender, &their_pos))

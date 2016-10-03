@@ -59,14 +59,6 @@ void chat_auth_gka_info_destroy(OtrlAuthGKAInfo *gka_info);
  */
 gcry_error_t chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend);
 
-/* Handle a chat query message msg using the ctx context. Prepares the Query response
- * and stores it in msgToSend */
-//TODO remove this gcry_error_t chat_auth_handle_query(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, const OtrlChatMessage *msg,
-//		OtrlChatMessage **msgToSend);
-
-/* Handles a chat query response message */
-//TODO remove this gcry_error_t chat_auth_handle_query_response(OtrlChatContext *ctx, const OtrlChatMessage *msg);
-
 /**
   Check if the msg belongs to the authentication protocol
 

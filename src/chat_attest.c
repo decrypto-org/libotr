@@ -33,16 +33,20 @@ int chat_attest_assoctable_hash(OtrlList *partList, unsigned char **hash)
 	OtrlListNode *cur;
 	unsigned char *buf, *key;
 	gcry_md_hd_t md;
-	gcry_error_t err;
+	gcry_error_t g_err;
+    int error;
 	size_t len;
 
-	err = gcry_md_open(&md, GCRY_MD_SHA512, 0);
-	if(err) { goto error; }
+	g_err = gcry_md_open(&md, GCRY_MD_SHA512, 0);
+	if(g_err) { goto error; }
 
 	for(cur=partList->head; cur!=NULL; cur=cur->next) {
 		ChatParticipant *part = cur->payload;
 		if(part->sign_key == NULL) { goto error_with_md; }
-		chat_sign_serialize_pubkey(part->sign_key, &key, &len);
+
+		error = chat_sign_serialize_pubkey(part->sign_key, &key, &len);
+        if(error) { goto error_with_md; }
+
 		gcry_md_write(md, key, len);
 		free(key);
 	}
@@ -257,9 +261,10 @@ int chat_attest_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, Cha
 	if(err) { goto error; }
 
 	if(res == 0) {
-		// TODO check this case handling!!!
-		//chat_protocol_reset(ctx);
 		fprintf(stderr, "libotr-mpOTR: chat_attest_handle_message: attest verification failed for participant #: %u\n", their_pos);
+		//TODO call protocol reset in chat_protocol.c
+		//chat_protocol_reset(ctx);
+		goto error;
 	} else {
 
 		// Create our attest message if we haven't already sent one

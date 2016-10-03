@@ -37,7 +37,7 @@
 #include "chat_idkey.h"
 #include "chat_dake.h"
 #include "chat_sign.h"
-#include "chat_fingerprint.h"
+//#include "chat_fingerprint.h"
 #include "list.h"
 //#include "chat_sign.h"
 
@@ -55,6 +55,8 @@ typedef enum {
     CHAT_MSGTYPE_GKA_DOWNFLOW,
     CHAT_MSGTYPE_ATTEST,
     CHAT_MSGTYPE_DATA,
+    CHAT_MSGTYPE_SHUTDOWN_SHUTDOWN,
+    CHAT_MSGTYPE_SHUTDOWN_DIGEST,
     CHAT_MSGTYPE_SHUTDOWN_END,
     CHAT_MSGTYPE_SHUTDOWN_KEYRELEASE
 } ChatMessageType;
@@ -67,7 +69,6 @@ typedef struct ChatMessageStruct {
 		otrl_instag_t senderInsTag;
 		otrl_instag_t chatInsTag;
 		char *senderName;
-		//TODO typedef the sid type, and maybe implement methods to be used on sid
 		unsigned char sid[CHAT_OFFER_SID_LENGTH];
 		ChatMessagePayloadPtr payload;
 		void (*payload_free)(ChatMessagePayloadPtr);
@@ -113,6 +114,14 @@ typedef struct ChatMessagePayloadDataStruct {
         unsigned char *ciphertext;
 } ChatMessagePayloadData;
 
+typedef struct ChatMessagePayloadShutdownShutdownStruct {
+	unsigned char shutdown_hash[CHAT_PARTICIPANTS_HASH_LENGTH];
+} ChatMessagePayloadShutdownShutdown;
+
+typedef struct ChatMessagePayloadShutdownDigestStruct {
+	unsigned char digest[CHAT_PARTICIPANTS_HASH_LENGTH];
+} ChatMessagePayloadShutdownDigest;
+
 typedef struct ChatMessagePayloadShutdownKeyReleaseStruct {
 		size_t keylen;
 		unsigned char *key;
@@ -151,14 +160,9 @@ typedef enum {
 
 /* Chat encryption type declarations */
 typedef struct ChatEncInfoStruct {
-        unsigned char ctr[16];    /* our counter */
+        unsigned char ctr[16];	/* our counter */
 
-        // TODO this should probably be a pointer since
-        // this needs to be on secure memory. We can't
-        // have secure memory with static allocation,
-        // and allocating the whole struct in secure memory
-        // would be a waste of resources.
-        unsigned char *key;   //[32];
+        unsigned char *key;	/* the shared secret */
 } OtrlChatEncInfo;
 
 
@@ -202,18 +206,22 @@ typedef enum {
 
 typedef struct {
 	ShutdownState state;
-
 } Shutdown;
 
 typedef enum {
 	CHAT_SHUTDOWNSTATE_NONE,
+	CHAT_SHUTDOWNSTATE_AWAITING_SHUTDOWNS,
+	CHAT_SHUTDOWNSTATE_AWAITING_DIGESTS,
 	CHAT_SHUTDOWNSTATE_AWAITING_ENDS,
 	CHAT_SHUTDOWNSTATE_FINISHED
 } ChatShutdownState;
 
 typedef struct {
-	int remaining;
+	int shutdowns_remaining;
+	int digests_remaining;
+	int ends_remaining;
 	unsigned char *has_send_end;
+	unsigned char *consensus_hash;
 	ChatShutdownState state;
 } ShutdownInfo;
 
@@ -266,25 +274,36 @@ typedef struct OtrlChatContextStruct {
 } OtrlChatContext;
 
 
+typedef struct ChatFingerprintStruct {
+	unsigned char *fingerprint;
+	char *username;     	 /* the username that the fingerprint corresponds to */
+	char *accountname;  	 /* the account name we have trusted with */
+	char *protocol;			 /* the protocol we have trusted the user with */
+	unsigned char isTrusted; /* boolean value showing if the user has verified the fingerprint */
+} ChatFingerprint;
+
 typedef  struct ChatParticipantStruct {
         char *username; // This users username
         SignKey *sign_key; //This users signing key
-        // TODO make sure the following is the fingerprint the participant is using and create another list with
-        // fingerprints our user has marked as trusted for the participant
         ChatFingerprint *fingerprint;
-        OtrlList *trusted_fingerprints;
+        OtrlList *fingerprints;
         DAKE *dake;
+	//TODO move these in Shutdown struct and release them
 	Shutdown *shutdown;
+	OtrlList *messages;
+	unsigned char messages_hash[CHAT_PARTICIPANTS_HASH_LENGTH];
+	char consensus; //TODO check if there is consensus or not
 
 } ChatParticipant;
 
 typedef enum {
 	LEVEL_NONE,
-	LEVEL_IN_PROGRESS,
+	LEVEL_UNVERIFIED,
 	LEVEL_PRIVATE,
 	LEVEL_FINISHED
 } OtrlChatInfoPrivacyLevel;
 
+//TODO write a function that creates an instance of this struct based on the current context
 typedef struct OtrlChatInfoStruct {
 	char *accountname;
 	char *protocol;

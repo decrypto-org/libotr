@@ -19,6 +19,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 /* libgcrypt headers */
 #include <gcrypt.h>
@@ -29,6 +30,33 @@
 #include "message.h"
 #include "chat_serial.h"
 #include "chat_auth.h"
+
+int chat_message_compare_payload(const char *msg_a, const char *msg_b)
+{
+    return strcmp(msg_a, msg_b);
+}
+
+void chat_message_printOp(OtrlListNode *a)
+{
+    char *msg = a->payload;
+    printf("%s\n", msg);
+}
+
+void chat_message_destroyOp(PayloadPtr a)
+{
+    free(a);
+}
+
+int chat_message_compareOp(PayloadPtr a, PayloadPtr b)
+{
+    return chat_message_compare_payload(a, b);
+}
+
+struct OtrlListOpsStruct chat_message_listOps = {
+    chat_message_compareOp,
+    chat_message_printOp,
+    chat_message_destroyOp
+};
 
 /**
   Checks if a serialized message is an OTR message
@@ -207,32 +235,37 @@ error:
  */
 ChatMessagePayloadPtr chat_message_payload_dake_handshake_parse(const unsigned char *message, size_t length)
 {
-	unsigned int pos = 0;
 	ChatMessagePayloadDAKEHandshake *payload;
 	size_t ephem_size, long_size;
+	unsigned int pos = 0;
+	int err;
 
 	if(length < 8) { goto error; }
 
+	ephem_size = chat_serial_string_to_int(&message[pos]);
+	pos += 4;
+	if(length < 8 + ephem_size) { goto error; }
+
 	payload = malloc(sizeof *payload);
 	if(!payload) { goto error; }
+
 	payload->handshake_data = malloc(sizeof *(payload->handshake_data));
 	if(!payload->handshake_data) { goto error_with_payload; }
 
-
-	ephem_size = chat_serial_string_to_int(&message[pos]);
-	pos += 4;
-	if(length < 8 + ephem_size) { goto error_with_payload; }
-	// TODO error handling for mpis
-	chat_serial_string_to_mpi(&message[pos], &payload->handshake_data->ephem_pub, ephem_size);
+	err = chat_serial_string_to_mpi(&message[pos], &payload->handshake_data->ephem_pub, ephem_size);
+	if(err) { goto error_with_payload_handshake_data; }
 	pos += ephem_size;
 	long_size = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
-	if(length != 8 + ephem_size+ long_size) { goto error_with_payload; }
-	chat_serial_string_to_mpi(&message[pos], &payload->handshake_data->long_pub, long_size);
+	if(length != 8 + ephem_size+ long_size) { goto error_with_payload_handshake_data; }
+	err = chat_serial_string_to_mpi(&message[pos], &payload->handshake_data->long_pub, long_size);
+	if(err) { goto error_with_payload_handshake_data; }
 	pos += long_size;
 
 	return payload;
 
+error_with_payload_handshake_data:
+	free(payload->handshake_data);
 error_with_payload:
 	free(payload);
 error:
@@ -247,7 +280,6 @@ error:
 void chat_message_payload_dake_handshake_free(ChatMessagePayloadPtr payload)
 {
 	ChatMessagePayloadDAKEHandshake *myPayload = payload;
-	//TODO Dimitris: Is that correct????
 	gcry_mpi_release(myPayload->handshake_data->ephem_pub);
 	gcry_mpi_release(myPayload->handshake_data->long_pub);
 	free(myPayload->handshake_data);
@@ -522,10 +554,10 @@ ChatMessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char 
 	ChatMessagePayloadGKAUpflow *payload;
 
 	unsigned int pos = 0;
+	OtrlListNode *node;
 	int keysLength, i, keySize, err;
 	gcry_mpi_t *key;
 
-	// TODO check length
 	if(length < 8) { goto error; }
 
 	payload = malloc(sizeof *payload);
@@ -549,20 +581,21 @@ ChatMessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char 
 
 		key = malloc(sizeof *key);
 		if(!key) { goto error_with_payload_interKeys; }
-		// TODO Dimitris error handling every use of chat_serial_string to mpi
+
 		err = chat_serial_string_to_mpi(&message[pos], key, keySize);
-		if(err) {
-			free(key);
-			goto error_with_payload_interKeys;
-		}
+		if(err) { goto error_with_key; }
 		pos += keySize;
-		otrl_list_append(payload->interKeys, key);
+
+		node = otrl_list_append(payload->interKeys, key);
+		if(!node) { goto error_with_payload_interKeys; }
 	}
 
 	if(length != pos ) { goto error_with_payload_interKeys; }
 
 	return (ChatMessagePayloadPtr)payload;
 
+error_with_key:
+	free(key);
 error_with_payload_interKeys:
 	otrl_list_destroy(payload->interKeys);
 error_with_payload:
@@ -669,8 +702,9 @@ ChatMessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned cha
 	ChatMessagePayloadGKADownflow *payload;
 
 	unsigned int pos = 0;
-	int keysLength, i, keySize;
+	int keysLength, i, keySize, err;
 	gcry_mpi_t *key;
+	OtrlListNode *node;
 
 	if(length < 4) { goto error; }
 
@@ -689,15 +723,22 @@ ChatMessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned cha
 		pos += 4;
 
 		if(length < pos + keySize) { goto error_with_payload_interKeys; }
+
 		key = malloc(sizeof *key);
 		if(!key) { goto error_with_payload_interKeys; }
-		chat_serial_string_to_mpi(&message[pos], key, keySize);
+
+		err = chat_serial_string_to_mpi(&message[pos], key, keySize);
+		if(err) { goto error_with_key; }
 		pos += keySize;
-		otrl_list_append(payload->interKeys, key);
+
+		node = otrl_list_append(payload->interKeys, key);
+		if(!node) { goto error_with_payload_interKeys; }
 	}
 
 	return (ChatMessagePayloadPtr)payload;
 
+error_with_key:
+	free(key);
 error_with_payload_interKeys:
 	otrl_list_destroy(payload->interKeys);
 error_with_payload:
@@ -889,6 +930,155 @@ void chat_message_payload_data_free(ChatMessagePayloadPtr payload)
 }
 
 /**
+  Serializes a Shutdown Shutdown payload
+
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
+
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
+unsigned char * chat_message_payload_shutdown_shutdown_serialize(ChatMessagePayloadPtr payload, size_t *payload_size)
+{
+	unsigned char *buf;
+	unsigned int pos = 0;
+	ChatMessagePayloadShutdownShutdown *myPayload= payload;
+	size_t len;
+
+	len = CHAT_PARTICIPANTS_HASH_LENGTH;
+	buf = malloc(len * sizeof *buf);
+	if(!buf) { goto error; }
+
+	memcpy(&buf[pos], myPayload->shutdown_hash, CHAT_PARTICIPANTS_HASH_LENGTH);
+	pos += CHAT_PARTICIPANTS_HASH_LENGTH;
+
+	*payload_size = len;
+	return buf;
+
+error:
+	return NULL;
+}
+
+/**
+  Parses a serialized Shutdown Shutdown message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller
+  	  	  should free the returned string using
+  	  	  chat_message_payload_shutdown_keyrelease_free().
+ */
+ChatMessagePayloadPtr chat_message_payload_shutdown_shutdown_parse(const unsigned char *message, size_t length)
+{
+	fprintf(stderr, "libotr-mpOTR: chat_message_payload_shutdown_shutdown_parse: start\n");
+
+	ChatMessagePayloadShutdownShutdown *payload;
+	unsigned int pos = 0;
+
+	payload = malloc(sizeof *payload);
+	if(!payload) { goto error; }
+
+	if(length != CHAT_PARTICIPANTS_HASH_LENGTH) { goto error_with_payload; }
+
+	memcpy(payload->shutdown_hash, &message[pos], CHAT_PARTICIPANTS_HASH_LENGTH);
+	pos += CHAT_PARTICIPANTS_HASH_LENGTH;
+
+	fprintf(stderr, "libotr-mpOTR: chat_message_payload_shutdown_shutdown_parse: end\n");
+
+	return (ChatMessagePayloadPtr)payload;
+
+error_with_payload:
+	free(payload);
+error:
+	return NULL;
+}
+
+/**
+  Frees a Shutdown Shutdown message payload
+
+  @param[in] payload The payload to be freed
+ */
+void chat_message_payload_shutdown_shutdown_free(ChatMessagePayloadPtr payload)
+{
+	ChatMessagePayloadShutdownShutdown *myPayload= payload;
+	free(myPayload);
+}
+
+
+/**
+  Serializes a Shutdown Digest payload
+
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
+
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
+unsigned char * chat_message_payload_shutdown_digest_serialize(ChatMessagePayloadPtr payload, size_t *payload_size)
+{
+	unsigned char *buf;
+	unsigned int pos = 0;
+	ChatMessagePayloadShutdownDigest *myPayload= payload;
+	size_t len;
+
+	len = CHAT_PARTICIPANTS_HASH_LENGTH;
+	buf = malloc(len * sizeof *buf);
+	if(!buf) { goto error; }
+
+	memcpy(&buf[pos], myPayload->digest, CHAT_PARTICIPANTS_HASH_LENGTH);
+	pos += CHAT_PARTICIPANTS_HASH_LENGTH;
+
+	*payload_size = len;
+	return buf;
+
+error:
+	return NULL;
+}
+
+/**
+  Parses a serialized Shutdown Digest message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller
+  	  	  should free the returned string using
+  	  	  chat_message_payload_shutdown_keyrelease_free().
+ */
+ChatMessagePayloadPtr chat_message_payload_shutdown_digest_parse(const unsigned char *message, size_t length)
+{
+	ChatMessagePayloadShutdownDigest *payload;
+	unsigned int pos = 0;
+
+	payload = malloc(sizeof *payload);
+	if(!payload) { goto error; }
+
+	if(length != CHAT_PARTICIPANTS_HASH_LENGTH) { goto error_with_payload; }
+
+	memcpy(payload->digest, &message[pos], CHAT_PARTICIPANTS_HASH_LENGTH);
+	pos += CHAT_PARTICIPANTS_HASH_LENGTH;
+
+	return (ChatMessagePayloadPtr)payload;
+
+error_with_payload:
+	free(payload);
+error:
+	return NULL;
+}
+
+/**
+  Frees a Shutdown Digest message payload
+
+  @param[in] payload The payload to be freed
+ */
+void chat_message_payload_shutdown_digest_free(ChatMessagePayloadPtr payload)
+{
+	ChatMessagePayloadShutdownDigest *myPayload= payload;
+	free(myPayload);
+}
+
+/**
   Serializes a Shutdown KeyRelease payload
 
   @param[in] 	payload 		A pointer to the payload
@@ -1032,8 +1222,11 @@ unsigned char * chat_message_serialize(ChatMessage *msg, size_t *length)
 
 	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: start\n");
 
+	fprintf(stderr, "libotr-mpOTR: msg: %p\n", msg);
+
 	if(!msg) { goto error; }
 
+	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before if(msg->payload_serialize && msg->payload) {\n");
 	if(msg->payload_serialize && msg->payload) {
 		payload_serialized = msg->payload_serialize(msg->payload, &payloadlen);
 		if(!payload_serialized) { goto error; }
@@ -1044,6 +1237,7 @@ unsigned char * chat_message_serialize(ChatMessage *msg, size_t *length)
 		buflen += CHAT_OFFER_SID_LENGTH;
 	}
 
+	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before malloc\n");
 	buf = malloc(buflen * sizeof *buf);
 	if(!buf) { goto error_with_payload_serialized; }
 
@@ -1060,6 +1254,7 @@ unsigned char * chat_message_serialize(ChatMessage *msg, size_t *length)
 		pos += CHAT_OFFER_SID_LENGTH;
 	}
 
+	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before if(payload_serialized) {\n");
 	if(payload_serialized) {
 		memcpy(&buf[pos], payload_serialized, payloadlen);
 		pos += payloadlen;
@@ -1079,6 +1274,7 @@ error:
 
 int chat_message_payload_parse(ChatMessage *msg, const unsigned char *message, size_t length)
 {
+	fprintf(stderr, "libotr-mpOTR: chat_message_payload_parse: start\n");
 	if(!msg) { goto error; }
 
 	switch(msg->msgType) {
@@ -1144,6 +1340,20 @@ int chat_message_payload_parse(ChatMessage *msg, const unsigned char *message, s
 			msg->payload = NULL;
 			break;
 
+		case CHAT_MSGTYPE_SHUTDOWN_SHUTDOWN:
+			msg->payload_free = chat_message_payload_shutdown_shutdown_free;
+			msg->payload_serialize = chat_message_payload_shutdown_shutdown_serialize;
+			msg->payload = chat_message_payload_shutdown_shutdown_parse(message, length);
+			if(!msg->payload) { goto error; }
+			break;
+
+		case CHAT_MSGTYPE_SHUTDOWN_DIGEST:
+			msg->payload_free = chat_message_payload_shutdown_digest_free;
+			msg->payload_serialize = chat_message_payload_shutdown_digest_serialize;
+			msg->payload = chat_message_payload_shutdown_digest_parse(message, length);
+			if(!msg->payload) { goto error; }
+			break;
+
 		case CHAT_MSGTYPE_SHUTDOWN_KEYRELEASE:
 			msg->payload_free = chat_message_payload_shutdown_keyrelease_free;
 			msg->payload_serialize = chat_message_payload_shutdown_keyrelease_serialize;
@@ -1154,6 +1364,8 @@ int chat_message_payload_parse(ChatMessage *msg, const unsigned char *message, s
 		default:
 			goto error;
 	}
+
+	fprintf(stderr, "libotr-mpOTR: chat_message_payload_parse: end\n");
 
 	return 0;
 
@@ -1559,6 +1771,77 @@ ChatMessage * chat_message_data_create(OtrlChatContext *ctx, unsigned char *ctr,
 	msg->payload = payload;
 	msg->payload_free = chat_message_payload_data_free;
 	msg->payload_serialize = chat_message_payload_data_serialize;
+
+	return msg;
+
+error_with_msg:
+	chat_message_free(msg);
+error:
+	return NULL;
+}
+
+
+/**
+  Creates a new GKA Downflow message
+
+  @param[in] ctx 		    The Context in which the message is created
+  @param[in] shutdown_hash 	The shutdown hash. Used by value
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
+ChatMessage * chat_message_shutdown_shutdown_create(OtrlChatContext *ctx, unsigned char *shutdown_hash)
+{
+	ChatMessage *msg;
+	ChatMessagePayloadShutdownShutdown *payload;
+
+	msg = chat_message_create(ctx, CHAT_MSGTYPE_SHUTDOWN_SHUTDOWN);
+	if(!msg) {goto error; }
+
+	payload = malloc(sizeof *payload);
+	if(!payload) { goto error_with_msg; }
+
+	memcpy(payload->shutdown_hash, shutdown_hash, CHAT_PARTICIPANTS_HASH_LENGTH);
+
+	msg->payload = payload;
+	msg->payload_free = chat_message_payload_shutdown_shutdown_free;
+	msg->payload_serialize = chat_message_payload_shutdown_shutdown_serialize;
+
+	return msg;
+
+error_with_msg:
+	chat_message_free(msg);
+error:
+	return NULL;
+}
+
+/**
+  Creates a new GKA Downflow message
+
+  @param[in] ctx        The Context in which the message is created
+  @param[in] digest 	The digest. Used by value
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
+ChatMessage * chat_message_shutdown_digest_create(OtrlChatContext *ctx, unsigned char *digest)
+{
+	ChatMessage *msg;
+	ChatMessagePayloadShutdownDigest *payload;
+
+	msg = chat_message_create(ctx, CHAT_MSGTYPE_SHUTDOWN_DIGEST);
+	if(!msg) {goto error; }
+
+	payload = malloc(sizeof *payload);
+	if(!payload) { goto error_with_msg; }
+
+	memcpy(payload->digest, digest, CHAT_PARTICIPANTS_HASH_LENGTH);
+
+	msg->payload = payload;
+	msg->payload_free = chat_message_payload_shutdown_digest_free;
+	msg->payload_serialize = chat_message_payload_shutdown_digest_serialize;
 
 	return msg;
 

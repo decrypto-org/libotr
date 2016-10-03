@@ -20,25 +20,29 @@
 #ifndef CHAT_FINGERPRINT_H_
 #define CHAT_FINGERPRINT_H_
 
-#include "userstate.h"
 #include "stdio.h"
+#include "userstate.h"
+#include "message.h"
 
 #define CHAT_FINGERPRINT_BUFSIZE 1024
 
-typedef struct ChatFingerprintStruct {
-	unsigned char *fingerprint;
-	char *username;     /* the username that the fingerprint corresponds to */
-	char *accountname;  /* the account name we have trusted with */
-	char *protocol;		/* the protocol we have trusted the user with */
-} ChatFingerprint;
+char *otrl_chat_fingerprint_bytes_to_hex(const unsigned char *fingerprint);
 
-char *chat_fingerprint_bytes_to_hex(const unsigned char *fingerprint);
+ChatFingerprint *chat_fingerprint_find(OtrlUserState us, char *accountname , char *protocol, char *username, unsigned char *fingerprint);
 
-ChatFingerprint *chat_fingerprint_find(OtrlUserState us, char *accountname , char *protocol, char *username);
+ChatFingerprint *chat_fingerprint_new(char *accountname, char *protocol, char *username, unsigned char *fingerprint, unsigned char isTrusted);
 
-ChatFingerprint *chat_fingerprint_new(char *accountname, char *protocol, char *username, unsigned char *fingerprint);
+void chat_fingerprint_destroy(ChatFingerprint *fingerprint);
+
+int chat_fingerprint_add(OtrlUserState us, ChatFingerprint *finger);
+
+int otrl_chat_fingerprint_verify(OtrlUserState us, const OtrlMessageAppOps *ops, ChatFingerprint *finger);
+
+int otrl_chat_fingerprint_forget(OtrlUserState us, const OtrlMessageAppOps *ops, ChatFingerprint *finger);
 
 int otrl_chat_fingerprint_read_FILEp(OtrlUserState us, FILE *fingerfile);
+
+int otrl_chat_fingerprint_write_FILEp(OtrlUserState us, FILE *fingerFile);
 
 struct OtrlListOpsStruct chat_fingerprint_listOps;
 
