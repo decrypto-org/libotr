@@ -88,10 +88,10 @@ int chat_protocol_participants_list_init(OtrlUserState us, const OtrlMessageAppO
 	OtrlListNode *cur;
 	for (cur = ctx->participants_list->head; cur != NULL; cur = cur->next) {
 		ChatParticipant *participant = cur->payload;
-		OtrlListNode *node = us->chat_trusted_fingerprints->head;
-		while(node != NULL) {
-			ChatFingerprint *fngrprnt = node->payload;
 
+		OtrlListNode *node;
+		for(node = us->chat_trusted_fingerprints->head; node != NULL; node = node->next) {
+			ChatFingerprint *fngrprnt = node->payload;
 			if(strcmp(fngrprnt->username, participant->username) == 0 &&
 					strcmp(fngrprnt->accountname, ctx->accountname) == 0 &&
 					strcmp(fngrprnt->protocol, ctx->protocol) == 0) {
@@ -99,7 +99,6 @@ int chat_protocol_participants_list_init(OtrlUserState us, const OtrlMessageAppO
 				if(!newfinger) { goto error; }
 				otrl_list_insert(participant->trusted_fingerprints, newfinger);
 			}
-			node = node->next;
 
 		}
 	}

@@ -274,9 +274,13 @@ int chat_idkey_compar(PayloadPtr a, PayloadPtr b)
     ChatIdKey *b_key = b;
 
     int username_eq = strcmp(a_key->accountname, b_key->accountname);
+    fprintf(stderr,"chat_idkey_compar: comparing %s with %s\n", a_key->accountname, b_key->accountname);
 
-    if(!username_eq)
+    if(!username_eq) {
+    	fprintf(stderr,"chat_idkey_compar: bingo! comparing protocol: %s with %s\n", a_key->protocol, b_key->protocol);
         return strcmp(a_key->protocol, b_key->protocol);
+    }
+
    	return username_eq;
 }
 
@@ -284,14 +288,25 @@ ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const c
 {
     ChatIdKey target;
     OtrlListNode *found;
-
+    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: start\n");
     target.accountname = strdup(accountname);
+    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after accountname dup, it is: %s\n", accountname);
     target.protocol = strdup(protocol);
+    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after protocol dup, it is: %s\n", protocol);
 
     found = otrl_list_find(key_list, &target);
+    if(!found){
+    	fprintf(stderr,"libotr-mpOTR: chat_idkey_find: a key was not found\n");
+    }
+    else {
+    	fprintf(stderr,"libotr-mpOTR: chat_idkey_find: a key was found\n");
+    }
 
+    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after list find\n");
     free(target.accountname);
+    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after accountname free\n");
     free(target.protocol);
+    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after protocol free\n");
 
     return (ChatIdKey *)found->payload;
 }

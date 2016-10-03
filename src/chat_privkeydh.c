@@ -204,7 +204,8 @@ gcry_error_t chat_privkeydh_generate_finish(OtrlUserState us, ChatIdKey *newkey,
         //fseek(privf, 0, SEEK_SET);
         fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: before append\n");
         //TODO add code to check if append succeded
-        otrl_list_append(us->chat_privkey_list, newkey);
+        //TODO maybe append instead of inserting to be more efficient? This will break the find call on the list though
+        otrl_list_insert(us->chat_privkey_list, newkey);
 
     }
     fprintf(stderr,"libotr-mpOTR: otrl_privkeydh_generate_finish: end\n");
@@ -233,15 +234,22 @@ int otrl_chat_privkeydh_generate_FILEp(OtrlUserState us, FILE *privf,
 
     return err;
 }
-
 ChatIdKey * chat_privkeydh_find_or_generate(OtrlUserState us, const OtrlMessageAppOps *ops, const char *accountname, const char* protocol){
+	ChatIdKey *key;
 
 	int keyexists = chat_privkeydh_key_exists(us, accountname, protocol);
 	if(!keyexists) {
 		ops->chat_privkey_create(NULL, accountname, protocol);
 	}
 
-	return chat_id_key_manager.find_key(us->chat_privkey_list, accountname, protocol);
+	fprintf(stderr, "chat_privkeydh_find_or_generate: dumping key list\n");
+	otrl_list_dump(us->chat_privkey_list);
+
+	key = chat_id_key_manager.find_key(us->chat_privkey_list, accountname, protocol);
+
+	fprintf(stderr, "chat_privkeydh_find_or_generate: after find_key\n");
+
+	return key;
 }
 
 int chat_privkeydh_key_exists(OtrlUserState us, const char *accountname, const char *protocol)

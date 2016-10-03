@@ -212,6 +212,7 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, ChatMessage *msg,
     	free(fingerprint);
     	chat_dake_destroy_confirm_data(dataToSend);
     	free(dataToSend);
+    	fprintf(stderr,"chat_dske_handle_handshake_message: fingerprint not found\n");
     	return DSKE_ERROR;
     }
     fprintf(stderr,"chat_dske_handle_handshake_message: after !cur\n");
