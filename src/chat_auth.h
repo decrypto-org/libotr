@@ -20,11 +20,8 @@
 #ifndef CHAT_AUTH_H_
 #define CHAT_AUTH_H_
 
-//#include "chat_enc.h"
-//#include "chat_context.h"
-//#include "chat_message.h"
 #include "chat_types.h"
-#include "message.h"
+
 struct OtrlListOpsStruct interKeyOps;
 
 //typedef enum {

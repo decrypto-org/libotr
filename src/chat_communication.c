@@ -17,12 +17,17 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "chat_message.h"
 #include "chat_enc.h"
+#include "chat_message.h"
 #include "chat_participant.h"
+#include "chat_types.h"
+#include "context.h"
+#include "list.h"
 
 int chat_communication_handle_data_message(OtrlChatContext *ctx, ChatMessage *msg,
 										   ChatMessage **msgToSend, char** plaintext)
@@ -34,20 +39,18 @@ int chat_communication_handle_data_message(OtrlChatContext *ctx, ChatMessage *ms
 	char *plain = NULL;
     char *plain_cpy = NULL;
 
+    fprintf(stderr, "libotr-mpOTR: chat_communication_handle_data_message: start\n");
+
 	switch(ctx->msg_state) {
 
 		case OTRL_MSGSTATE_PLAINTEXT:
 		case OTRL_MSGSTATE_FINISHED:
-			/* TODO if plaintext or finished ignore the message. In the future handle this more gracefully */
 			goto error;
 			break;
 
 		case OTRL_MSGSTATE_ENCRYPTED:
-			plain = chat_enc_decrypt(ctx, payload->ciphertext,
-										 payload->datalen, payload->ctr,
-                                         msg->senderName);
 
-			/* TODO ignore if there was an error. handle this more gracefully in the future */
+			plain = chat_enc_decrypt(ctx, payload->ciphertext, payload->datalen, payload->ctr, msg->senderName);
 			if (!plain) { goto error; }
 
             sender = chat_participant_find(ctx, msg->senderName, &sender_pos);
@@ -64,6 +67,8 @@ int chat_communication_handle_data_message(OtrlChatContext *ctx, ChatMessage *ms
 	}
 
 	*plaintext = plain;
+
+	fprintf(stderr, "libotr-mpOTR: chat_communication_handle_data_message: end\n");
 
 	return 0;
 
@@ -100,12 +105,12 @@ int chat_communication_broadcast(OtrlChatContext *ctx, const char *message,
 	ciphertext = chat_enc_encrypt(ctx, message);
 	if(!ciphertext) { goto error_with_msg_cpy; }
 
-	// TODO maybe get length from chat_enc_encrypt so that we can support other modes of aes
 	datalen = strlen(message);
 
 	msg = chat_message_data_create(ctx, ctx->enc_info->ctr, datalen, ciphertext);
 	if(!msg) { goto error_with_ciphertext; }
 
+	//TODO Dimitris: maybe add a chat_participant_add_message function ,to avoid code duplication of allocation and error handling
     /* And insert the message he is sending, so that we can later execute
      * the shutdown phase */
     node = otrl_list_insert(me->messages, msg_cpy);

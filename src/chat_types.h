@@ -20,6 +20,11 @@
 #ifndef CHAT_TYPES_H
 #define CHAT_TYPES_H
 
+#include <stddef.h>
+#include <stdint.h>
+
+#include "context.h"
+
 #define CHAT_PROTOCOL_VERSION 1
 
 #define CHAT_PARTICIPANTS_HASH_LENGTH 64
@@ -37,9 +42,7 @@
 #include "chat_idkey.h"
 #include "chat_dake.h"
 #include "chat_sign.h"
-//#include "chat_fingerprint.h"
 #include "list.h"
-//#include "chat_sign.h"
 
 #include <gcrypt.h>
 
@@ -255,7 +258,7 @@ typedef struct OtrlChatContextStruct {
 
         OtrlAuthDSKEInfo *dske_info;	  	   /* Info needed for the DSKE */
 
-        ShutdownInfo shutdown_info;
+        ShutdownInfo *shutdown_info;
 
         OtrlMessageState msg_state;
 
@@ -312,12 +315,14 @@ typedef struct OtrlChatInfoStruct {
 } OtrlChatInfo;
 
 typedef enum {
-	OTRL_CHAT_EVENT_OFFER_RECEIVED, 	/* emitted when we received an offer */
-	OTRL_CHAT_EVENT_STARTING,			/* emitted when the protocol attempts to start a private session */
-	OTRL_CHAT_EVENT_STARTED,			/* emitted when the private conversation has started */
-	OTRL_CHAT_EVENT_PLAINTEXT_RECEIVED,	/* emitted when a private chatroom receives a plaintext message */
-	OTRL_CHAT_EVENT_CONSENSUS_BROKEN, 	/* emitted when there was no consensus with a participant */
-	OTRL_CHAT_EVENT_FINISHED			/* emited when a private session was finished */
+	OTRL_CHAT_EVENT_OFFER_RECEIVED, 		/* emitted when we received an offer */
+	OTRL_CHAT_EVENT_STARTING,				/* emitted when the protocol attempts to start a private session */
+	OTRL_CHAT_EVENT_STARTED,				/* emitted when the private session has started */
+	OTRL_CHAT_EVENT_UNVERIFIED_PARTICIPANT,	/* emitted when the private session has started with an unverified participant in it */
+	OTRL_CHAT_EVENT_PLAINTEXT_RECEIVED,		/* emitted when we receive a plaintext message while in a private session */
+	OTRL_CHAT_EVENT_PRIVATE_RECEIVED,		/* emitted when we receive a private message while NOT in a private session */
+	OTRL_CHAT_EVENT_CONSENSUS_BROKEN, 		/* emitted when there was no consensus with a participant */
+	OTRL_CHAT_EVENT_FINISHED				/* emitted when a private session was finished */
 } OtrlChatEventType;
 
 typedef void * OtrlChatEventDataPtr;
@@ -328,8 +333,13 @@ typedef struct OtrlChatEventStruct {
 	void (*data_free)(OtrlChatEventDataPtr);
 } OtrlChatEvent;
 
-typedef struct OtrlChatEventConsensusParticipantData {
+typedef struct OtrlChatEventParticipantData {
 	char *username;
-} OtrlChatEventConsensusParticipantData;
+} OtrlChatEventParticipantData;
+
+typedef struct OtrlChatEventMessageDataStruct {
+	char *username;
+	char *message;
+} OtrlChatEventMessageData;
 
 #endif /* CHAT_TYPES_H */

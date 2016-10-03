@@ -17,15 +17,17 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "chat_message.h"
-#include "chat_enc.h"
-#include "instag.h"
-#include "dh.h"
-#include "chat_types.h"
-
-#include "chat_participant.h"
-
+#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "chat_enc.h"
+#include "chat_message.h"
+#include "chat_participant.h"
+#include "chat_types.h"
+#include "dh.h"
+#include "list.h"
 
 /**
   Compares two MPIs stored in a otr list

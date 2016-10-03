@@ -266,11 +266,13 @@ char * chat_enc_decrypt(const OtrlChatContext *ctx, const unsigned char *ciphert
 	if(chat_participant_get_position(ctx->participants_list, sender, &their_pos))
 		return NULL;
 
+	/* FIXME How we get the sender_id is very hacky. At the moment setting the sender_id
+	 * to simply be the senders position in the list should suffice. However this
+	 * relies on all the participants seeing the same usernames in the chatroom.
+	 * A better solution is required, when we find a robust way to handle the
+	 * usernames/user alieses.
+	 */
 	participants_len = otrl_list_length(ctx->participants_list);
-
-	//fprintf(stderr, "our_pos: %u, their_pos: %u, our_gka_pos: %d, list len: %d\n", our_pos, their_pos, ctx->gka_info.position, participants_len);
-	//TODO % operation is implementation defined. We want mod to only return positive
-	//numbers
 	sender_id = their_pos + ctx->gka_info->position - our_pos;
 	if(sender_id >= (int) participants_len) {
 		sender_id -= participants_len;

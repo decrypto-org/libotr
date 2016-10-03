@@ -296,7 +296,7 @@ typedef struct s_OtrlMessageAppOps {
     void (*timer_control)(void *opdata, unsigned int interval);
 
     /* DIKOMAS */
-    void (*chat_inject_message)(void *opdata, const OtrlChatInfo *info, const char *message);
+    int (*chat_inject_message)(void *opdata, const OtrlChatInfo *info, const char *message);
     void (*chat_handle_event)(void *odata, const OtrlChatInfo *info, const OtrlChatEvent *event);
     void (*chat_display_notification_cb)(void *opdata, const OtrlChatInfo *info, const char *notification);
     char **(*chat_get_participants)(void *opdata, const OtrlChatInfo *info, unsigned int *size);

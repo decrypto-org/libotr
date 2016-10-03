@@ -49,16 +49,16 @@ error:
 
  void chat_event_participant_data_free(OtrlChatEventDataPtr data)
 {
-	 OtrlChatEventConsensusParticipantData *part_data = data;
+	 OtrlChatEventParticipantData *part_data = data;
 	 if(part_data) {
 		 free(part_data->username);
 	 }
 	 free(part_data);
 }
 
-OtrlChatEventConsensusParticipantData *chat_event_participant_data_create(const char *username)
+OtrlChatEventParticipantData *chat_event_participant_data_create(const char *username)
 {
-	OtrlChatEventConsensusParticipantData *data;
+	OtrlChatEventParticipantData *data;
 
 	data = malloc(sizeof *data);
 	if(!data) { goto error; }
@@ -74,10 +74,44 @@ error:
 	return NULL;
 }
 
+void chat_event_message_data_free(OtrlChatEventDataPtr data)
+{
+	OtrlChatEventMessageData *msg_data = data;
+
+	if(msg_data) {
+		free(msg_data->username);
+		free(msg_data->message);
+	}
+	free(msg_data);
+}
+
+OtrlChatEventMessageData *chat_event_message_data_create(const char *username, const char *message)
+{
+	OtrlChatEventMessageData *data;
+
+	data = malloc(sizeof *data);
+	if(!data) { goto error; }
+
+	data->username = strdup(username);
+	if(!data->username) { goto error_with_data; }
+
+	data->message = strdup(message);
+	if(!data->message) { goto error_with_username; }
+
+	return data;
+
+error_with_username:
+	free(data->username);
+error_with_data:
+	free(data);
+error:
+	return NULL;
+}
+
 OtrlChatEvent *chat_event_offer_received_create(const char *username)
 {
 	OtrlChatEvent *event;
-	OtrlChatEventConsensusParticipantData *data;
+	OtrlChatEventParticipantData *data;
 
 	data = chat_event_participant_data_create(username);
 	if(!data) { goto error; }
@@ -119,10 +153,67 @@ error:
 	return NULL;
 }
 
+OtrlChatEvent *chat_event_unverified_participant_create(const char *username)
+{
+	OtrlChatEvent *event;
+	OtrlChatEventParticipantData *data;
+
+	data = chat_event_participant_data_create(username);
+	if(!data) { goto error; }
+
+	event = chat_event_create(OTRL_CHAT_EVENT_UNVERIFIED_PARTICIPANT, data, chat_event_participant_data_free);
+	if(!event) { goto error_with_data; }
+
+	return event;
+
+error_with_data:
+	chat_event_participant_data_free(data);
+error:
+	return NULL;
+}
+
+OtrlChatEvent *chat_event_plaintext_received_create(const char *username, const char *message)
+{
+	OtrlChatEvent *event;
+	OtrlChatEventMessageData *data;
+
+	data = chat_event_message_data_create(username, message);
+	if(!data) { goto error; }
+
+	event = chat_event_create(OTRL_CHAT_EVENT_PLAINTEXT_RECEIVED, data, chat_event_message_data_free);
+	if(!event) { goto error_with_data; }
+
+	return event;
+
+error_with_data:
+	chat_event_message_data_free(data);
+error:
+	return NULL;
+}
+
+OtrlChatEvent *chat_event_private_received_create(const char *username)
+{
+	OtrlChatEvent *event;
+	OtrlChatEventParticipantData *data;
+
+	data = chat_event_participant_data_create(username);
+	if(!data) { goto error; }
+
+	event = chat_event_create(OTRL_CHAT_EVENT_PRIVATE_RECEIVED, data, chat_event_participant_data_free);
+	if(!event) { goto error_with_data; }
+
+	return event;
+
+error_with_data:
+	chat_event_message_data_free(data);
+error:
+	return NULL;
+}
+
 OtrlChatEvent *chat_event_consensus_broken_create(const char *username)
 {
 	OtrlChatEvent *event;
-	OtrlChatEventConsensusParticipantData *data;
+	OtrlChatEventParticipantData *data;
 
 	data = chat_event_participant_data_create(username);
 	if(!data) { goto error; }

@@ -48,11 +48,15 @@ void chat_idkey_init_key(ChatIdKey *key){
 }
 
 void chat_idkey_free(ChatIdKey *key){
-	if(key) {
-		otrl_dh_keypair_free(&key->keyp);
-		free(key->accountname);
-		free(key->protocol);
-	}
+
+	if(!key) {
+        return;
+    }
+
+    otrl_dh_keypair_free(&key->keyp);
+    free(key->accountname);
+    free(key->protocol);
+
     free(key);
 }
 
@@ -75,9 +79,14 @@ int chat_idkey_generate_key(ChatIdKey **newkey)
 
     fprintf(stderr,"libotr-mpOTR: chat_idkey_generate_key: start\n");
 
+    /* Allocate memory for a ChatIdKey struct */
     key = malloc(sizeof *key);
     if(!key) { goto error; }
 
+    /* Initialize the new key */
+    chat_idkey_init_key(key);
+
+    /* Generate a diffie hellman keypair */
     err = otrl_dh_gen_keypair(DH1536_GROUP_ID, &key->keyp);
     if(err) { goto error_with_key; }
 
@@ -95,10 +104,13 @@ error:
 gcry_error_t chat_idkey_serialize_key(ChatIdKey *key, gcry_sexp_t *sexp)
 {
     gcry_error_t err = gcry_error(GPG_ERR_NO_ERROR);
+    static char *key_paramstr = "(tdh-key (name %s) (protocol %s) (group %u) (private-key %M) (public-key %M))";
 
     fprintf(stderr,"libotr-mpOTR: chat_idkey_serialize_key: start\n");
+
+    /* Build the s expression according to the key_paramstr structure */
     err = gcry_sexp_build(sexp, NULL,
-                          "(tdh-key (name %s) (protocol %s) (group %u) (private-key %M) (public-key %M))",
+                          key_paramstr,
                           key->accountname, key->protocol, key->keyp.groupid,
                           key->keyp.priv, key->keyp.pub);
 
@@ -118,152 +130,112 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
     fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: start\n");
 
     token = gcry_sexp_nth_data(accounts, 0, &tokenlen);
-    fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: token is %d %.*s\n",(int)tokenlen, (int)tokenlen, token);
-    if (tokenlen != 7 || strncmp(token, "tdh-key", 7)) {
-    	return NULL;
-    }
+    if (tokenlen != 7 || strncmp(token, "tdh-key", 7)) { goto error; }
 
-    fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before find_tokens\n");
 	/* Extract the name, protocol, and privkey S-exps */
 	names = gcry_sexp_find_token(accounts, "name", 0);
 	protos = gcry_sexp_find_token(accounts, "protocol", 0);
 	groups = gcry_sexp_find_token(accounts, "group", 0);
 	privs = gcry_sexp_find_token(accounts, "private-key", 0);
 	pubs = gcry_sexp_find_token(accounts, "public-key", 0);
-	if (!names || !protos || !groups || !privs || !pubs ) {
-	    gcry_sexp_release(names);
-	    gcry_sexp_release(protos);
-	    gcry_sexp_release(groups);
-	    gcry_sexp_release(privs);
-	    gcry_sexp_release(pubs);
-	    return NULL;
-	}
+	if (!names || !protos || !groups || !privs || !pubs ) { goto error_with_names; }
 
+    /* Allocate memory for the key to be parsed */
 	key = malloc(sizeof *key);
+	if(!key) { goto error_with_names; }
+
+    /* And initialize it */
 	chat_idkey_init_key(key);
 
-	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before name\n");
+
 	/* Extract the name */
 	token = gcry_sexp_nth_data(names, 1, &tokenlen);
-	if (!token) {
-	    gcry_sexp_release(names);
-	    gcry_sexp_release(protos);
-	    gcry_sexp_release(groups);
-	    gcry_sexp_release(privs);
-	    gcry_sexp_release(pubs);
-	    return NULL;
-	}
+	if (!token) { goto error_with_names;}
 
-	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before accountname alloc\n");
+    /* Allocate memory for the accountname string inside the key struct */
 	key->accountname = malloc((tokenlen+1) * sizeof *(key->accountname));
-	if (!key->accountname) {
-	    gcry_sexp_release(names);
-	    gcry_sexp_release(protos);
-	    gcry_sexp_release(groups);
-	    gcry_sexp_release(privs);
-	    gcry_sexp_release(pubs);
-	    chat_idkey_free(key);
-	    return NULL;
-	}
+	if (!key->accountname) { goto error_with_names; }
+
+    /* Copy the accountname and place a null character at the end */
 	memmove(key->accountname, token, tokenlen);
 	key->accountname[tokenlen] = '\0';
+
 	gcry_sexp_release(names);
 
-	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before protocol\n");
 	/* Extract the protocol */
 	token = gcry_sexp_nth_data(protos, 1, &tokenlen);
-	if (!token) {
-	    gcry_sexp_release(protos);
-	    gcry_sexp_release(privs);
-	    gcry_sexp_release(groups);
-	    gcry_sexp_release(pubs);
-	    chat_idkey_free(key);
-	    return NULL;
-	}
-	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before protocol alloc\n");
+	if (!token) { goto error_with_protos; }
+
+    /* Allocate memory for the protocol string inside the key struct */
 	key->protocol = malloc((tokenlen+1) * sizeof *(key->protocol));
-	if (!key->protocol) {
-	    gcry_sexp_release(protos);
-	    gcry_sexp_release(privs);
-	    gcry_sexp_release(groups);
-	    gcry_sexp_release(pubs);
-	    chat_idkey_free(key);
-	    return NULL;
-	}
+	if (!key->protocol) { goto error_with_protos; }
+
+    /* Copy the protocol and place a null character at the end */
 	memmove(key->protocol, token, tokenlen);
 	key->protocol[tokenlen] = '\0';
+
 	gcry_sexp_release(protos);
 
-	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before group\n");
 	/* Extract the group */
 	token = gcry_sexp_nth_data(groups, 1, &tokenlen);
-	if (!token) {
-	    gcry_sexp_release(privs);
-	    gcry_sexp_release(groups);
-	    gcry_sexp_release(pubs);
-	    chat_idkey_free(key);
-	    return NULL;
-	}
-	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before group alloc\n");
+	if (!token) { goto error_with_groups; }
+
+    /* Allocate memory for the group string. This auxiliary string is needed
+    since the DH group is stored as a string and we must convert it to an
+    integer later */
 	group_str = malloc((tokenlen+1) * sizeof *group_str);
-	if (!group_str) {
-	    gcry_sexp_release(privs);
-	    gcry_sexp_release(groups);
-	    gcry_sexp_release(pubs);
-	    chat_idkey_free(key);
-	    return NULL;
-	}
+	if (!group_str) { goto error_with_groups; }
+
+    /* Copy it and place a null character in the end */
 	memmove(group_str, token, tokenlen);
 	group_str[tokenlen] = '\0';
+
 	gcry_sexp_release(groups);
 
-	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before groupid\n");
 	/* Get the groupid from the string */
 	key->keyp.groupid = strtol(group_str, &s, 10);
 	if(s[0] != '\0'){
-		free(group_str);
-	    gcry_sexp_release(privs);
-	    gcry_sexp_release(pubs);
-	    chat_idkey_free(key);
-	    return NULL;
-	}
-	free(group_str);
+	    free(group_str);
+        goto error_with_privs;
+    }
+    free(group_str);
 
-	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before priv\n");
+    /* Get the private key */
 	w = gcry_sexp_nth_mpi(privs, 1, GCRYMPI_FMT_USG);
-	if(!w) {
-	    gcry_sexp_release(privs);
-	    gcry_sexp_release(pubs);
-	    chat_idkey_free(key);
-	    return NULL;
-	}
-	key->keyp.priv = w;//gcry_mpi_copy(w);
+	if(!w) { goto error_with_privs; }
 
-	if(!key->keyp.priv) {
-	    gcry_sexp_release(privs);
-	    gcry_sexp_release(pubs);
-	    chat_idkey_free(key);
-		return NULL;
-	}
+	key->keyp.priv = w;
 	gcry_sexp_release(privs);
 
-	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before pub\n");
+    /* Get the public key */
 	w = gcry_sexp_nth_mpi(pubs, 1, GCRYMPI_FMT_USG);
-	if(!w) {
-	    gcry_sexp_release(pubs);
-	    chat_idkey_free(key);
-	    return NULL;
-	}
-	key->keyp.pub = w; //gcry_mpi_copy(w);
-	if(!key->keyp.pub) {
-	    gcry_sexp_release(pubs);
-	    chat_idkey_free(key);
-		return NULL;
-	}
+	if(!w) { goto error_with_pubs; }
+
+	key->keyp.pub = w;
 	gcry_sexp_release(pubs);
 
     fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: end\n");
 	return key;
+
+error_with_names:
+	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: error_with_names\n");
+	gcry_sexp_release(names);
+error_with_protos:
+	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: error_with_protos\n");
+	gcry_sexp_release(protos);
+error_with_groups:
+	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: error_with_groups\n");
+	gcry_sexp_release(groups);
+error_with_privs:
+	gcry_sexp_release(privs);
+	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: error_with_privs\n");
+error_with_pubs:
+	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: error_with_names\n");
+	gcry_sexp_release(pubs);
+error:
+	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: error\n");
+    chat_idkey_free(key);
+    return NULL;
 }
 
 int chat_idkey_compare(ChatIdKey *a_key, ChatIdKey *b_key)
@@ -286,15 +258,18 @@ ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const c
 
     fprintf(stderr,"libotr-mpOTR: chat_idkey_find: start\n");
 
+    /* Duplicate the target accountname and protocol */
     target.accountname = strdup(accountname);
     if(!target.accountname) { goto error; }
 
     target.protocol = strdup(protocol);
     if(!target.protocol) { goto error_with_accountname; }
 
+    /* And search the key in the key list */
     found = otrl_list_find(key_list, &target);
     if(!found){ goto error_with_protocol; }
 
+    /* Free the target */
     free(target.protocol);
     free(target.accountname);
 

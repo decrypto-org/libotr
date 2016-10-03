@@ -17,16 +17,22 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include <stdlib.h>
-
-#include "chat_types.h"
-#include "chat_dake.h"
 #include "chat_dske.h"
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "chat_dake.h"
+#include "chat_fingerprint.h"
+#include "chat_idkey.h"
 #include "chat_message.h"
 #include "chat_participant.h"
-#include "chat_sign.h"
 #include "chat_privkeydh.h"
-#include "chat_fingerprint.h"
+#include "chat_sign.h"
+#include "chat_types.h"
+#include "list.h"
 
 
 enum {
@@ -56,41 +62,26 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 
     /* Allocate memory for the info struct */
     ctx->dske_info = malloc(sizeof(*ctx->dske_info));
-    if(!ctx->dske_info) {
-        return DSKE_ERROR;
-    }
+    if(!ctx->dske_info) { goto error; }
 
     chat_idkey_print(ctx->identity_key);
 
     /* Find us in the participant list */
     me = chat_participant_find(ctx, ctx->accountname, &my_pos);
-    if(!me) {
-        return DSKE_ERROR;
-    }
+    if(!me) { goto error; }
 
-    //chat_idkey_print_key(ctx->identity_key);
     fprintf(stderr,"chat_dske_init: before genkey\n");
-    //TODO 1: make sure to destroy the key in the event of an error KOSTIS
-    //TODO 2: Is ctx->singing_key needed?? i dont think it is used anywhere...
-    //        Generate it in a local variable instead of a context field. KOSTIS
+
+
     /* Generate an ephemeral signing key for this session */
     ctx->signing_key = chat_sign_genkey();
-
-    //chat_idkey_print_key(ctx->identity_key);
-    fprintf(stderr,"chat_dske_init: after genkey\n");
-    //TODO encapsulate this in a chat_sign function
+    //TODO    Is ctx->singing_key needed??
+    //        Maybe generate it in a local variable instead of a context field
+    //        KOSTIS
 
     /* Copy the public part of the signing key in me */
     me->sign_key = chat_sign_copy_pub(ctx->signing_key);
-
-    //me->sign_key = malloc(sizeof *(me->sign_key));
-    //if(!me->sign_key) {
-    //    chat_sign_destroy_key(ctx->signing_key);
-    //        return DSKE_ERROR;
-    //}
-
-    //me->sign_key->pub_key = gcry_sexp_find_token(ctx->signing_key->pub_key, "public-key", 0);
-    //me->sign_key->priv_key = NULL;
+    if(!me->sign_key) { goto error_with_ctx_key; }
 
     fprintf(stderr,"chat_dske_init: after key copy\n");
 
@@ -98,10 +89,7 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
      * contain the data that will be sent in the handshake message. */
     error = chat_dake_init_keys(&ctx->dske_info->dake_info, ctx->identity_key, ctx->accountname,
                         ctx->protocol, &dataToSend);
-    if(error) {
-        chat_sign_destroy_key(ctx->signing_key);
-        return DSKE_ERROR;
-    }
+    if(error) { goto error_with_me_key; }
 
     /* Initiate a dake for each participant. The dake struct holds information
      * regarding each individual DAKE with each participant. */
@@ -116,26 +104,11 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 
         chat_dake_init(participant->dake,&ctx->dske_info->dake_info);//, participant->fingerprint);
     }
-    if(error) {
-    	//TODO de-initialize every participant that was init'ed before the error
-        chat_sign_destroy_key(ctx->signing_key);
-        return DSKE_ERROR;
-    }
+    if(error) { goto error_with_participants; }
 
-    //fprintf(stderr,"chat_dske_init: after handhsake_init\n");
     /* Create the message we should send */
     *msgToSend = chat_message_dake_handshake_create(ctx, dataToSend);
-
-    //fprintf(stderr,"chat_dske_init: destroying data\n");
-    //chat_dake_destroy_handshake_data(dataToSend);
-    //free(dataToSend);
-    //fprintf(stderr,"chat_dske_init: after destroying data\n");
-    if(!msgToSend) {
-        chat_sign_destroy_key(ctx->signing_key);
-    	chat_dake_destroy_handshake_data(dataToSend);
-        free(dataToSend);
-        return DSKE_ERROR;
-    }
+    if(!msgToSend) { goto error_with_data; }
 
     //fprintf(stderr,"chat_dske_init: after handshake_create\n");
     /* Change the protocol state */
@@ -145,6 +118,26 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 
     fprintf(stderr,"chat_dske_init: end\n");
     return DSKE_NO_ERROR;
+
+error_with_data:
+	chat_dake_destroy_handshake_data(dataToSend);
+	free(dataToSend);
+error_with_participants:
+	for(cur = ctx->participants_list->head; cur != NULL; cur = cur->next)
+	{
+		participant = cur->payload;
+
+		if(participant->dake){
+			chat_dake_destroy(participant->dake);
+			free(participant->dake);
+		}
+	}
+error_with_me_key:
+	chat_sign_destroy_key(me->sign_key);
+error_with_ctx_key:
+	chat_sign_destroy_key(ctx->signing_key);
+error:
+	return DSKE_ERROR;
 }
 
 int chat_dske_handle_handshake_message(OtrlChatContext *ctx, ChatMessage *msg,

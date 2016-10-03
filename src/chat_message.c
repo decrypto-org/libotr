@@ -31,6 +31,8 @@
 #include "chat_serial.h"
 #include "chat_auth.h"
 
+#define CHAT_MESSAGE_TYPE_POSITION 2
+
 int chat_message_compare_payload(const char *msg_a, const char *msg_b)
 {
     return strcmp(msg_a, msg_b);
@@ -981,8 +983,6 @@ error:
  */
 ChatMessagePayloadPtr chat_message_payload_shutdown_shutdown_parse(const unsigned char *message, size_t length)
 {
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_shutdown_shutdown_parse: start\n");
-
 	ChatMessagePayloadShutdownShutdown *payload;
 	unsigned int pos = 0;
 
@@ -993,8 +993,6 @@ ChatMessagePayloadPtr chat_message_payload_shutdown_shutdown_parse(const unsigne
 
 	memcpy(payload->shutdown_hash, &message[pos], CHAT_PARTICIPANTS_HASH_LENGTH);
 	pos += CHAT_PARTICIPANTS_HASH_LENGTH;
-
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_shutdown_shutdown_parse: end\n");
 
 	return (ChatMessagePayloadPtr)payload;
 
@@ -1238,8 +1236,6 @@ unsigned char * chat_message_serialize(ChatMessage *msg, size_t *length)
 	size_t buflen, payloadlen = 0;
 	unsigned int pos = 0;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: start\n");
-
 	if(!msg) { goto error; }
 
 	if(msg->payload_serialize && msg->payload) {
@@ -1275,8 +1271,6 @@ unsigned char * chat_message_serialize(ChatMessage *msg, size_t *length)
 		free(payload_serialized);
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: end\n");
-
 	*length = buflen;
 	return buf;
 
@@ -1302,7 +1296,6 @@ error:
  */
 int chat_message_payload_parse(ChatMessage *msg, const unsigned char *message, size_t length)
 {
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_parse: start\n");
 	if(!msg) { goto error; }
 
 	switch(msg->msgType) {
@@ -1393,8 +1386,6 @@ int chat_message_payload_parse(ChatMessage *msg, const unsigned char *message, s
 			goto error;
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_parse: end\n");
-
 	return 0;
 
 error:
@@ -1413,8 +1404,7 @@ error:
 int chat_message_parse_type(const unsigned char *message, const size_t messagelen, ChatMessageType *type)
 {
 	if(messagelen < 3) { goto error; }
-	//TODO maybe define a value for the position of message type
-	*type = chat_message_message_type_parse(message[2]);
+	*type = chat_message_message_type_parse(message[CHAT_MESSAGE_TYPE_POSITION]);
 	return 0;
 
 error:
