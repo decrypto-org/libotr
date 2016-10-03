@@ -26,45 +26,40 @@
 
 int chat_context_compare(PayloadPtr a, PayloadPtr b)
 {
-	fprintf(stderr, "libotr-mpOTR: chat_context_compare: start\n");
 	OtrlChatContext *a1 = (OtrlChatContext *)a;
 	OtrlChatContext *b1 = (OtrlChatContext *)b;
 	int res = 0;
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_compare: before strcmp(a1->accountname, b1->accountname);\n");
 	res = strcmp(a1->accountname, b1->accountname);
 	if(res == 0) {
-		fprintf(stderr, "libotr-mpOTR: chat_context_compare: before res = strcmp(a1->protocol, b1->protocol);\n");
 		res = strcmp(a1->protocol, b1->protocol);
 		if(res == 0) {
-			fprintf(stderr, "libotr-mpOTR: chat_context_compare: before chat_token_compare(a1->the_chat_token, b1->the_chat_token);\n");
 			res = chat_token_compare(a1->the_chat_token, b1->the_chat_token);
 		}
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_compare: end\n");
 	return res;
 }
 
 
-void chat_context_destroy(PayloadPtr a)
+void chat_context_free(PayloadPtr a)
 {
-	fprintf(stderr, "libotr-mpOTR: chat_context_destroy: start\n");
-
 	OtrlChatContext *a1 = (OtrlChatContext *)a;
 	if(a1) {
-		if(a1->accountname)
-			fprintf(stderr, "libotr-mpOTR: chat_context_destroy: before free(a1->accountname);\n");
+		if(a1->accountname) {
 			free(a1->accountname);
-		if(a1->protocol)
-			fprintf(stderr, "libotr-mpOTR: chat_context_destroy: before free(a1->protocol);\n");
+		}
+		// TODO Dimitris: maybe define enc_info as a pointer, and change this
+		if(a1->enc_info.key) {
+			free(a1->enc_info.key);
+		}
+		if(a1->protocol) {
 			free(a1->protocol);
-
+		}
 		if(a1->app_data && a1->app_data_free) {
-			fprintf(stderr, "libotr-mpOTR: chat_context_destroy: before a1->app_data_free(a1->app_data);\n");
 			a1->app_data_free(a1->app_data);
 		}
-
+		free(a1);
 	}
 }
 
@@ -74,35 +69,25 @@ OtrlChatContext* chat_context_find(OtrlUserState us,
 	OtrlListNode *foundListNode;
 	OtrlChatContext *target;
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_find: start\n");
-
-
-	fprintf(stderr, "libotr-mpOTR: chat_context_find: initializing target\n");
 	target = chat_context_create(us, accountname, protocol, the_chat_token);
 	if(!target)
 		return NULL;
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_find: before otrl_list_find\n");
 	foundListNode = otrl_list_find(us->chat_context_list, (PayloadPtr)target);
-	fprintf(stderr, "libotr-mpOTR: chat_context_find: before chat_context_destroy\n");
-	chat_context_destroy((PayloadPtr)target);
+	chat_context_free((PayloadPtr)target);
 
 	if(!foundListNode)
 		return NULL;
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_find: end\n");
 	return (OtrlChatContext *)foundListNode->payload;
 }
 
 int chat_context_add(OtrlUserState us, OtrlChatContext* ctx)
 {
-	fprintf(stderr, "libotr-mpOTR: chat_context_add: start\n");
-
 	OtrlListNode * aNode;
-	fprintf(stderr, "libotr-mpOTR: chat_context_add: before otrl_list_insert\n");
+
 	aNode = otrl_list_insert(us->chat_context_list, (PayloadPtr)ctx);
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_add: end\n");
 	if(!aNode)
 		return -1;
 	else
@@ -116,14 +101,12 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname,
 	OtrlInsTag *ourInstanceTag;
 
 	//TODO initialize other Context elements
-
-	fprintf(stderr, "libotr-mpOTR: chat_context_create: before malloc\n");
 	ctx = (OtrlChatContext *)malloc(sizeof(OtrlChatContext));
 	if(ctx) {
 		ctx->accountname = strdup(accountname);
 		ctx->protocol = strdup(protocol);
 		// TODO: Dimitris: Check what is returned here?
-		fprintf(stderr, "libotr-mpOTR: chat_context_create: before otrl_instag_find, accountname: %s, protocol: %s\n", accountname, protocol);
+		// TODO: Dimitris: Important! We should handle the case of not found instag, and create a new one!!!!
 		ourInstanceTag = otrl_instag_find(us, accountname, protocol);
 		if(!ourInstanceTag) {
 			fprintf(stderr, "libotr-mpOTR: chat_context_create: ourInstanceTag not found!\n");
@@ -132,11 +115,12 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname,
 		ctx->the_chat_token = the_chat_token;
 		ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
 		ctx->protocol_version = CHAT_PROTOCOL_VERSION;
+		// TODO Dimitris: maybe define enc_info as a pointer, and change this
+		ctx->enc_info.key = NULL;
 		ctx->app_data = NULL;
 		ctx->app_data_free = NULL;
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_create: end\n");
 	return ctx;
 }
 
@@ -145,32 +129,25 @@ OtrlChatContext* chat_context_find_or_add(OtrlUserState us,
 {
 	OtrlChatContext *ctx;
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_find_or_add: start\n");
-
-	fprintf(stderr, "libotr-mpOTR: chat_context_find_or_add: accountname: %s, protocol: %s\n", accountname, protocol);
 	ctx = chat_context_find(us, accountname, protocol, the_chat_token);
 
 	if(!ctx) {
-		fprintf(stderr, "libotr-mpOTR: chat_context_find_or_add: before chat_context_create\n");
 		ctx = chat_context_create(us, accountname, protocol, the_chat_token);
 		if(ctx) {
-			fprintf(stderr, "libotr-mpOTR: chat_context_find_or_add: before chat_context_add\n");
 			if (!chat_context_add(us, ctx)) {
-				chat_context_destroy((PayloadPtr)ctx);
+				chat_context_free((PayloadPtr)ctx);
 				ctx = NULL;
 			}
 		}
 	}
 
-
-	fprintf(stderr, "libotr-mpOTR: chat_context_find_or_add: end\n");
 	return ctx;
 }
 
 struct OtrlListOpsStruct chat_context_listOps = {
 		chat_context_compare,
 		chat_context_toString,
-		chat_context_destroy
+		chat_context_free
 };
 
 void chat_context_toString(OtrlListNode *node) {

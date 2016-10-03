@@ -67,7 +67,7 @@
 
 int chat_context_compare(PayloadPtr a, PayloadPtr b);
 
-void chat_context_destroy(PayloadPtr a);
+void chat_context_free(PayloadPtr a);
 
 OtrlChatContext* chat_context_find(OtrlUserState us,
 		const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token);
