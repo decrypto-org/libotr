@@ -34,6 +34,11 @@ void chat_enc_initialize_enc_info(OtrlChatEncInfo *enc_info) {
 
 }
 
+void chat_enc_info_destroy(OtrlChatEncInfo *enc_info)
+{
+	gcry_free(enc_info->key);
+}
+
 unsigned char * mpi_serial_secure(gcry_mpi_t w, size_t *size)
 {
 	unsigned char *buf;
@@ -404,4 +409,3 @@ unsigned char * chat_enc_encrypt(OtrlChatContext *ctx, const char *plaintext) {
 	gcry_cipher_close(ecipher);
 	return ciphertext;
 }
-

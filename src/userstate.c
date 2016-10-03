@@ -40,7 +40,7 @@ OtrlUserState otrl_userstate_create(void)
     OtrlUserState us = malloc(sizeof(struct s_OtrlUserState));
     if (!us) return NULL;
     us->context_root = NULL;
-    us->chat_context_list = otrl_list_init(&chat_context_listOps, sizeof(OtrlChatContext)); /* DIKOMAS */
+    us->chat_context_list = otrl_list_create(&chat_context_listOps, sizeof(OtrlChatContext)); /* DIKOMAS */
     fprintf(stderr, "nlibotr-mpOTR: otrl_userstate_create: dumping the context list:\n"); /* DIKOMAS */
     otrl_list_dump(us->chat_context_list); /* DIKOMAS */
     us->privkey_root = NULL;

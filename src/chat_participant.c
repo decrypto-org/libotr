@@ -215,6 +215,8 @@ void chat_participant_toString(OtrlListNode *node)
     fprintf(stderr, "OtrlChatParticipant:\n");
     fprintf(stderr, "|-username\t:%s\n",participant->username);
     fprintf(stderr, "|-pub_key\t:%s\n", buf);
+
+    free(buf);
 }
 
 struct OtrlListOpsStruct chat_participant_listOps = {

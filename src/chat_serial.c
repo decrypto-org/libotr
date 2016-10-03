@@ -74,7 +74,8 @@ int chat_serial_string_to_mpi(const unsigned char* input, gcry_mpi_t *output, si
 {
 	gcry_error_t err;
 
-	*output = gcry_mpi_new(320);
+	//TODO commenting this out to check if scan allocates a new mpi. remove this if it does.
+	//*output = gcry_mpi_new(320);
 
 	err = gcry_mpi_scan(output, GCRYMPI_FMT_HEX, input, 0, NULL);
 	if(err)

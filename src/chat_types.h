@@ -53,11 +53,13 @@ typedef struct OtrlChatMessageStruct {
 		unsigned char * (*payload_serialize)(MessagePayloadPtr, size_t *);
 } OtrlChatMessage;
 
+//TODO Remove this struct. it is not used
 typedef struct OtrlChatMessagePayloadQueryStruct {
         //TODO this is to change
         unsigned char key[32];
 } OtrlChatMessagePayloadQuery;
 
+//TODO Remove this struct. it is not used
 typedef struct OtrlChatMessagePayloadQueryAckStruct {
         //TODO this is to change
         unsigned char magicnum[4];
@@ -104,11 +106,9 @@ typedef enum {
 typedef struct {
         OtrlChatAuthGKAState state;  /* the gka state */
 
-        unsigned int position;
+        unsigned int position;      /* Our position in the participants order starting from the gka initiator */
 
         DH_keypair *keypair;		/* The keypair used for the gka */
-
-        OtrlChatMessage *auth_msg; /* the next message to be send for GKA */
 
         unsigned char participants_hash[CHAT_PARTICIPANTS_HASH_LENGTH];
 } OtrlAuthGKAInfo;
