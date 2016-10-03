@@ -54,7 +54,7 @@ int chat_serial_mpi_to_string(gcry_mpi_t w, unsigned char** output, size_t *size
     if(err)
     	return 1;
 
-    *output = malloc(s * sizeof *output);
+    *output = malloc(s * sizeof **output);
     if(!*output)
     	return 1;
 

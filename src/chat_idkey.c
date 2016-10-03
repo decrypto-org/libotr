@@ -30,7 +30,7 @@ void print_mpi(gcry_mpi_t w)
     size_t s;
 
     gcry_mpi_print(GCRYMPI_FMT_HEX,NULL,0,&s,w);
-    buf = malloc((s+1) * sizeof (*buf));
+    buf = malloc((s+1) * sizeof *buf);
     if(!buf) {
     	return;
     }
@@ -47,18 +47,16 @@ void chat_idkey_init_key(ChatIdKey *key){
 	otrl_dh_keypair_init(&key->keyp);
 }
 
-void chat_idkey_destroy_key(ChatIdKey *key){
-    otrl_dh_keypair_free(&key->keyp);
-    free(key->accountname);
-    free(key->protocol);
+void chat_idkey_free(ChatIdKey *key){
+	if(key) {
+		otrl_dh_keypair_free(&key->keyp);
+		free(key->accountname);
+		free(key->protocol);
+	}
     free(key);
 }
 
-void chat_idkey_destroy_keyOp(PayloadPtr a) {
-	chat_idkey_destroy_key(a);
-}
-
-void chat_idkey_print_key(ChatIdKey *key) {
+void chat_idkey_print(ChatIdKey *key) {
 
 	fprintf(stderr, "idkey:\n");
 	fprintf(stderr, "|- accountname: %s\n", key->accountname );
@@ -70,29 +68,28 @@ void chat_idkey_print_key(ChatIdKey *key) {
 	print_mpi(key->keyp.pub);
 }
 
-void chat_idkey_print_keyOp(OtrlListNode* a) {
-	ChatIdKey *key = a->payload;
-
-	chat_idkey_print_key(key);
-}
-
-gcry_error_t chat_idkey_generate_key(ChatIdKey **newkey)
+int chat_idkey_generate_key(ChatIdKey **newkey)
 {
-    gcry_error_t err = gcry_error(GPG_ERR_NO_ERROR);
+	ChatIdKey *key;
+    gcry_error_t err;
 
     fprintf(stderr,"libotr-mpOTR: chat_idkey_generate_key: start\n");
 
-    *newkey = malloc(sizeof(**newkey));
+    key = malloc(sizeof *key);
+    if(!key) { goto error; }
 
-    err = otrl_dh_gen_keypair(DH1536_GROUP_ID, &(*newkey)->keyp);
-    if(err) {
-    	fprintf(stderr,"libotr-mpOTR: chat_idkey_generate_key: error\n");
-        free(newkey);
-        *newkey = NULL;
-    }
+    err = otrl_dh_gen_keypair(DH1536_GROUP_ID, &key->keyp);
+    if(err) { goto error_with_key; }
 
     fprintf(stderr,"libotr-mpOTR: chat_idkey_generate_key: end\n");
-    return err;
+
+    *newkey = key;
+    return 0;
+
+error_with_key:
+	free(key);
+error:
+	return 1;
 }
 
 gcry_error_t chat_idkey_serialize_key(ChatIdKey *key, gcry_sexp_t *sexp)
@@ -142,7 +139,7 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 	    return NULL;
 	}
 
-	key = malloc(sizeof(*key));
+	key = malloc(sizeof *key);
 	chat_idkey_init_key(key);
 
 	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before name\n");
@@ -158,14 +155,14 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 	}
 
 	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before accountname alloc\n");
-	key->accountname = malloc(tokenlen + 1);
+	key->accountname = malloc((tokenlen+1) * sizeof *(key->accountname));
 	if (!key->accountname) {
 	    gcry_sexp_release(names);
 	    gcry_sexp_release(protos);
 	    gcry_sexp_release(groups);
 	    gcry_sexp_release(privs);
 	    gcry_sexp_release(pubs);
-	    chat_idkey_destroy_key(key);
+	    chat_idkey_free(key);
 	    return NULL;
 	}
 	memmove(key->accountname, token, tokenlen);
@@ -180,17 +177,17 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 	    gcry_sexp_release(privs);
 	    gcry_sexp_release(groups);
 	    gcry_sexp_release(pubs);
-	    chat_idkey_destroy_key(key);
+	    chat_idkey_free(key);
 	    return NULL;
 	}
 	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before protocol alloc\n");
-	key->protocol = malloc(tokenlen + 1);
+	key->protocol = malloc((tokenlen+1) * sizeof *(key->protocol));
 	if (!key->protocol) {
 	    gcry_sexp_release(protos);
 	    gcry_sexp_release(privs);
 	    gcry_sexp_release(groups);
 	    gcry_sexp_release(pubs);
-	    chat_idkey_destroy_key(key);
+	    chat_idkey_free(key);
 	    return NULL;
 	}
 	memmove(key->protocol, token, tokenlen);
@@ -204,16 +201,16 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 	    gcry_sexp_release(privs);
 	    gcry_sexp_release(groups);
 	    gcry_sexp_release(pubs);
-	    chat_idkey_destroy_key(key);
+	    chat_idkey_free(key);
 	    return NULL;
 	}
 	fprintf(stderr,"libotr-mpOTR: chat_idkey_parse_key: before group alloc\n");
-	group_str = malloc(tokenlen + 1);
+	group_str = malloc((tokenlen+1) * sizeof *group_str);
 	if (!group_str) {
 	    gcry_sexp_release(privs);
 	    gcry_sexp_release(groups);
 	    gcry_sexp_release(pubs);
-	    chat_idkey_destroy_key(key);
+	    chat_idkey_free(key);
 	    return NULL;
 	}
 	memmove(group_str, token, tokenlen);
@@ -227,7 +224,7 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 		free(group_str);
 	    gcry_sexp_release(privs);
 	    gcry_sexp_release(pubs);
-	    chat_idkey_destroy_key(key);
+	    chat_idkey_free(key);
 	    return NULL;
 	}
 	free(group_str);
@@ -237,7 +234,7 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 	if(!w) {
 	    gcry_sexp_release(privs);
 	    gcry_sexp_release(pubs);
-	    chat_idkey_destroy_key(key);
+	    chat_idkey_free(key);
 	    return NULL;
 	}
 	key->keyp.priv = w;//gcry_mpi_copy(w);
@@ -245,7 +242,7 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 	if(!key->keyp.priv) {
 	    gcry_sexp_release(privs);
 	    gcry_sexp_release(pubs);
-	    chat_idkey_destroy_key(key);
+	    chat_idkey_free(key);
 		return NULL;
 	}
 	gcry_sexp_release(privs);
@@ -254,13 +251,13 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 	w = gcry_sexp_nth_mpi(pubs, 1, GCRYMPI_FMT_USG);
 	if(!w) {
 	    gcry_sexp_release(pubs);
-	    chat_idkey_destroy_key(key);
+	    chat_idkey_free(key);
 	    return NULL;
 	}
 	key->keyp.pub = w; //gcry_mpi_copy(w);
 	if(!key->keyp.pub) {
 	    gcry_sexp_release(pubs);
-	    chat_idkey_destroy_key(key);
+	    chat_idkey_free(key);
 		return NULL;
 	}
 	gcry_sexp_release(pubs);
@@ -269,11 +266,8 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 	return key;
 }
 
-int chat_idkey_compar(PayloadPtr a, PayloadPtr b)
+int chat_idkey_compare(ChatIdKey *a_key, ChatIdKey *b_key)
 {
-    ChatIdKey *a_key = a;
-    ChatIdKey *b_key = b;
-
     int username_eq = strcmp(a_key->accountname, b_key->accountname);
     fprintf(stderr,"chat_idkey_compar: comparing %s with %s\n", a_key->accountname, b_key->accountname);
 
@@ -287,64 +281,63 @@ int chat_idkey_compar(PayloadPtr a, PayloadPtr b)
 
 ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const char *protocol)
 {
-    ChatIdKey target;
+    ChatIdKey target, *res;
     OtrlListNode *found;
+
     fprintf(stderr,"libotr-mpOTR: chat_idkey_find: start\n");
 
     target.accountname = strdup(accountname);
     if(!target.accountname) { goto error; }
-    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after accountname dup, it is: %s\n", accountname);
 
     target.protocol = strdup(protocol);
     if(!target.protocol) { goto error_with_accountname; }
-    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after protocol dup, it is: %s\n", protocol);
 
     found = otrl_list_find(key_list, &target);
-    if(!found){
-    	fprintf(stderr,"libotr-mpOTR: chat_idkey_find: a key was not found\n");
-    }
-    else {
-    	fprintf(stderr,"libotr-mpOTR: chat_idkey_find: a key was found\n");
-    }
+    if(!found){ goto error_with_protocol; }
 
-    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after list find\n");
-    free(target.accountname);
-    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after accountname free\n");
     free(target.protocol);
-    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: after protocol free\n");
+    free(target.accountname);
 
-    return (ChatIdKey *)found->payload;
+    fprintf(stderr,"libotr-mpOTR: chat_idkey_find: end\n");
 
+    res = found->payload;
+    return res;
+
+error_with_protocol:
+    free(target.protocol);
 error_with_accountname:
     free(target.accountname);
 error:
     return NULL;
 }
 
-//ChatIdKey * chat_idkey_find_or_add(OtrlList *key_list, const char *accountname, const char *protocol)
-//{
-//	ChatIdKey *key;
-//	gcry_error_t err;
-//
-//	key = chat_idkey_find(key_list, accountname, protocol);
-//	if(!key){
-//		err = chat_idkey_generate_key(&key);
-//		if(err) {
-//			return NULL;
-//		}
-//
-//	}
-//}
+int chat_idkey_compareOp(PayloadPtr a, PayloadPtr b)
+{
+    ChatIdKey *a_key = a;
+    ChatIdKey *b_key = b;
+
+   	return chat_idkey_compare(a_key, b_key);
+}
+
+void chat_idkey_printOp(OtrlListNode* a) {
+	ChatIdKey *key = a->payload;
+
+	chat_idkey_print(key);
+}
+
+void chat_idkey_freeOp(PayloadPtr a) {
+	chat_idkey_free(a);
+}
 
 struct OtrlListOpsStruct chat_idkey_listOps = {
-		chat_idkey_compar,
-		chat_idkey_print_keyOp,
-		chat_idkey_destroy_keyOp
+		chat_idkey_compareOp,
+		chat_idkey_printOp,
+		chat_idkey_freeOp
 };
 
 ChatIdKeyManager chat_id_key_manager = {
     chat_idkey_init_key,
-    chat_idkey_destroy_key,
+    chat_idkey_free,
 	chat_idkey_parse_key,
     chat_idkey_generate_key,
     chat_idkey_serialize_key,

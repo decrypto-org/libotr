@@ -41,11 +41,11 @@ struct OtrlListOpsStruct interKeyOps;
 //} OtrlAuthGKAInfo;
 
 /**
-  Destroyes an OtrlAuthGKAInfo struct. It does not free the struct itself.
+  Frees all memory allocated for a OtrlAuthGKAInfo struct.
 
-  @param gka_info the struct to be destroyed.
+  @param gka_info the struct to be free'd.
  */
-void chat_auth_gka_info_destroy(OtrlAuthGKAInfo *gka_info);
+void chat_auth_gka_info_free(OtrlAuthGKAInfo *gka_info);
 
 /**
  Initialize the query exchange

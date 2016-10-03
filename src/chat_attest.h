@@ -20,7 +20,7 @@
 #ifndef CHAT_ATTEST_H_
 #define CHAT_ATTEST_H_
 
-void chat_attest_info_destroy(OtrlChatContext *ctx);
+void chat_attest_info_free(ChatAttestInfo *info);
 
 int chat_attest_init(OtrlChatContext *ctx, ChatMessage **msgToSend);
 

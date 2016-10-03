@@ -21,5 +21,10 @@
 #include <string.h>
 
 int chat_token_compare(otrl_chat_token_t a, otrl_chat_token_t b) {
-	return strcmp(a, b);
+    if( a > b )
+        return 1;
+    else if(a < b)
+        return -1;
+    else
+        return 0;
 }

@@ -23,7 +23,7 @@
 #ifndef CHAT_OFFER_H_
 #define CHAT_OFFER_H_
 
-void chat_offer_info_destroy(ChatOfferInfo **info);
+void chat_offer_info_free(ChatOfferInfo *info);
 
 int chat_offer_info_init(OtrlChatContext *ctx, size_t size);
 

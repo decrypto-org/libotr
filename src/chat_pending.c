@@ -60,11 +60,12 @@ error:
 	return NULL;
 }
 
-void chat_pending_destroy(ChatPendingPtr pending)
+void chat_pending_free(ChatPendingPtr pending)
 {
-	assert(pending && "Is validated by the caller");
-	free(pending->sender);
-    free(pending->msg);
+	if(pending) {
+		free(pending->sender);
+		free(pending->msg);
+	}
     free(pending);
 }
 
@@ -126,23 +127,21 @@ int chat_pending_compareOp(PayloadPtr a, PayloadPtr b)
 	return chat_pending_compare(a1, b1);
 }
 
-
-void chat_pending_destroyOp(PayloadPtr a)
-{
-	ChatPendingPtr pending = a;
-	chat_pending_destroy(pending);
-}
-
-
 void chat_pending_printOp(OtrlListNode* a)
 {
 	ChatPendingPtr pending = a->payload;
 	chat_pending_print(pending);
 }
 
+void chat_pending_freeOp(PayloadPtr a)
+{
+	ChatPendingPtr pending = a;
+	chat_pending_free(pending);
+}
+
 struct OtrlListOpsStruct chat_pending_listOps = {
 		chat_pending_compareOp,
 		chat_pending_printOp,
-		chat_pending_destroyOp
+		chat_pending_freeOp
 };
 

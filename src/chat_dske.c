@@ -35,14 +35,12 @@ enum {
 	DSKE_KEY_UNVERIFIED
 };
 
-void chat_dske_destroy_info(OtrlAuthDSKEInfo **dske_info)
+void chat_dske_info_free(OtrlAuthDSKEInfo *dske_info)
 {
-	if(!*dske_info)
-		return;
-
-    chat_dake_destroy_info(&(*dske_info)->dake_info);
-    free(*dske_info);
-    *dske_info = NULL;
+	if(dske_info) {
+		chat_dake_destroy_info(&dske_info->dake_info);
+	}
+    free(dske_info);
 }
 
 int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
@@ -57,8 +55,11 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     fprintf(stderr,"chat_dske_init: start\n");
 
     ctx->dske_info = malloc(sizeof(*ctx->dske_info));
+    if(!ctx->dske_info) {
+        return DSKE_ERROR;
+    }
 
-    chat_idkey_print_key(ctx->identity_key);
+    chat_idkey_print(ctx->identity_key);
 
     me = chat_participant_find(ctx, ctx->accountname, &my_pos);
     if(!me) {
@@ -73,7 +74,7 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     //chat_idkey_print_key(ctx->identity_key);
     fprintf(stderr,"chat_dske_init: after my keygen\n");
     //TODO encapsulate this in a chat_sign function
-    me->sign_key = malloc(sizeof(SignKey));
+    me->sign_key = malloc(sizeof *(me->sign_key));
     if(!me->sign_key) {
         chat_sign_destroy_key(ctx->signing_key);
             return DSKE_ERROR;
@@ -103,7 +104,7 @@ int chat_dske_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     for(cur = ctx->participants_list->head; cur != NULL; cur = cur->next)
     {
         participant = cur->payload;
-        participant->dake = malloc(sizeof(*(participant->dake)));
+        participant->dake = malloc(sizeof *(participant->dake));
         if(!participant->dake){
             error = DSKE_ERROR;
             break;
@@ -150,7 +151,7 @@ int chat_dske_handle_handshake_message(OtrlChatContext *ctx, ChatMessage *msg,
     DAKE_confirm_message_data *dataToSend;
     unsigned int pos;
     unsigned char *fingerprint;
-    ChatFingerprint *cur_finger;
+    OtrlChatFingerprint *cur_finger;
     OtrlListNode *cur = NULL;
     OtrlListNode *node = NULL;
     int error = DSKE_NO_ERROR;

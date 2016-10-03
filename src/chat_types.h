@@ -226,7 +226,7 @@ typedef struct {
 } ShutdownInfo;
 
 /* Chat token type declerations */
-typedef char* otrl_chat_token_t;
+typedef int otrl_chat_token_t;
 
 
 /* Chat context type declerations */
@@ -249,9 +249,9 @@ typedef struct OtrlChatContextStruct {
 
         ChatAttestInfo *attest_info;
 
-        OtrlChatEncInfo enc_info;          /* Info needed for encrypting messages */
+        OtrlChatEncInfo *enc_info;          /* Info needed for encrypting messages */
 
-        OtrlAuthGKAInfo gka_info;          /* Info needed for the GKA */
+        OtrlAuthGKAInfo *gka_info;          /* Info needed for the GKA */
 
         OtrlAuthDSKEInfo *dske_info;	  	   /* Info needed for the DSKE */
 
@@ -274,18 +274,18 @@ typedef struct OtrlChatContextStruct {
 } OtrlChatContext;
 
 
-typedef struct ChatFingerprintStruct {
+typedef struct OtrlChatFingerprintStruct {
 	unsigned char *fingerprint;
 	char *username;     	 /* the username that the fingerprint corresponds to */
 	char *accountname;  	 /* the account name we have trusted with */
 	char *protocol;			 /* the protocol we have trusted the user with */
 	unsigned char isTrusted; /* boolean value showing if the user has verified the fingerprint */
-} ChatFingerprint;
+} OtrlChatFingerprint;
 
 typedef  struct ChatParticipantStruct {
         char *username; // This users username
         SignKey *sign_key; //This users signing key
-        ChatFingerprint *fingerprint;
+        OtrlChatFingerprint *fingerprint;
         OtrlList *fingerprints;
         DAKE *dake;
 	//TODO move these in Shutdown struct and release them

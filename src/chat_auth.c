@@ -65,7 +65,7 @@ void key_toString(OtrlListNode *node)
     size_t s;
 
     gcry_mpi_print(GCRYMPI_FMT_HEX,NULL,0,&s,*w);
-    buf = malloc(s+1);
+    buf = malloc((s+1) * sizeof *buf);
     gcry_mpi_print(GCRYMPI_FMT_HEX,buf,s,NULL,*w);
     buf[s]='\0';
 
@@ -86,7 +86,7 @@ void mpi_toString(gcry_mpi_t w)
     size_t s;
 
     gcry_mpi_print(GCRYMPI_FMT_HEX,NULL,0,&s,w);
-    buf = malloc(s+1);
+    buf = malloc((s+1) * sizeof *buf);
     gcry_mpi_print(GCRYMPI_FMT_HEX,buf,s,NULL,w);
     buf[s]='\0';
 
@@ -108,12 +108,32 @@ struct OtrlListOpsStruct interKeyOps = {
 
   @param gka_info the OtrlAuthGKAInfo to be destroyed
  */
-void chat_auth_gka_info_destroy(OtrlAuthGKAInfo *gka_info)
+void chat_auth_gka_info_free(OtrlAuthGKAInfo *gka_info)
 {
+    if(!gka_info){
+        return;
+    }
+
 	if(gka_info->keypair)
 		otrl_dh_keypair_free(gka_info->keypair);
 
 	free(gka_info->keypair);
+    free(gka_info);
+}
+
+OtrlAuthGKAInfo *chat_auth_gka_info_new()
+{
+    OtrlAuthGKAInfo *tmp;
+
+    tmp = malloc(sizeof *tmp);
+    if(!tmp) {
+        return NULL;
+    }
+
+    tmp->keypair = NULL;
+    tmp->state = CHAT_GKASTATE_NONE;
+
+    return tmp;
 }
 
 /**
@@ -137,7 +157,7 @@ OtrlList * initial_intermediate_key_list()
 
 	fprintf(stderr, "libotr-mpOTR: inital_intermediate_key_list: start\n");
 
-	generator = malloc(sizeof(gcry_mpi_t));
+	generator = malloc(sizeof *generator);
 	if(!generator) {
 		return NULL;
 	}
@@ -157,7 +177,7 @@ OtrlList * initial_intermediate_key_list()
 	return key_list;
 
 error_with_list:
-	otrl_list_destroy(key_list);
+	otrl_list_free(key_list);
 error:
 	gcry_mpi_release(*generator);
 	free(generator);
@@ -180,7 +200,7 @@ int append_with_key(OtrlList *new_key_list, OtrlList *old_key_list, DH_keypair *
 {
 	OtrlListNode *cur, *node;
 	gcry_mpi_t *w, *tmp;
-	char error = 0;
+	int err;
 
 	fprintf(stderr, "libotr-mpOTR: append_with_key: start\n");
 
@@ -189,17 +209,13 @@ int append_with_key(OtrlList *new_key_list, OtrlList *old_key_list, DH_keypair *
 	for(cur = old_key_list->head; cur!=NULL; cur = cur->next) {
 
 		tmp = cur->payload;
-		if(otrl_dh_is_inrange(*tmp)) {
-			error = 1;
-			break;
-		}
+
+		err = otrl_dh_is_inrange(*tmp);
+		if(err) { goto error; }
 
 		/* Allocate a new gcry_mpi_t to be held in the list */
-		w = malloc( sizeof(*w) );
-		if(!w) {
-			error = 1;
-			break;
-		}
+		w = malloc(sizeof *w);
+		if(!w) { goto error; }
 		*w = gcry_mpi_new(256);
 
 		/* raise it to the key->prive (mod the modulo) */
@@ -207,19 +223,18 @@ int append_with_key(OtrlList *new_key_list, OtrlList *old_key_list, DH_keypair *
 
 		/* Append it to the new_list and check if it was added correctly */
 		node = otrl_list_append(new_key_list,w);
-		if(!node){
-			error = 1;
-			break;
-		}
-	}
+		if(!node){ goto error_with_w; };
 
-	if(error){
-		fprintf(stderr, "libotr-mpOTR: append_with_key: end error\n");
-		return 1;
 	}
 
 	fprintf(stderr, "libotr-mpOTR: append_with_key: end\n");
 	return 0;
+
+error_with_w:
+	gcry_mpi_release(*w);
+	free(w);
+error:
+	return 1;
 }
 
 /**
@@ -239,48 +254,57 @@ OtrlList * intermediate_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 	OtrlList *new_list;
 	OtrlListNode *node;
 	gcry_mpi_t *w, *last, *first;
+	int err;
 
 	fprintf(stderr, "libotr-mpOTR: intermediate_key_list_to_send: start\n");
 
     /* If the intermediate key_list we received is from the first upflow message
      * we should check that the sender is using the correct generator */
-    first = otrl_list_get_first(key_list)->payload;
+	node = otrl_list_get_first(key_list);
+	if(!node) { goto error; }
+    first = node->payload;
+    if(!first) { goto error; }
+
     if(2 == otrl_list_length(key_list) && gcry_mpi_cmp(otrl_dh_get_generator(),*first)){
-        otrl_list_dump(key_list);
-        return NULL;
-      }
+    	goto error;
+     }
+
+    /* Append the last key in the key_list to the new list, as
+	 * specified by the algorithm */
+    node = otrl_list_get_last(key_list);
+    if(!node) { goto error; }
+	last = otrl_list_get_last(key_list)->payload;
+	if(!last) { goto error; }
 
 	/* Initialize the list to be returned */
 	new_list = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
+	if(!new_list) { goto error; }
 
-	/* Append the last key in the key_list to the new list, as
-	 * specified by the algorithm */
-	last = otrl_list_get_last(key_list)->payload;
+	w = malloc(sizeof *w);
+	if(!w) { goto error_with_new_list; }
 
-	w = malloc( sizeof(*w));
 	*w = gcry_mpi_copy(*last);
 
 	node = otrl_list_append(new_list, w);
-	if(!node) {
-		gcry_mpi_release(*w);
-		free(w);
-		fprintf(stderr, "libotr-mpOTR: intermediate_key_list_to_send: end error\n");
-		return NULL;
-	}
+	if(!node) { goto error_with_w; }
 
 	/* If there was an error destroy the new_list and return NULL */
-	if(append_with_key(new_list, key_list, key)){
-		otrl_list_destroy(new_list);
-		fprintf(stderr, "libotr-mpOTR: intermediate_key_list_to_send: end error\n");
-		return NULL;
-	}
-
+	err = append_with_key(new_list, key_list, key);
+	if(err) { goto error_with_new_list; }
 
 	otrl_list_dump(new_list);
 
 	fprintf(stderr, "libotr-mpOTR: intermediate_key_list_to_send: end\n");
 
 	return new_list;
+
+error_with_w:
+	gcry_mpi_release(*w);
+	free(w);
+error_with_new_list:
+	otrl_list_free(new_list);
+error:
+	return NULL;
 }
 
 /**
@@ -300,23 +324,26 @@ OtrlList * intermediate_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 OtrlList * final_key_list_to_send(OtrlList *key_list, DH_keypair *key)
 {
 	OtrlList *new_list;
+	int err;
 
 	fprintf(stderr, "libotr-mpOTR: final_key_list_to_send: start\n");
 
-	/* Initialize the list to be returned */
 	new_list = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
-	fprintf(stderr, "libotr-mpOTR: final_key_list_to_send: after list init\n");
+	if(!new_list) { goto error; }
 
-	/* If there was an error destroy the new_list and return NULL */
-	if(append_with_key(new_list, key_list, key)){
-		fprintf(stderr, "libotr-mpOTR: final_key_list_to_send: append_with_key error\n");
-		otrl_list_destroy(new_list);
-		return NULL;
-	}
+	err = append_with_key(new_list, key_list, key);
+	if(err) { goto error_with_new_list; }
 
 	fprintf(stderr, "libotr-mpOTR: final_key_list_to_send: end\n");
 
 	return new_list;
+
+error_with_new_list:
+	fprintf(stderr, "libotr-mpOTR: final_key_list_to_send: error_with_new_list\n");
+	otrl_list_free(new_list);
+error:
+	fprintf(stderr, "libotr-mpOTR: final_key_list_to_send: error\n");
+	return NULL;
 }
 
 /**
@@ -377,7 +404,7 @@ gcry_error_t initialize_gka_info(OtrlAuthGKAInfo *gka_info)
     /* Allocate the DH keypair */
     if(gka_info->keypair)
     	free(gka_info->keypair);
-    gka_info->keypair = malloc(sizeof(DH_keypair));
+    gka_info->keypair = malloc(sizeof *(gka_info->keypair));
     if(!gka_info->keypair) {
     	return gcry_error(GPG_ERR_ENOMEM);
     }
@@ -405,8 +432,13 @@ int chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: start\n");
 
+    ctx->gka_info = chat_auth_gka_info_new();
+    if(!ctx->gka_info) {
+        return 1;
+    }
+
     /* Do any initializations needed */
-    g_err = initialize_gka_info(&ctx->gka_info);
+    g_err = initialize_gka_info(ctx->gka_info);
     if(g_err) {
     	return 1;
     }
@@ -418,6 +450,12 @@ int chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     if(err) { goto error_with_init_info; }
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after get pos\n");
 
+    if(0 != me_next[0]){
+        ctx->gka_info->state = CHAT_GKASTATE_AWAITING_UPFLOW;
+        *msgToSend = NULL;
+        return 0;
+    }
+
     /* Get a intermediate key list with only the generator inside */
     initial_key_list = initial_intermediate_key_list();
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after initial_intermediate_key_list\n");
@@ -427,12 +465,12 @@ int chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     fprintf(stderr, "libotr-mpOTR: chat_auth_init: after init list dump\n");
 
     /* Create the intermediate key list to send */
-    inter_key_list = intermediate_key_list_to_send(initial_key_list, ctx->gka_info.keypair);
+    inter_key_list = intermediate_key_list_to_send(initial_key_list, ctx->gka_info->keypair);
     //otrl_list_dump(inter_key_list);
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after list to send\n");
 
     /* We don't need the initial list anymore */
-    otrl_list_destroy(initial_key_list);
+    otrl_list_free(initial_key_list);
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after init list destroy\n");
 
     if(!inter_key_list) { goto error_with_init_info; }
@@ -446,17 +484,17 @@ int chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
     }
 
     /* Set the gka_info state to await downflow message */
-    ctx->gka_info.state = CHAT_GKASTATE_AWAITING_DOWNFLOW;
-    ctx->gka_info.position = 0;
+    ctx->gka_info->state = CHAT_GKASTATE_AWAITING_DOWNFLOW;
+    ctx->gka_info->position = 0;
 
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: end\n");
 
     return 0;
 
 error_with_inter_list:
-    otrl_list_destroy(inter_key_list);
+    otrl_list_free(inter_key_list);
 error_with_init_info:
-    otrl_dh_keypair_free(ctx->gka_info.keypair);
+    otrl_dh_keypair_free(ctx->gka_info->keypair);
     return 1;
 
 }
@@ -477,17 +515,17 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
 
 	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: start\n");
 
-	if(ctx->gka_info.state == CHAT_GKASTATE_AWAITING_DOWNFLOW) {
+	if(ctx->gka_info->state == CHAT_GKASTATE_AWAITING_DOWNFLOW) {
 		return gcry_error(GPG_ERR_INV_PACKET);
 	}
 
-    if(ctx->gka_info.state == CHAT_GKASTATE_NONE) {
+    if(ctx->gka_info->state == CHAT_GKASTATE_NONE) {
     	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: storing\n");
         return 1;
     }
 
     /* Do any initializations needed */
-    err = initialize_gka_info(&ctx->gka_info);
+    err = initialize_gka_info(ctx->gka_info);
     if(err) goto err;
 	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after gka_info init\n");
 
@@ -515,7 +553,7 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
 	//because an attacker (maybe a dishonest participant?) can manipulate
 	//this to something he wants. I cant think of a possible attack now
 	//but you never know. Check it!
-	ctx->gka_info.position = inter_key_list_length - 1;//me_next[0];
+	ctx->gka_info->position = inter_key_list_length - 1;//me_next[0];
 
     /* Get the participants list length */
     participants_list_length = otrl_list_length(ctx->participants_list);
@@ -529,7 +567,7 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
     	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: in upflow generation\n");
 
     	/* Generate the intermediate key list that we will send */
-    	inter_key_list = intermediate_key_list_to_send(upflowMsg->interKeys, ctx->gka_info.keypair);
+    	inter_key_list = intermediate_key_list_to_send(upflowMsg->interKeys, ctx->gka_info->keypair);
     	if(!inter_key_list) {
     		//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: inter_key_list error\n");
         	err = gcry_error(GPG_ERR_INTERNAL);
@@ -545,7 +583,7 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
     	}
     	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after upflow_create\n");
     	/* Set the gka_info state to await downflow message */
-    	ctx->gka_info.state = CHAT_GKASTATE_AWAITING_DOWNFLOW;
+    	ctx->gka_info->state = CHAT_GKASTATE_AWAITING_DOWNFLOW;
     }
     else {
     	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: in downflow generation\n");
@@ -556,21 +594,22 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
     	last_key = last->payload;
 
     	/* Initialize enc_info struct */
-    	chat_enc_initialize_enc_info(&ctx->enc_info);
+    	ctx->enc_info = chat_enc_info_new();
+        if(!ctx->enc_info) { goto err_with_gka_init; }
 
     	/* Generate the master secret */
-    	err = chat_enc_create_secret(&ctx->enc_info, *last_key, ctx->gka_info.keypair);
+    	err = chat_enc_create_secret(ctx->enc_info, *last_key, ctx->gka_info->keypair);
     	if(err) {
     		goto err_with_gka_init;
     	}
     	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after create secret\n");
 
     	/* Drop the last element */
-    	otrl_list_remove_and_destroy(upflowMsg->interKeys, last);
+    	otrl_list_remove_and_free(upflowMsg->interKeys, last);
     	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after drop last elem\n");
 
     	/* Get the final intermediate key list to send in the downflow message */
-    	inter_key_list = final_key_list_to_send(upflowMsg->interKeys, ctx->gka_info.keypair);
+    	inter_key_list = final_key_list_to_send(upflowMsg->interKeys, ctx->gka_info->keypair);
     	if(!inter_key_list) {
     		//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: inter_key_list error\n");
         	err = gcry_error(GPG_ERR_INTERNAL);
@@ -589,9 +628,9 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
     	//fprintf(stderr, "libotr-mpOTR: handle_upflow_message: after downflow create\n");
 
     	/* Set the gka_info state to finished */
-    	ctx->gka_info.state = CHAT_GKASTATE_FINISHED;
+    	ctx->gka_info->state = CHAT_GKASTATE_FINISHED;
     	//ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
-    	ctx->id = ctx->gka_info.position;
+    	ctx->id = ctx->gka_info->position;
     }
 
 
@@ -601,9 +640,9 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
 
 
 err_with_inter_keys:
-	otrl_list_destroy(inter_key_list);
+	otrl_list_free(inter_key_list);
 err_with_gka_init:
-	otrl_dh_keypair_free(ctx->gka_info.keypair);
+	otrl_dh_keypair_free(ctx->gka_info->keypair);
 err:
 	return err;
 }
@@ -643,8 +682,8 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
     key_list_length = otrl_list_length(downflowMsg->interKeys);
 
     /* The key list is reversed so we need the i-th element from the end
-       of the list. This items is at position key_list_length - ctx->gka_info.position */
-    i = key_list_length -1 - ctx->gka_info.position;
+       of the list. This items is at position key_list_length - ctx->gka_info->position */
+    i = key_list_length -1 - ctx->gka_info->position;
 
     /* Get the appropriate intermediate key */
     cur = otrl_list_get(downflowMsg->interKeys, i);
@@ -657,9 +696,12 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
     w = cur->payload;
 
     /* Initialize enc_info struct */
-    chat_enc_initialize_enc_info(&ctx->enc_info);
+    ctx->enc_info = chat_enc_info_new();
+    if(!ctx->enc_info) {
+        return 1;
+    }
 
-    err = chat_enc_create_secret(&ctx->enc_info, *w, ctx->gka_info.keypair);
+    err = chat_enc_create_secret(ctx->enc_info, *w, ctx->gka_info->keypair);
     if(err) {
     	return err;
     }
@@ -667,9 +709,9 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
 
     *msgToSend = NULL;
 
-    ctx->gka_info.state = CHAT_GKASTATE_FINISHED;
+    ctx->gka_info->state = CHAT_GKASTATE_FINISHED;
     //ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
-    ctx->id = ctx->gka_info.position;
+    ctx->id = ctx->gka_info->position;
 
     fprintf(stderr, "libotr-mpOTR: handle_downflow_message: end\n");
 
