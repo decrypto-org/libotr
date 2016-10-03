@@ -22,6 +22,8 @@
 #ifndef __MESSAGE_H__
 #define __MESSAGE_H__
 
+#include "chat_types.h" /* DIKOMAS */
+
 #define OTR_ERROR_PREFIX "?OTR Error: "
 
 typedef enum {
@@ -292,6 +294,10 @@ typedef struct s_OtrlMessageAppOps {
      * conversation).
      */
     void (*timer_control)(void *opdata, unsigned int interval);
+
+    /* DIKOMAS */
+    char **(*chat_get_participants)(void *opdata, const char *accountname, const char *protocol, otrl_chat_token_t chat_token, unsigned int *size);
+    /***********/
 
 } OtrlMessageAppOps;
 

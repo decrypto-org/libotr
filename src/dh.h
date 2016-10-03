@@ -77,6 +77,14 @@ void otrl_dh_keypair_free(DH_keypair *kp);
  */
 gcry_error_t otrl_dh_gen_keypair(unsigned int groupid, DH_keypair *kp);
 
+/* DIKOMAS
+ *
+ * Generate a DH keypair for a specified group with specified private
+ * exponent
+ */
+gcry_error_t otrl_dh_gen_keypair_with_exp(unsigned int groupid, DH_keypair *kp,
+        gcry_mpi_t exp);
+
 /*
  * Construct session keys from a DH keypair and someone else's public
  * key.
@@ -120,4 +128,15 @@ void otrl_dh_incctr(unsigned char *ctr);
  * < 0 if ctr1 < ctr2 (as unsigned 64-bit values), > 0 if ctr1 > ctr2. */
 int otrl_dh_cmpctr(const unsigned char *ctr1, const unsigned char *ctr2);
 
+
+/* DIKOMAS */
+
+/* Check wether the to_check mpi is withing the range of the group */
+int otrl_dh_is_inrange(gcry_mpi_t to_check);
+
+/* Modular exponentiation: gab = their_pub^our_exp  mod the group's modulo */
+void otrl_dh_powm(gcry_mpi_t gab, gcry_mpi_t their_pub, gcry_mpi_t our_exp);
+
+gcry_mpi_t otrl_dh_get_generator();
+/**********/
 #endif

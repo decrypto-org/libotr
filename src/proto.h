@@ -84,9 +84,6 @@ typedef enum {
     OTRL_MSGTYPE_DATA,
     OTRL_MSGTYPE_ERROR,
     OTRL_MSGTYPE_UNKNOWN,
-    OTRL_MSGTYPE_CHAT_QUERY,     /* DIKOMAS */
-    OTRL_MSGTYPE_CHAT_QUERY_ACK, /* DIKOMAS */
-    OTRL_MSGTYPE_CHAT_DATA       /* DIKOMAS */
 } OtrlMessageType;
 
 typedef enum {

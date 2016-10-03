@@ -117,6 +117,22 @@ gcry_error_t otrl_dh_gen_keypair(unsigned int groupid, DH_keypair *kp)
     return gcry_error(GPG_ERR_NO_ERROR);
 }
 
+/* DIKOMAS */
+gcry_error_t otrl_dh_gen_keypair_with_exp(unsigned int groupid, DH_keypair *kp,
+        gcry_mpi_t exp)
+{
+    if (groupid != DH1536_GROUP_ID) {
+        /* Invalid group id */
+        return gcry_error(GPG_ERR_INV_VALUE);
+    }
+    kp->groupid = groupid;
+    kp->priv = gcry_mpi_copy(exp);
+    kp->pub = gcry_mpi_new(DH1536_MOD_LEN_BITS);
+    gcry_mpi_powm(kp->pub, DH1536_GENERATOR, exp, DH1536_MODULUS);
+    return gcry_error(GPG_ERR_NO_ERROR);
+}
+/************/
+
 /*
  * Construct session keys from a DH keypair and someone else's public
  * key.
@@ -474,3 +490,21 @@ int otrl_dh_cmpctr(const unsigned char *ctr1, const unsigned char *ctr2)
     }
     return 0;
 }
+
+/* DIKOMAS */
+int otrl_dh_is_inrange(gcry_mpi_t to_check)
+{
+    return (gcry_mpi_cmp_ui(to_check, 2) < 0) ||
+	(gcry_mpi_cmp(to_check, DH1536_MODULUS_MINUS_2) > 0);
+}
+
+void otrl_dh_powm(gcry_mpi_t gab, gcry_mpi_t their_pub, gcry_mpi_t our_exp)
+{
+    gcry_mpi_powm(gab, their_pub, our_exp, DH1536_MODULUS);
+}
+
+gcry_mpi_t otrl_dh_get_generator()
+{
+	return DH1536_GENERATOR;
+}
+/***********/

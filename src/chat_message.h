@@ -60,6 +60,7 @@ typedef struct OtrlChatMessagePayloadDataStruct {
 } OtrlChatMessagePayloadData;
 */
 
+
 int otrl_chat_message_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
 	void *opdata, const char *accountname, const char *protocol,
 	const char *sender, otrl_chat_token_t chat_token, const char *message,
@@ -78,50 +79,44 @@ int otrl_chat_message_send_query(OtrlUserState us,
 
 OtrlChatMessage * chat_message_parse(const char *message);
 
-MessagePayloadPtr chat_message_payload_parse(OtrlChatMessage *msg, const unsigned char *message, size_t length);
+int chat_message_payload_parse(OtrlChatMessage *msg, const unsigned char *message, size_t length);
 
 char * chat_message_serialize(OtrlChatMessage *msg);
-
-MessagePayloadPtr chat_message_payload_query_parse(const unsigned char * message, size_t length);
-
-void chat_message_payload_query_free(MessagePayloadPtr payload);
-
-unsigned char * chat_message_payload_query_serialize(MessagePayloadPtr payload);
-
-MessagePayloadPtr chat_message_payload_query_ack_parse(const unsigned char * message, size_t length);
-
-void chat_message_payload_query_ack_free(MessagePayloadPtr payload);
-
-unsigned char * chat_message_payload_query_ack_serialize(MessagePayloadPtr payload);
 
 MessagePayloadPtr chat_message_payload_data_parse(const unsigned char *message, size_t length);
 
 void chat_message_payload_data_free(MessagePayloadPtr payload);
 
-unsigned char * chat_message_payload_data_serialize(MessagePayloadPtr payload);
-
-size_t chat_message_payload_size(OtrlChatMessage *msg);
+unsigned char * chat_message_payload_data_serialize(MessagePayloadPtr payload, size_t *payload_size);
 
 OtrlMessageType chat_message_message_type_parse(unsigned char c);
 
 unsigned char chat_message_message_type_serialize(OtrlMessageType msgType);
-
 void chat_message_free(OtrlChatMessage * msg);
 
 int chat_message_is_otr(const char * message);
 
 int chat_message_is_fragment(const char * message);
 
-OtrlChatMessage * chat_message_create(unsigned int proto_version, OtrlMessageType msgType ,otrl_instag_t our_instag);
+OtrlChatMessage * chat_message_create(OtrlChatContext *ctx, OtrlChatMessageType msgType);
 
-OtrlChatMessage * chat_message_query_create(int16_t proto_version,
-		otrl_instag_t our_instag, const unsigned char *key);
+MessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char *message, size_t length);
 
-OtrlChatMessage * chat_message_query_ack_create(int16_t protoVersion,
-		otrl_instag_t ourInstag);
+unsigned char * chat_message_payload_gka_upflow_serialize(MessagePayloadPtr payload, size_t *payload_size);
 
-OtrlChatMessage * chat_message_data_create(int16_t protoVersion,
-		otrl_instag_t ourInstag, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
+void chat_message_payload_gka_upflow_free(MessagePayloadPtr payload);
+
+MessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned char *message, size_t length);
+
+unsigned char * chat_message_payload_gka_downflow_serialize(MessagePayloadPtr payload, size_t *payload_size);
+
+void chat_message_payload_gka_downflow_free(MessagePayloadPtr payload);
+
+OtrlChatMessage * chat_message_gka_upflow_create(OtrlChatContext *ctx, const unsigned char *partlistHash, OtrlList *interKeys, unsigned int recipient);
+
+OtrlChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, const unsigned char *partlistHash, OtrlList *interKeys);
+
+OtrlChatMessage * chat_message_data_create(OtrlChatContext *ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
 
 int chat_message_send(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg);
 
