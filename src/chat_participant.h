@@ -1,3 +1,22 @@
+/*
+ *  Off-the-Record Messaging library
+ *  Copyright (C) 2015-2016  Dimitrios Kolotouros <dim.kolotouros@gmail.com>,
+ *  						 Konstantinos Andrikopoulos <el11151@mail.ntua.gr>
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of version 2.1 of the GNU Lesser General
+ *  Public License as published by the Free Software Foundation.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
 #ifndef CHAT_PARTICIPANT_H
 #define CHAT_PARTICIPANT_H
 
@@ -47,10 +66,11 @@ OtrlChatParticipant* chat_participant_create(const char *username, gcry_mpi_t pu
 
   @param ctx The context where the user will be searched
   @param username The user name of the user to be searced
+  @param position If the user is found the position contains his position in the list
 
   @return If the user is found a pointer to it will be returned. Otherwise NULL
  */
-OtrlChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username);
+OtrlChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username, unsigned int *position);
 
 /**
   Add a user to the ctx's participants list
@@ -83,10 +103,11 @@ int chat_participant_list_from_usernames(OtrlList *participants, char **username
 
  @param participants The list of the participants
  @param accountname The account name we are searching for
+ @param position If found, contains the position of the participant in the list
 
- @return the position if found. -1 otherwise
+ @return 0 if found. -1 otherwise
  */
-int chat_participant_get_position(const OtrlList *participants, const char *accountname);
+int chat_participant_get_position(const OtrlList *participants, const char *accountname, unsigned int *position);
 
 //TODO Dimitris: write docstring
 int chat_participant_get_me_next_position(const char *accountname, const OtrlList *participants, unsigned int *me_next);

@@ -1,7 +1,28 @@
+/*
+ *  Off-the-Record Messaging library
+ *  Copyright (C) 2015-2016  Dimitrios Kolotouros <dim.kolotouros@gmail.com>,
+ *  						 Konstantinos Andrikopoulos <el11151@mail.ntua.gr>
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of version 2.1 of the GNU Lesser General
+ *  Public License as published by the Free Software Foundation.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
 #include <gcrypt.h>
 #include <stdio.h>
 
 #include "chat_types.h"
+#include "chat_dake.h"
+#include "chat_sign.h"
 #include "list.h"
 
 
@@ -19,7 +40,10 @@ void chat_participant_free(OtrlChatParticipant *a)
 
     free(a1->username);
 
-    gcry_mpi_release(a1->signing_pub_key);
+    free(a1->pending_message);
+
+    //gcry_mpi_release(a1->signing_pub_key);
+    chat_sign_destroy_key(a1->sign_key);
 
     free(a1);
 }
@@ -34,7 +58,7 @@ void chat_participant_free_foreach(OtrlListNode *a)
     chat_participant_free(a->payload);
 }
 
-OtrlChatParticipant * chat_participant_create(const char *username, gcry_mpi_t pub_key)
+OtrlChatParticipant * chat_participant_create(const char *username, SignKey *pub_key)
 {
     OtrlChatParticipant *participant;
 
@@ -44,29 +68,34 @@ OtrlChatParticipant * chat_participant_create(const char *username, gcry_mpi_t p
 
     participant->username = strdup(username);
     if(pub_key)
-	participant->signing_pub_key = gcry_mpi_copy(pub_key);
+	    participant->sign_key = pub_key;
     else
-	participant->signing_pub_key = gcry_mpi_new(320);
+	    participant->sign_key = NULL;
+
+    participant->pending_message = NULL;
 
     return participant;
 }
 
-OtrlChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username)
+OtrlChatParticipant* chat_participant_find(OtrlChatContext *ctx, const char *username, unsigned int *position)
 {
-    OtrlListNode *foundListNode;
-    OtrlChatParticipant *target;
+    unsigned int i;
+    OtrlListNode *cur;
 
-    target = chat_participant_create(username, NULL);
-    if(!target)
-	return NULL;
+    if(!ctx) { goto error; }
+    if(!ctx->participants_list) { goto error; }
 
-    foundListNode = otrl_list_find(ctx->participants_list, target);
-    chat_participant_free(target);
+    // TODO for loop should be stopped if we have gone too far in the ordered list
+    for(cur=ctx->participants_list->head,i=0; cur!=NULL && strcmp(username,((OtrlChatParticipant *)cur->payload)->username)!=0; cur=cur->next,i++);
 
-    if(!foundListNode)
-	return NULL;
+    if(cur) {
+    	*position = i;
+    }
 
-    return foundListNode->payload;
+    return cur->payload;
+
+error:
+    return NULL;
 }
 
 int chat_participant_add(OtrlList *list, const OtrlChatParticipant *participant)
@@ -121,12 +150,11 @@ int chat_participant_list_from_usernames(OtrlList *participants, char **username
 	    return 0;
 }
 
-int chat_participant_get_position(const OtrlList *participants, const char *accountname)
+int chat_participant_get_position(const OtrlList *participants, const char *accountname, unsigned int *position)
 {
 	char *splitposition, *name;
 	unsigned int i;
 	OtrlListNode *cur;
-	int ret = -1;
 
 	name = NULL;
 
@@ -134,89 +162,65 @@ int chat_participant_get_position(const OtrlList *participants, const char *acco
 	splitposition = strchr(accountname, '@');
 	if(splitposition) {
 		name = malloc( (splitposition - accountname + 1) * sizeof *name);
-		if(!name) {
-			return 1;
-		}
+		if(!name) { goto error;	}
 		memcpy(name, accountname, splitposition - accountname);
 		name[splitposition - accountname] = '\0';
 	} else {
 		name = malloc( (strlen(accountname) + 1) * sizeof *name);
+		if(!name) { goto error; }
 		strcpy(name, accountname);
 	}
 
 	if(participants) {
+		// TODO for loop should be stopped if we have gone too far in the ordered list
 		for(cur = participants->head, i = 0; cur != NULL && strcmp(name, ((OtrlChatParticipant *)cur->payload)->username) != 0;  cur = cur->next, i++);
-		if(cur)
-			ret = i;
+		if(!cur) { goto error; }
+		*position = i;
 	}
 
 	free(name);
 
-	return ret;
+	return 0;
+
+error:
+	return 1;
 }
 
 int chat_participant_get_me_next_position(const char *accountname, const OtrlList *participants, unsigned int *me_next)
 {
-	char *splitposition, *name;
-	unsigned int i;
-	OtrlListNode *cur;
-	int err = 0;
+	int err;
+	unsigned int me;
 
 	fprintf(stderr, "libotr-mpOTR: chat_participant_get_me_next_position: start\n");
 
-	name = NULL;
+	err = chat_participant_get_position(participants, accountname, &me);
+	if(err) { goto error; }
 
-	//TODO Dimitris: this is a workaround, should be removed as soon as we find how to get the participant's account identifier instead of chat name
-	fprintf(stderr, "libotr-mpOTR: chat_participant_get_me_next_position: before splitposition\n");
-	splitposition = strchr(accountname, '@');
-	if(splitposition) {
-		fprintf(stderr, "libotr-mpOTR: chat_participant_get_me_next_position: before malloc\n");
-		name = malloc( (splitposition - accountname + 1) * sizeof *name);
-		if(!name) {
-			return 1;
-		}
-		memcpy(name, accountname, splitposition - accountname);
-		name[splitposition - accountname] = '\0';
-	} else {
-		fprintf(stderr, "libotr-mpOTR: chat_participant_get_me_next_position: before strcpy\n");
-		strcpy(name, accountname);
-	}
-
-	fprintf(stderr, "libotr-mpOTR: chat_participant_get_me_next_position: before if(participants_list)\n");
-	if(participants) {
-		i = 0;
-		for(cur = participants->head; cur != NULL && strcmp(name, ((OtrlChatParticipant *)cur->payload)->username) != 0;  cur = cur->next) {
-			i++;
-		}
-		if(cur) {
-			me_next[0] = i;
-			me_next[1] = (cur->next) ? i+1 : 0;
-		} else {
-			err = 1;
-		}
-	}
-
-	free(name);
+	me_next[0] = me;
+	me_next[1] = (me < participants->size-1) ? me+1 : 0;
 
 	fprintf(stderr, "libotr-mpOTR: chat_participant_get_me_next_position: end\n");
 
-	return err;
+	return 0;
+
+error:
+	return 1;
 }
 
 void chat_participant_toString(OtrlListNode *node)
 {
     OtrlChatParticipant *participant = node->payload;
-    unsigned char *buf;
-    size_t s;
+    //unsigned char *buf;
+    //size_t s;
 
-    gcry_mpi_print(GCRYMPI_FMT_HEX, NULL, 0, &s, participant->signing_pub_key);
-    buf = malloc((s+1)*sizeof(*buf));
-    gcry_mpi_print(GCRYMPI_FMT_HEX, buf, s, NULL, participant->signing_pub_key);
+    //gcry_mpi_print(GCRYMPI_FMT_HEX, NULL, 0, &s, participant->signing_pub_key);
+    //buf = malloc((s+1)*sizeof(*buf));
+    //gcry_mpi_print(GCRYMPI_FMT_HEX, buf, s, NULL, participant->signing_pub_key);
     fprintf(stderr, "OtrlChatParticipant:\n");
     fprintf(stderr, "|-username\t:%s\n",participant->username);
-    fprintf(stderr, "|-pub_key\t:%s\n", buf);
+    //fprintf(stderr, "|-pub_key\t:%s\n", buf);
 
-    free(buf);
+    //free(buf);
 }
 
 struct OtrlListOpsStruct chat_participant_listOps = {

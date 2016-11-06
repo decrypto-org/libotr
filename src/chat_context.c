@@ -47,6 +47,10 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname,
 		ctx->our_instance = ourInstanceTag->instag;
 		ctx->the_chat_token = the_chat_token;
 		ctx->participants_list = otrl_list_create(&chat_participant_listOps, sizeof(OtrlChatParticipant));
+		//TODO maybe free offer info on context free????
+		ctx->offer_info = NULL;
+		ctx->offer_state = OTRL_CHAT_OFFERSTATE_NONE;
+		ctx->sign_state = OTRL_CHAT_SINGSTATE_NONE;
 		ctx->gka_info.keypair = NULL;
 		ctx->gka_info.state = OTRL_CHAT_GKASTATE_NONE;
 		ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;

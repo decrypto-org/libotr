@@ -1,3 +1,22 @@
+/*
+ *  Off-the-Record Messaging library
+ *  Copyright (C) 2015-2016  Dimitrios Kolotouros <dim.kolotouros@gmail.com>,
+ *  						 Konstantinos Andrikopoulos <el11151@mail.ntua.gr>
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of version 2.1 of the GNU Lesser General
+ *  Public License as published by the Free Software Foundation.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
 #include <stdlib.h>
 #include <gcrypt.h>
 
@@ -11,7 +30,10 @@ void print_mpi(gcry_mpi_t w)
     size_t s;
 
     gcry_mpi_print(GCRYMPI_FMT_HEX,NULL,0,&s,w);
-    buf = malloc(s+1);
+    buf = malloc((s+1) * sizeof (*buf));
+    if(!buf) {
+    	return;
+    }
     gcry_mpi_print(GCRYMPI_FMT_HEX,buf,s,NULL,w);
     buf[s]='\0';
 
@@ -27,6 +49,8 @@ void chat_idkey_init_key(ChatIdKey *key){
 
 void chat_idkey_destroy_key(ChatIdKey *key){
     otrl_dh_keypair_free(&key->keyp);
+    free(key->accountname);
+    free(key->protocol);
     free(key);
 }
 
@@ -34,8 +58,7 @@ void chat_idkey_destroy_keyOp(PayloadPtr a) {
 	chat_idkey_destroy_key(a);
 }
 
-void chat_idkey_print_keyOp(OtrlListNode* a) {
-	ChatIdKey *key = a->payload;
+void chat_idkey_print_key(ChatIdKey *key) {
 
 	fprintf(stderr, "idkey:\n");
 	fprintf(stderr, "|- accountname: %s\n", key->accountname );
@@ -45,6 +68,12 @@ void chat_idkey_print_keyOp(OtrlListNode* a) {
 	print_mpi(key->keyp.priv);
 	fprintf(stderr, "|- pub:");
 	print_mpi(key->keyp.pub);
+}
+
+void chat_idkey_print_keyOp(OtrlListNode* a) {
+	ChatIdKey *key = a->payload;
+
+	chat_idkey_print_key(key);
 }
 
 gcry_error_t chat_idkey_generate_key(ChatIdKey **newkey)
@@ -240,8 +269,46 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 
 int chat_idkey_compar(PayloadPtr a, PayloadPtr b)
 {
-	return 0;
+    ChatIdKey *a_key = a;
+    ChatIdKey *b_key = b;
+
+    int username_eq = strcmp(a_key->accountname, b_key->accountname);
+
+    if(!username_eq)
+        return strcmp(a_key->protocol, b_key->protocol);
+   	return username_eq;
 }
+
+ChatIdKey * chat_idkey_find(OtrlList *key_list, const char *accountname, const char *protocol)
+{
+    ChatIdKey target;
+    OtrlListNode *found;
+
+    target.accountname = strdup(accountname);
+    target.protocol = strdup(protocol);
+
+    found = otrl_list_find(key_list, &target);
+
+    free(target.accountname);
+    free(target.protocol);
+
+    return (ChatIdKey *)found->payload;
+}
+
+//ChatIdKey * chat_idkey_find_or_add(OtrlList *key_list, const char *accountname, const char *protocol)
+//{
+//	ChatIdKey *key;
+//	gcry_error_t err;
+//
+//	key = chat_idkey_find(key_list, accountname, protocol);
+//	if(!key){
+//		err = chat_idkey_generate_key(&key);
+//		if(err) {
+//			return NULL;
+//		}
+//
+//	}
+//}
 
 struct OtrlListOpsStruct chat_idkey_listOps = {
 		chat_idkey_compar,
@@ -254,5 +321,6 @@ ChatIdKeyManager chat_id_key_manager = {
     chat_idkey_destroy_key,
 	chat_idkey_parse_key,
     chat_idkey_generate_key,
-    chat_idkey_serialize_key
+    chat_idkey_serialize_key,
+	chat_idkey_find
 };
