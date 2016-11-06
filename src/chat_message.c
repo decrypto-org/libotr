@@ -36,8 +36,10 @@
 #include "chat_message.h"
 #include "chat_auth.h"
 #include "chat_enc.h"
+#include "chat_types.h"
 #include "b64.h"
 #include "chat_serial.h"
+#include "chat_privkeydh.h"
 
 
 int otrl_chat_message_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
@@ -189,6 +191,12 @@ int otrl_chat_message_send_query(OtrlUserState us,
 	OtrlChatMessage *msg;
 	OtrlChatContext *ctx;
 	int err;
+
+	//TODO this is for testing reasons only.
+	int keyexists = chat_privkeydh_key_exists(us, accountname, protocol);
+	if(!keyexists) {
+		ops->chat_privkey_create(NULL, accountname, protocol);
+	}
 
 	ctx = chat_context_find_or_add(us, accountname, protocol, chat_token);
 	if(!ctx) { goto error; }
@@ -490,7 +498,7 @@ error:
 
 MessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char *message, size_t length)
 {
-	OtrlChatMessagePayloadGkaUpflow *payload;
+	OtrlChatMessagePayloadGKAUpflow *payload;
 
 	unsigned int pos = 0;
 	int keysLength, i, keySize;
@@ -537,7 +545,7 @@ error:
 
 unsigned char * chat_message_payload_gka_upflow_serialize(MessagePayloadPtr payload, size_t *payload_size)
 {
-	OtrlChatMessagePayloadGkaUpflow *myPayload;
+	OtrlChatMessagePayloadGKAUpflow *myPayload;
 	unsigned char *ret, **keys;
 	unsigned int i;
 	int err;
@@ -610,7 +618,7 @@ error:
 
 void chat_message_payload_gka_upflow_free(MessagePayloadPtr payload)
 {
-	OtrlChatMessagePayloadGkaUpflow *myPayload = payload;
+	OtrlChatMessagePayloadGKAUpflow *myPayload = payload;
 
 	otrl_list_destroy(myPayload->interKeys);
 	free(myPayload);
@@ -619,7 +627,7 @@ void chat_message_payload_gka_upflow_free(MessagePayloadPtr payload)
 
 MessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned char *message, size_t length)
 {
-	OtrlChatMessagePayloadGkaDownflow *payload;
+	OtrlChatMessagePayloadGKADownflow *payload;
 
 	unsigned int pos = 0;
 	int keysLength, i, keySize;
@@ -661,7 +669,7 @@ error:
 
 unsigned char * chat_message_payload_gka_downflow_serialize(MessagePayloadPtr payload, size_t *payload_size)
 {
-	OtrlChatMessagePayloadGkaDownflow *myPayload;
+	OtrlChatMessagePayloadGKADownflow *myPayload;
 	unsigned char *ret, **keys;
 	unsigned int i;
 	int err;
@@ -731,7 +739,7 @@ error:
 
 void chat_message_payload_gka_downflow_free(MessagePayloadPtr payload)
 {
-	OtrlChatMessagePayloadGkaDownflow *myPayload = payload;
+	OtrlChatMessagePayloadGKADownflow *myPayload = payload;
 
 	otrl_list_destroy(myPayload->interKeys);
 	free(myPayload);
@@ -740,7 +748,7 @@ void chat_message_payload_gka_downflow_free(MessagePayloadPtr payload)
 OtrlChatMessage * chat_message_gka_upflow_create(OtrlChatContext *ctx, const unsigned char *partlistHash, OtrlList *interKeys, unsigned int recipient)
 {
 	OtrlChatMessage *msg;
-	OtrlChatMessagePayloadGkaUpflow *payload;
+	OtrlChatMessagePayloadGKAUpflow *payload;
 
 	msg = chat_message_create(ctx, OTRL_MSGTYPE_CHAT_UPFLOW);
 	if(!msg) { goto error; }
@@ -767,7 +775,7 @@ error:
 OtrlChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, const unsigned char *partlistHash, OtrlList *interKeys)
 {
 	OtrlChatMessage *msg;
-	OtrlChatMessagePayloadGkaDownflow *payload;
+	OtrlChatMessagePayloadGKADownflow *payload;
 
 	msg = chat_message_create(ctx, OTRL_MSGTYPE_CHAT_DOWNFLOW);
 	if(!msg) {goto error; }

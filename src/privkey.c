@@ -440,7 +440,7 @@ static gcry_error_t account_write(FILE *privf, const char *accountname,
     gcry_error_t err;
     gcry_sexp_t names, protos;
 
-    fprintf(privf, " (account\n");
+    fprintf(privf, " (account keys:q\n");
 
     err = gcry_sexp_build(&names, NULL, "(name %s)", accountname);
     if (!err) {

@@ -27,6 +27,7 @@
 #include "userstate.h"
 #include "chat_context.h" /* DIKOMAS */
 #include "list.h" /* DIKOMAS */
+#include "chat_idkey.h"
 
 /* Create a new OtrlUserState.  Most clients will only need one of
  * these.  A OtrlUserState encapsulates the list of known fingerprints
@@ -41,6 +42,7 @@ OtrlUserState otrl_userstate_create(void)
     if (!us) return NULL;
     us->context_root = NULL;
     us->chat_context_list = otrl_list_create(&chat_context_listOps, sizeof(OtrlChatContext)); /* DIKOMAS */
+    us->chat_privkey_list = otrl_list_create(&chat_idkey_listOps, sizeof(ChatIdKey)); /* DIKOMAS */
     fprintf(stderr, "nlibotr-mpOTR: otrl_userstate_create: dumping the context list:\n"); /* DIKOMAS */
     otrl_list_dump(us->chat_context_list); /* DIKOMAS */
     us->privkey_root = NULL;
@@ -56,6 +58,7 @@ void otrl_userstate_free(OtrlUserState us)
 {
     otrl_context_forget_all(us);
     otrl_list_destroy(us->chat_context_list);	/* DIKOMAS */
+    otrl_list_destroy(us->chat_privkey_list);	/* DIKOMAS */
     otrl_privkey_forget_all(us);
     otrl_privkey_pending_forget_all(us);
     otrl_instag_forget_all(us);
