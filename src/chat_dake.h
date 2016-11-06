@@ -22,7 +22,7 @@
 
 #include <stddef.h>
 
-#include "chat_idkey.h"
+#include "chat_id_key.h"
 #include "dh.h"
 #include "tdh.h"
 
@@ -84,7 +84,7 @@ void chat_dake_destroy_confirm_data(DAKE_confirm_message_data *data);
 
 void chat_dake_destroy_info(DAKEInfo *dake_info);
 
-int chat_dake_init_keys(DAKEInfo *dake_info, ChatIdKey *key,
+int chat_dake_init_keys(DAKEInfo *dake_info, ChatIdKeyPtr id_key,
                         const char* accountname, const char *protocol,
                         DAKE_handshake_message_data **dataToSend);
 

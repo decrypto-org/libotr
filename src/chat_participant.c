@@ -29,27 +29,27 @@
 #include "chat_fingerprint.h"
 #include "list.h"
 
-struct ChatParticipantStruct {
+struct ChatParticipant {
 	char *username; 			// This users username
 	SignKey *sign_key; 			//This users signing key
-	OtrlChatFingerprint fingerprint;
-	OtrlList fingerprints;
+	OtrlChatFingerprintPtr fingerprint;
+	OtrlListPtr fingerprints;
 	DAKE *dake;
 	//TODO move these in Shutdown struct and release them
 	ChatParticipantShutdown *shutdown;
-	OtrlList messages;
+	OtrlListPtr messages;
 	unsigned char messages_hash[CHAT_PARTICIPANTS_HASH_LENGTH];
 	int consensus; //TODO check if there is consensus or not
 };
 
 size_t chat_participant_size()
 {
-	return sizeof(struct ChatParticipantStruct);
+	return sizeof(struct ChatParticipant);
 }
 
-ChatParticipant chat_participant_new(const char *username, SignKey *pub_key)
+ChatParticipantPtr chat_participant_new(const char *username)
 {
-    ChatParticipant participant;
+    ChatParticipantPtr participant;
 
     participant = malloc(sizeof *participant);
     if(!participant) { goto error; }
@@ -57,7 +57,8 @@ ChatParticipant chat_participant_new(const char *username, SignKey *pub_key)
     participant->username = strdup(username);
     if(!participant->username) { goto error_with_participant; }
 
-    participant->sign_key = (pub_key) ? pub_key : NULL;
+    //participant->sign_key = (pub_key) ? pub_key : NULL;
+    participant->sign_key = NULL;
 
     participant->dake = NULL;
 
@@ -83,67 +84,67 @@ error:
 	return NULL;
 }
 
-char * chat_participant_get_username(ChatParticipant participant)
+char * chat_participant_get_username(ChatParticipantPtr participant)
 {
 	return participant->username;
 }
 
-SignKey * chat_participant_get_sign_key(ChatParticipant participant)
+SignKey * chat_participant_get_sign_key(ChatParticipantPtr participant)
 {
 	return participant->sign_key;
 }
 
-void chat_participant_set_sign_key(ChatParticipant participant, SignKey *sign_key)
+void chat_participant_set_sign_key(ChatParticipantPtr participant, SignKey *sign_key)
 {
 	participant->sign_key = sign_key;
 }
 
-OtrlChatFingerprint chat_participant_get_fingerprint(ChatParticipant participant)
+OtrlChatFingerprintPtr chat_participant_get_fingerprint(ChatParticipantPtr participant)
 {
 	return participant->fingerprint;
 }
 
-void chat_participant_set_fingerprint(ChatParticipant participant, OtrlChatFingerprint fingerprint)
+void chat_participant_set_fingerprint(ChatParticipantPtr participant, OtrlChatFingerprintPtr fingerprint)
 {
 	participant->fingerprint = fingerprint;
 }
 
-OtrlList chat_participant_get_fingerprints(ChatParticipant participant)
+OtrlListPtr chat_participant_get_fingerprints(ChatParticipantPtr participant)
 {
 	return participant->fingerprints;
 }
 
-DAKE * chat_participant_get_dake(ChatParticipant participant)
+DAKE * chat_participant_get_dake(ChatParticipantPtr participant)
 {
 	return participant->dake;
 }
 
-void chat_participant_set_dake(ChatParticipant participant, DAKE *dake)
+void chat_participant_set_dake(ChatParticipantPtr participant, DAKE *dake)
 {
 	participant->dake = dake;
 }
 
-OtrlList chat_participant_get_messages(ChatParticipant participant)
+OtrlListPtr chat_participant_get_messages(ChatParticipantPtr participant)
 {
 	return participant->messages;
 }
 
-unsigned char * chat_participant_get_messages_hash(ChatParticipant participant)
+unsigned char * chat_participant_get_messages_hash(ChatParticipantPtr participant)
 {
 	return participant->messages_hash;
 }
 
-int chat_participant_get_consensus(ChatParticipant participant)
+int chat_participant_get_consensus(ChatParticipantPtr participant)
 {
 	return participant->consensus;
 }
 
-void chat_participant_set_consensus(ChatParticipant participant, int consesnus)
+void chat_participant_set_consensus(ChatParticipantPtr participant, int consesnus)
 {
 	participant->consensus = consesnus;
 }
 
-void chat_participant_free(ChatParticipant participant)
+void chat_participant_free(ChatParticipantPtr participant)
 {
     if(participant)  {
     	free(participant->username);
@@ -156,19 +157,19 @@ void chat_participant_free(ChatParticipant participant)
     free(participant);
 }
 
-int chat_participant_compare(ChatParticipant a, ChatParticipant b)
+int chat_participant_compare(ChatParticipantPtr a, ChatParticipantPtr b)
 {
 	return strcmp(chat_participant_get_username(a), chat_participant_get_username(b));
 }
 
 // TODO Dimitris: support NULL for position pointer if the caller doesn't need the position
-ChatParticipant chat_participant_find(OtrlList participants_list, const char *username, unsigned int *position)
+ChatParticipantPtr chat_participant_find(OtrlListPtr participants_list, const char *username, unsigned int *position)
 {
     unsigned int i;
-    OtrlListIterator iter;
-    OtrlListNode cur;
-    ChatParticipant part;
-    ChatParticipant res;
+    OtrlListIteratorPtr iter;
+    OtrlListNodePtr cur;
+    ChatParticipantPtr part;
+    ChatParticipantPtr res;
 
     if(!participants_list) { goto error; }
 
@@ -216,9 +217,9 @@ error:
     return NULL;
 }
 
-int chat_participant_add(OtrlList participants_list, const ChatParticipant participant)
+int chat_participant_add(OtrlListPtr participants_list, const ChatParticipantPtr participant)
 {
-    OtrlListNode node;
+    OtrlListNodePtr node;
 
     node = otrl_list_insert(participants_list, participant);
     if(!node) { goto error; }
@@ -229,15 +230,15 @@ error:
 	return 1;
 }
 
-int chat_participant_list_from_usernames(OtrlList participants_list, char **usernames, unsigned int usernames_size)
+int chat_participant_list_from_usernames(OtrlListPtr participants_list, char **usernames, unsigned int usernames_size)
 {
-	ChatParticipant participant;
+	ChatParticipantPtr participant;
 	int err;
 
 	otrl_list_clear(participants_list);
 
 	for(size_t i = 0; i < usernames_size; i++) {
-		participant = chat_participant_new(usernames[i],NULL);
+		participant = chat_participant_new(usernames[i]);
 		if(!participant){ goto error_with_participants; }
 
 		err = chat_participant_add(participants_list, participant);
@@ -247,18 +248,17 @@ int chat_participant_list_from_usernames(OtrlList participants_list, char **user
 	return 0;
 
 error_with_participants:
-	fprintf(stderr, "libotr-mpOTR: chat_participant_list_from_usernames: error_with_participants\n");
 	otrl_list_clear(participants_list);
 	return 1;
 }
 
-int chat_participant_get_position(OtrlList participants_list, const char *accountname, unsigned int *position)
+int chat_participant_get_position(OtrlListPtr participants_list, const char *accountname, unsigned int *position)
 {
 	char *splitposition, *name = NULL;
 	unsigned int i, flag;
-	OtrlListIterator iter;
-	OtrlListNode cur;
-	ChatParticipant part;
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr cur;
+	ChatParticipantPtr part;
 
 	//TODO Dimitris: this is a workaround, should be removed as soon as we find how to get the participant's account identifier instead of chat name
 	splitposition = strchr(accountname, '@');
@@ -305,7 +305,7 @@ error:
 	return 1;
 }
 
-int chat_participant_get_me_next_position(const char *accountname, OtrlList participants_list, unsigned int *me_next)
+int chat_participant_get_me_next_position(const char *accountname, OtrlListPtr participants_list, unsigned int *me_next)
 {
 	int err;
 	unsigned int me;
@@ -325,12 +325,12 @@ error:
 /* TODO improve docstring
    This function hashes all the messages from a participant. The messages are
    stored in lexicographic ordering. */
-int chat_participant_calculate_messages_hash(ChatParticipant participant, unsigned char* result)
+int chat_participant_calculate_messages_hash(ChatParticipantPtr participant, unsigned char* result)
 {
     gcry_md_hd_t md;
     gcry_error_t err;
-    OtrlListIterator iter;
-    OtrlListNode cur;
+    OtrlListIteratorPtr iter;
+    OtrlListNodePtr cur;
     char *msg;
     size_t len;
     unsigned char *hash_result = NULL;
@@ -367,40 +367,31 @@ error:
 	return 1;
 }
 
-void chat_participant_print(ChatParticipant participant)
+void chat_participant_print(ChatParticipantPtr participant)
 {
-    //unsigned char *buf;
-    //size_t s;
-
-    //gcry_mpi_print(GCRYMPI_FMT_HEX, NULL, 0, &s, participant->signing_pub_key);
-    //buf = malloc((s+1)*sizeof(*buf));
-    //gcry_mpi_print(GCRYMPI_FMT_HEX, buf, s, NULL, participant->signing_pub_key);
     fprintf(stderr, "OtrlChatParticipant:\n");
     fprintf(stderr, "|-username\t:%s\n", chat_participant_get_username(participant));
-    //fprintf(stderr, "|-pub_key\t:%s\n", buf);
-
-    //free(buf);
 }
 
-int chat_participant_compareOp(OtrlListPayload a, OtrlListPayload b)
+int chat_participant_compareOp(OtrlListPayloadPtr a, OtrlListPayloadPtr b)
 {
-    ChatParticipant part1 = a;
-    ChatParticipant part2 = b;
+    ChatParticipantPtr part1 = a;
+    ChatParticipantPtr part2 = b;
 
     return chat_participant_compare(part1, part2);
 }
 
-void chat_participant_printOp(OtrlListNode node)
+void chat_participant_printOp(OtrlListNodePtr node)
 {
-	ChatParticipant participant;
+	ChatParticipantPtr participant;
 
 	participant = otrl_list_node_get_payload(node);
 	chat_participant_print(participant);
 }
 
-void chat_participant_freeOp(OtrlListPayload a)
+void chat_participant_freeOp(OtrlListPayloadPtr a)
 {
-	ChatParticipant participant = a;
+	ChatParticipantPtr participant = a;
     chat_participant_free(participant);
 }
 

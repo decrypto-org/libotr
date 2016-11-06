@@ -11,8 +11,8 @@ typedef enum {
 	CHAT_SHUTDOWNSTATE_FINISHED
 } ChatShutdownState;
 
-ChatShutdownState chat_shutdown_info_get_state(ChatShutdownInfo shutdown_info);
-void chat_shutdown_info_free(ChatShutdownInfo shutdown_info);
+ChatShutdownState chat_shutdown_info_get_state(ChatShutdownInfoPtr shutdown_info);
+void chat_shutdown_info_free(ChatShutdownInfoPtr shutdown_info);
 
 /**
  Initializes the shutdown subprotocol
@@ -20,7 +20,7 @@ void chat_shutdown_info_free(ChatShutdownInfo shutdown_info);
  @param ctx The context we are initializing the shutdown subprotocol for
  @return Non-zero on error. Zero on success
 */
-int chat_shutdown_init(ChatContext ctx);
+int chat_shutdown_init(ChatContextPtr ctx);
 
 /**
  Sends a shutdown message
@@ -30,7 +30,7 @@ int chat_shutdown_init(ChatContext ctx);
   shutdown message that must be sent in the chatroom
  @return Non-zero on error. Zero on success.
 */
-int chat_shutdown_send_shutdown(ChatContext ctx, ChatMessage **msgToSend);
+int chat_shutdown_send_shutdown(ChatContextPtr ctx, ChatMessage **msgToSend);
 
 /**
  Sends a digest message
@@ -41,7 +41,7 @@ int chat_shutdown_send_shutdown(ChatContext ctx, ChatMessage **msgToSend);
  @return Non-zero on error. Zero on success
 
  */
-int chat_shutdown_send_digest(ChatContext ctx, ChatMessage **msgToSend);
+int chat_shutdown_send_digest(ChatContextPtr ctx, ChatMessage **msgToSend);
 
 /**
  Sends an end message
@@ -51,7 +51,7 @@ int chat_shutdown_send_digest(ChatContext ctx, ChatMessage **msgToSend);
   end message that must be sent in the chatroom
  @return Non-zero on error. Zero on success
 */
-int chat_shutdown_send_end(ChatContext ctx, ChatMessage **msgToSend);
+int chat_shutdown_send_end(ChatContextPtr ctx, ChatMessage **msgToSend);
 
 /**
  Sends a key release message
@@ -61,7 +61,7 @@ int chat_shutdown_send_end(ChatContext ctx, ChatMessage **msgToSend);
   key release message that must be sent in the chatroom
  @return Non-zero on error. Zero on success
 */
-int chat_shutdown_release_secrets(ChatContext ctx, ChatMessage **msgToSend);
+int chat_shutdown_release_secrets(ChatContextPtr ctx, ChatMessage **msgToSend);
 
 /**
  Checks if a message belongs in the shutdown protocol
@@ -84,7 +84,7 @@ int chat_shutdown_is_my_message(const ChatMessage *msg);
   be sent in the chatroom
  @return Zero on success. Non-zero on error
 */
-int chat_shutdown_handle_message(ChatContext ctx, ChatMessage *msg,
+int chat_shutdown_handle_message(ChatContextPtr ctx, ChatMessage *msg,
 		                 ChatMessage **msgToSend);
 
 #endif /* CHAT_SHUTDOWN_H */

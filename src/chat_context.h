@@ -25,48 +25,48 @@
 #include "userstate.h"
 
 size_t chat_context_size();
-void chat_context_reset(ChatContext ctx);
+void chat_context_reset(ChatContextPtr ctx);
 
-unsigned int chat_context_get_protocol_version(ChatContext ctx);
-char * chat_context_get_accountname(const ChatContext ctx);
-char * chat_context_get_protocol(const ChatContext ctx);
-otrl_chat_token_t chat_context_get_chat_token(const ChatContext ctx);
-otrl_instag_t chat_context_get_our_instag(ChatContext ctx);
-unsigned int chat_context_get_id(ChatContext ctx);
-void chat_context_set_id(ChatContext ctx, unsigned int id);
+unsigned int chat_context_get_mpotr_version(ChatContextPtr ctx);
+char * chat_context_get_accountname(const ChatContextPtr ctx);
+char * chat_context_get_protocol(const ChatContextPtr ctx);
+otrl_chat_token_t chat_context_get_chat_token(const ChatContextPtr ctx);
+otrl_instag_t chat_context_get_our_instag(ChatContextPtr ctx);
+unsigned int chat_context_get_id(ChatContextPtr ctx);
+void chat_context_set_id(ChatContextPtr ctx, unsigned int id);
 
-OtrlList chat_context_get_participants_list(const ChatContext ctx);
-OtrlList chat_context_get_pending_list(const ChatContext ctx);
+OtrlListPtr chat_context_get_participants_list(const ChatContextPtr ctx);
+OtrlListPtr chat_context_get_pending_list(const ChatContextPtr ctx);
 
-unsigned char * chat_context_get_sid(const ChatContext ctx);
+unsigned char * chat_context_get_sid(const ChatContextPtr ctx);
 
-ChatOfferInfo chat_context_get_offer_info(const ChatContext ctx);
-void chat_context_set_offer_info(ChatContext ctx, ChatOfferInfo offer_info);
-ChatDSKEInfo chat_context_get_dske_info(const ChatContext ctx);
-void chat_context_set_dske_info(ChatContext ctx, ChatDSKEInfo dske_info);
-ChatGKAInfo chat_context_get_gka_info(const ChatContext ctx);
-void chat_context_set_gka_info(ChatContext ctx, ChatGKAInfo gka_info);
-ChatAttestInfo chat_context_get_attest_info(const ChatContext ctx);
-void chat_context_set_attest_info(ChatContext ctx, ChatAttestInfo attest_info);
-ChatEncInfo * chat_context_get_enc_info(const ChatContext ctx);
-void chat_context_set_enc_info(ChatContext ctx, ChatEncInfo *enc_info);
-ChatShutdownInfo chat_context_get_shutdown_info(const ChatContext ctx);
-void chat_context_set_shutdown_info(ChatContext ctx, ChatShutdownInfo shutdown_info);
+ChatOfferInfoPtr chat_context_get_offer_info(const ChatContextPtr ctx);
+void chat_context_set_offer_info(ChatContextPtr ctx, ChatOfferInfoPtr offer_info);
+ChatDSKEInfoPtr chat_context_get_dske_info(const ChatContextPtr ctx);
+void chat_context_set_dske_info(ChatContextPtr ctx, ChatDSKEInfoPtr dske_info);
+ChatGKAInfoPtr chat_context_get_gka_info(const ChatContextPtr ctx);
+void chat_context_set_gka_info(ChatContextPtr ctx, ChatGKAInfoPtr gka_info);
+ChatAttestInfoPtr chat_context_get_attest_info(const ChatContextPtr ctx);
+void chat_context_set_attest_info(ChatContextPtr ctx, ChatAttestInfoPtr attest_info);
+ChatEncInfo * chat_context_get_enc_info(const ChatContextPtr ctx);
+void chat_context_set_enc_info(ChatContextPtr ctx, ChatEncInfo *enc_info);
+ChatShutdownInfoPtr chat_context_get_shutdown_info(const ChatContextPtr ctx);
+void chat_context_set_shutdown_info(ChatContextPtr ctx, ChatShutdownInfoPtr shutdown_info);
 
-OtrlMessageState chat_context_get_msg_state(const ChatContext ctx);
-void chat_context_set_msg_state(ChatContext ctx, OtrlMessageState state);
-ChatSignState chat_context_get_sign_state(const ChatContext ctx);
-void chat_context_set_sign_state(ChatContext ctx, ChatSignState state);
+OtrlMessageState chat_context_get_msg_state(const ChatContextPtr ctx);
+void chat_context_set_msg_state(ChatContextPtr ctx, OtrlMessageState state);
+ChatSignState chat_context_get_sign_state(const ChatContextPtr ctx);
+void chat_context_set_sign_state(ChatContextPtr ctx, ChatSignState state);
 
-SignKey * chat_context_get_signing_key(const ChatContext ctx);
-void chat_context_set_signing_key(ChatContext ctx, SignKey *signing_key);
-ChatIdKey * chat_context_get_identity_key(ChatContext ctx);
-void chat_context_set_identity_key(ChatContext ctx, ChatIdKey *identity_key);
+SignKey * chat_context_get_signing_key(const ChatContextPtr ctx);
+void chat_context_set_signing_key(ChatContextPtr ctx, SignKey *signing_key);
+ChatIdKeyPtr chat_context_get_identity_key(ChatContextPtr ctx);
+void chat_context_set_identity_key(ChatContextPtr ctx, ChatIdKeyPtr identity_key);
 
-ChatContext chat_context_find(OtrlList context_list, const char *accountname,
+ChatContextPtr chat_context_find(OtrlListPtr context_list, const char *accountname,
 		const char *protocol, otrl_chat_token_t the_chat_token, otrl_instag_t instag);
 
-ChatContext chat_context_find_or_add(OtrlList context_list, const char *accountname,
+ChatContextPtr chat_context_find_or_add(OtrlListPtr context_list, const char *accountname,
 		const char *protocol, otrl_chat_token_t the_chat_token, otrl_instag_t instag);
 
 struct OtrlListOpsStruct chat_context_listOps;

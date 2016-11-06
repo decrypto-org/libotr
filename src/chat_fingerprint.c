@@ -23,12 +23,12 @@
 #include <string.h>
 #include <gcrypt.h>
 
-#include "chat_privkeydh.h"
-#include "list.h"
-#include "userstate.h"
+#include "chat_id_key.h"
 #include "list.h"
 
-struct OtrlChatFingerprintStruct {
+#include "userstate.h"
+
+struct OtrlChatFingerprint {
 	char *accountname;  	/* the account name we have trusted with */
 	char *protocol;			/* the protocol we have trusted the user with */
 	char *username;     	/* the username that the fingerprint corresponds to */
@@ -41,10 +41,10 @@ char *otrl_chat_fingerprint_bytes_to_hex(const unsigned char *fingerprint)
 	char *hex;
 	unsigned int i;
 
-	hex = malloc((2*CHAT_FINGERPRINT_SIZE + 1) * sizeof *hex);
+	hex = malloc((2*CHAT_ID_KEY_FINGERPRINT_SIZE + 1) * sizeof *hex);
 	if(!hex) { goto error; }
 
-	for(i=0; i<CHAT_FINGERPRINT_SIZE; i++) {
+	for(i=0; i<CHAT_ID_KEY_FINGERPRINT_SIZE; i++) {
 		sprintf(&hex[i*2], "%02X", fingerprint[i]);
 	}
 
@@ -60,12 +60,12 @@ unsigned char *chat_fingerprint_hex_to_bytes(const char *fingerprint_hex)
 	unsigned int tmp;
 	unsigned char *bytes;
 
-	if(strlen(fingerprint_hex) != 2*CHAT_FINGERPRINT_SIZE) { goto error; }
+	if(strlen(fingerprint_hex) != 2*CHAT_ID_KEY_FINGERPRINT_SIZE) { goto error; }
 
-	bytes = malloc(CHAT_FINGERPRINT_SIZE * sizeof *bytes);
+	bytes = malloc(CHAT_ID_KEY_FINGERPRINT_SIZE * sizeof *bytes);
 	if(!bytes) { goto error; }
 
-	for(i=0; i<CHAT_FINGERPRINT_SIZE; i++) {
+	for(i=0; i<CHAT_ID_KEY_FINGERPRINT_SIZE; i++) {
 		sscanf(&fingerprint_hex[i*2], "%02X", &tmp);
 		bytes[i] = (unsigned char) tmp;
 	}
@@ -78,12 +78,12 @@ error:
 
 size_t chat_fingerprint_size()
 {
-	return sizeof(struct OtrlChatFingerprintStruct);
+	return sizeof(struct OtrlChatFingerprint);
 }
 
-OtrlChatFingerprint chat_fingerprint_new(char *accountname, char *protocol, char *username, unsigned char *bytes, int isTrusted)
+OtrlChatFingerprintPtr chat_fingerprint_new(char *accountname, char *protocol, char *username, unsigned char *bytes, int isTrusted)
 {
-	OtrlChatFingerprint fnprnt;
+	OtrlChatFingerprintPtr fnprnt;
 
 	fnprnt = malloc(sizeof *fnprnt);
 	if(!fnprnt) { goto error; }
@@ -97,12 +97,12 @@ OtrlChatFingerprint chat_fingerprint_new(char *accountname, char *protocol, char
 	fnprnt->username = strdup(username);
 	if(!fnprnt->username) { goto error_with_protocol; }
 
-	fnprnt->bytes = malloc(CHAT_FINGERPRINT_SIZE * sizeof *fnprnt->bytes);
+	fnprnt->bytes = malloc(CHAT_ID_KEY_FINGERPRINT_SIZE * sizeof *fnprnt->bytes);
 	if(!fnprnt->bytes) { goto error_with_username; }
 
 	fnprnt->trusted = isTrusted;
 
-	memcpy(fnprnt->bytes, bytes, CHAT_FINGERPRINT_SIZE);
+	memcpy(fnprnt->bytes, bytes, CHAT_ID_KEY_FINGERPRINT_SIZE);
 
 	return fnprnt;
 
@@ -118,7 +118,7 @@ error:
 	return NULL;
 }
 
-void chat_fingerprint_free(OtrlChatFingerprint fnprnt)
+void chat_fingerprint_free(OtrlChatFingerprintPtr fnprnt)
 {
 	if(fnprnt) {
 		free(fnprnt->accountname);
@@ -129,36 +129,36 @@ void chat_fingerprint_free(OtrlChatFingerprint fnprnt)
     free(fnprnt);
 }
 
-char * otrl_chat_fingerprint_get_accountname(OtrlChatFingerprint fnprnt)
+char * otrl_chat_fingerprint_get_accountname(OtrlChatFingerprintPtr fnprnt)
 {
 	return fnprnt->accountname;
 }
 
-char * otrl_chat_fingerprint_get_protocol(OtrlChatFingerprint fnprnt)
+char * otrl_chat_fingerprint_get_protocol(OtrlChatFingerprintPtr fnprnt)
 {
 	return fnprnt->protocol;
 }
 
-char * otrl_chat_fingerprint_get_username(OtrlChatFingerprint fnprnt)
+char * otrl_chat_fingerprint_get_username(OtrlChatFingerprintPtr fnprnt)
 {
 	return fnprnt->username;
 }
 
-unsigned char * otrl_chat_fingerprint_get_bytes(OtrlChatFingerprint fnprnt)
+unsigned char * otrl_chat_fingerprint_get_bytes(OtrlChatFingerprintPtr fnprnt)
 {
 	return fnprnt->bytes;
 }
 
-int otrl_chat_fingerprint_is_trusted(OtrlChatFingerprint fnprnt)
+int otrl_chat_fingerprint_is_trusted(OtrlChatFingerprintPtr fnprnt)
 {
 	return fnprnt->trusted;
 }
 
-OtrlChatFingerprint chat_fingerprint_find(OtrlList fingerlist, char *accountname , char *protocol, char *username, unsigned char *bytes)
+OtrlChatFingerprintPtr chat_fingerprint_find(OtrlListPtr fingerlist, char *accountname , char *protocol, char *username, unsigned char *bytes)
 {
-	OtrlListIterator iter;
-	OtrlListNode cur;
-	OtrlChatFingerprint fnprnt, result;
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr cur;
+	OtrlChatFingerprintPtr fnprnt, result;
 
 	iter = otrl_list_iterator_new(fingerlist);
 	if(!iter) { goto error; }
@@ -171,7 +171,7 @@ OtrlChatFingerprint chat_fingerprint_find(OtrlList fingerlist, char *accountname
 		if( 0 == strcmp(accountname, otrl_chat_fingerprint_get_accountname(fnprnt)) &&
 				0 == strcmp(protocol, otrl_chat_fingerprint_get_protocol(fnprnt)) &&
 				0 == strcmp(username, otrl_chat_fingerprint_get_username(fnprnt)) &&
-				0 == memcmp(bytes, otrl_chat_fingerprint_get_bytes(fnprnt), CHAT_FINGERPRINT_SIZE)) {
+				0 == memcmp(bytes, otrl_chat_fingerprint_get_bytes(fnprnt), CHAT_ID_KEY_FINGERPRINT_SIZE)) {
 			result = fnprnt;
 		}
 	}
@@ -184,9 +184,9 @@ error:
 	return NULL;
 }
 
-int chat_fingerprint_add(OtrlList fingerlist, OtrlChatFingerprint fnprnt)
+int chat_fingerprint_add(OtrlListPtr fingerlist, OtrlChatFingerprintPtr fnprnt)
 {
-	OtrlListNode node;
+	OtrlListNodePtr node;
 
 	node = otrl_list_insert(fingerlist, fnprnt);
 	if(!node) { goto error; }
@@ -197,9 +197,9 @@ error:
 	return 1;
 }
 
-int chat_fingerprint_remove(OtrlList fingerlist, OtrlChatFingerprint fnprnt)
+int chat_fingerprint_remove(OtrlListPtr fingerlist, OtrlChatFingerprintPtr fnprnt)
 {
-	OtrlListNode node;
+	OtrlListNodePtr node;
 
 	node = otrl_list_find(fingerlist, fnprnt);
 	if(!node) { goto error; }
@@ -212,26 +212,26 @@ error:
 	return 1;
 }
 
-void chat_fingerprint_verify(OtrlChatFingerprint fnprnt)
+void chat_fingerprint_verify(OtrlChatFingerprintPtr fnprnt)
 {
 	// TODO check already initialized contexts and inform the application
 	fnprnt->trusted = 1;
 }
 
-void chat_fingerprint_forget(OtrlList fingerlist, OtrlChatFingerprint fnprnt)
+void chat_fingerprint_forget(OtrlListPtr fingerlist, OtrlChatFingerprintPtr fnprnt)
 {
 	// TODO check already initialized contexts and inform the application
 	chat_fingerprint_remove(fingerlist, fnprnt);
 }
 
-int chat_fingerprint_read_FILEp(OtrlList fingerlist, FILE *fingerfile)
+int chat_fingerprint_read_FILEp(OtrlListPtr fingerlist, FILE *fingerfile)
 {
 	char buf[CHAT_FINGERPRINT_BUFSIZE];
 	char *accountname, *protocol, *username, *bytes_hex, *trustedStr, *pch;
 	unsigned char *bytes;
 	int trusted;
-	OtrlChatFingerprint fnprnt;
-	OtrlListNode node;
+	OtrlChatFingerprintPtr fnprnt;
+	OtrlListNodePtr node;
 
 	fprintf(stderr,"libotr-mpOTR: otrl_chat_fingerprint_read_FILEp: start\n");
 
@@ -335,11 +335,11 @@ error:
 	return 1;
 }
 
-int chat_fingerprint_write_FILEp(OtrlList fingerlist, FILE *fingerFile)
+int chat_fingerprint_write_FILEp(OtrlListPtr fingerlist, FILE *fingerFile)
 {
-	OtrlListIterator iter;
-	OtrlListNode cur;
-	OtrlChatFingerprint fnprnt;
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr cur;
+	OtrlChatFingerprintPtr fnprnt;
 	char *accountname = NULL, *protocol = NULL, *username = NULL;
 	unsigned char *bytes;
 	char *bytes_hex = NULL;
@@ -377,7 +377,7 @@ error:
 	return 1;
 }
 
-void chat_fingerprint_print(OtrlChatFingerprint fnprnt)
+void chat_fingerprint_print(OtrlChatFingerprintPtr fnprnt)
 {
 	char *accountname = NULL, *protocol = NULL, *username = NULL, *bytes_hex = NULL;
 	unsigned char *bytes;
@@ -399,19 +399,19 @@ void chat_fingerprint_print(OtrlChatFingerprint fnprnt)
 	free(bytes_hex);
 }
 
-int chat_fingerprint_compare(OtrlChatFingerprint a, OtrlChatFingerprint b)
+int chat_fingerprint_compare(OtrlChatFingerprintPtr a, OtrlChatFingerprintPtr b)
 {
     int res;
     res = strcmp(otrl_chat_fingerprint_get_accountname(a), otrl_chat_fingerprint_get_accountname(b));
     if(res == 0) res = strcmp(otrl_chat_fingerprint_get_protocol(a), otrl_chat_fingerprint_get_protocol(b));
     if(res == 0) res = strcmp(otrl_chat_fingerprint_get_username(a), otrl_chat_fingerprint_get_username(b));
-    if(res == 0) res = memcmp(otrl_chat_fingerprint_get_bytes(a), otrl_chat_fingerprint_get_bytes(b), CHAT_FINGERPRINT_SIZE);
+    if(res == 0) res = memcmp(otrl_chat_fingerprint_get_bytes(a), otrl_chat_fingerprint_get_bytes(b), CHAT_ID_KEY_FINGERPRINT_SIZE);
     return res;
 }
 
-int chat_fingerprint_compareOp(OtrlListPayload a, OtrlListPayload b)
+int chat_fingerprint_compareOp(OtrlListPayloadPtr a, OtrlListPayloadPtr b)
 {
-	OtrlChatFingerprint fa, fb;
+	OtrlChatFingerprintPtr fa, fb;
 
 	fa = a;
 	fb = b;
@@ -419,17 +419,17 @@ int chat_fingerprint_compareOp(OtrlListPayload a, OtrlListPayload b)
 	return chat_fingerprint_compare(fa, fb);
 }
 
-void chat_fingerprint_printOp(OtrlListNode a)
+void chat_fingerprint_printOp(OtrlListNodePtr a)
 {
-	OtrlChatFingerprint fnprnt;
+	OtrlChatFingerprintPtr fnprnt;
 
 	fnprnt = otrl_list_node_get_payload(a);
 	chat_fingerprint_print(fnprnt);
 }
 
-void chat_fingerprint_freeOp(OtrlListPayload a)
+void chat_fingerprint_freeOp(OtrlListPayloadPtr a)
 {
-	OtrlChatFingerprint fnprnt = a;
+	OtrlChatFingerprintPtr fnprnt = a;
 
 	chat_fingerprint_free(fnprnt);
 }

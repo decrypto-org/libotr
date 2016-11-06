@@ -22,24 +22,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct OtrlChatEventParticipantDataStruct {
+struct OtrlChatEventParticipantData {
 	char *username;
 };
 
-struct OtrlChatEventMessageDataStruct {
+struct OtrlChatEventMessageData {
 	char *username;
 	char *message;
 };
 
-struct OtrlChatEventStruct {
+struct OtrlChatEvent {
 	OtrlChatEventType type;
 	void *data;
-	void (*data_free)(OtrlChatEventData);
+	void (*data_free)(OtrlChatEventDataPtr);
 };
 
-OtrlChatEventParticipantData chat_event_participant_data_new(const char *username)
+OtrlChatEventParticipantDataPtr chat_event_participant_data_new(const char *username)
 {
-	OtrlChatEventParticipantData data;
+	OtrlChatEventParticipantDataPtr data;
 
 	data = malloc(sizeof *data);
 	if(!data) { goto error; }
@@ -55,23 +55,23 @@ error:
 	return NULL;
 }
 
-void chat_event_participant_data_free(OtrlChatEventData data)
+void chat_event_participant_data_free(OtrlChatEventDataPtr data)
 {
-	 OtrlChatEventParticipantData part_data = data;
+	 OtrlChatEventParticipantDataPtr part_data = data;
 	 if(part_data) {
 		 free(part_data->username);
 	 }
 	 free(part_data);
 }
 
-char * otrl_chat_event_participant_data_get_username(OtrlChatEventParticipantData data)
+char * otrl_chat_event_participant_data_get_username(OtrlChatEventParticipantDataPtr data)
 {
 	return data->username;
 }
 
-OtrlChatEventMessageData chat_event_message_data_new(const char *username, const char *message)
+OtrlChatEventMessageDataPtr chat_event_message_data_new(const char *username, const char *message)
 {
-	OtrlChatEventMessageData data;
+	OtrlChatEventMessageDataPtr data;
 
 	data = malloc(sizeof *data);
 	if(!data) { goto error; }
@@ -92,9 +92,9 @@ error:
 	return NULL;
 }
 
-void chat_event_message_data_free(OtrlChatEventData data)
+void chat_event_message_data_free(OtrlChatEventDataPtr data)
 {
-	OtrlChatEventMessageData msg_data = data;
+	OtrlChatEventMessageDataPtr msg_data = data;
 
 	if(msg_data) {
 		free(msg_data->username);
@@ -103,19 +103,19 @@ void chat_event_message_data_free(OtrlChatEventData data)
 	free(msg_data);
 }
 
-char * otrl_chat_event_message_data_get_username(OtrlChatEventMessageData data)
+char * otrl_chat_event_message_data_get_username(OtrlChatEventMessageDataPtr data)
 {
 	return data->username;
 }
 
-char * otrl_chat_event_message_data_get_message(OtrlChatEventMessageData data)
+char * otrl_chat_event_message_data_get_message(OtrlChatEventMessageDataPtr data)
 {
 	return data->message;
 }
 
-OtrlChatEvent chat_event_new(OtrlChatEventType type, OtrlChatEventData data, void (*data_free)(void *))
+OtrlChatEventPtr chat_event_new(OtrlChatEventType type, OtrlChatEventDataPtr data, void (*data_free)(void *))
 {
-	OtrlChatEvent event;
+	OtrlChatEventPtr event;
 
 	event = malloc(sizeof *event);
 	if(!event) { goto error; }
@@ -130,7 +130,7 @@ error:
 	return NULL;
 }
 
-void chat_event_free(OtrlChatEvent event)
+void chat_event_free(OtrlChatEventPtr event)
 {
 	if(event) {
 		if(event->data_free && event->data) {
@@ -140,20 +140,20 @@ void chat_event_free(OtrlChatEvent event)
 	free(event);
 }
 
-OtrlChatEventType otrl_chat_event_get_type(OtrlChatEvent event)
+OtrlChatEventType otrl_chat_event_get_type(OtrlChatEventPtr event)
 {
 	return event->type;
 }
 
-OtrlChatEventData otrl_chat_event_get_data(OtrlChatEvent event)
+OtrlChatEventDataPtr otrl_chat_event_get_data(OtrlChatEventPtr event)
 {
 	return event->data;
 }
 
-OtrlChatEvent chat_event_offer_received_new(const char *username)
+OtrlChatEventPtr chat_event_offer_received_new(const char *username)
 {
-	OtrlChatEvent event;
-	OtrlChatEventParticipantData data;
+	OtrlChatEventPtr event;
+	OtrlChatEventParticipantDataPtr data;
 
 	data = chat_event_participant_data_new(username);
 	if(!data) { goto error; }
@@ -169,9 +169,9 @@ error:
 	return NULL;
 }
 
-OtrlChatEvent chat_event_starting_new()
+OtrlChatEventPtr chat_event_starting_new()
 {
-	OtrlChatEvent event;
+	OtrlChatEventPtr event;
 
 	event = chat_event_new(OTRL_CHAT_EVENT_STARTING, NULL, NULL);
 	if(!event) { goto error; }
@@ -182,9 +182,9 @@ error:
 	return NULL;
 }
 
-OtrlChatEvent chat_event_started_new()
+OtrlChatEventPtr chat_event_started_new()
 {
-	OtrlChatEvent event;
+	OtrlChatEventPtr event;
 
 	event = chat_event_new(OTRL_CHAT_EVENT_STARTED, NULL, NULL);
 	if(!event) { goto error; }
@@ -195,10 +195,10 @@ error:
 	return NULL;
 }
 
-OtrlChatEvent chat_event_unverified_participant_new(const char *username)
+OtrlChatEventPtr chat_event_unverified_participant_new(const char *username)
 {
-	OtrlChatEvent event;
-	OtrlChatEventParticipantData data;
+	OtrlChatEventPtr event;
+	OtrlChatEventParticipantDataPtr data;
 
 	data = chat_event_participant_data_new(username);
 	if(!data) { goto error; }
@@ -214,10 +214,10 @@ error:
 	return NULL;
 }
 
-OtrlChatEvent chat_event_plaintext_received_new(const char *username, const char *message)
+OtrlChatEventPtr chat_event_plaintext_received_new(const char *username, const char *message)
 {
-	OtrlChatEvent event;
-	OtrlChatEventMessageData data;
+	OtrlChatEventPtr event;
+	OtrlChatEventMessageDataPtr data;
 
 	data = chat_event_message_data_new(username, message);
 	if(!data) { goto error; }
@@ -233,10 +233,10 @@ error:
 	return NULL;
 }
 
-OtrlChatEvent chat_event_private_received_new(const char *username)
+OtrlChatEventPtr chat_event_private_received_new(const char *username)
 {
-	OtrlChatEvent event;
-	OtrlChatEventParticipantData data;
+	OtrlChatEventPtr event;
+	OtrlChatEventParticipantDataPtr data;
 
 	data = chat_event_participant_data_new(username);
 	if(!data) { goto error; }
@@ -252,10 +252,10 @@ error:
 	return NULL;
 }
 
-OtrlChatEvent chat_event_consensus_broken_new(const char *username)
+OtrlChatEventPtr chat_event_consensus_broken_new(const char *username)
 {
-	OtrlChatEvent event;
-	OtrlChatEventParticipantData data;
+	OtrlChatEventPtr event;
+	OtrlChatEventParticipantDataPtr data;
 
 	data = chat_event_participant_data_new(username);
 	if(!data) { goto error; }
@@ -271,9 +271,9 @@ error:
 	return NULL;
 }
 
-OtrlChatEvent chat_event_finished_new()
+OtrlChatEventPtr chat_event_finished_new()
 {
-	OtrlChatEvent event;
+	OtrlChatEventPtr event;
 
 	event = chat_event_new(OTRL_CHAT_EVENT_FINISHED, NULL, NULL);
 	if(!event) { goto error; }

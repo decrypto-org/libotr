@@ -20,15 +20,17 @@
 #ifndef CHAT_PROTOCOL_H_
 #define CHAT_PROTOCOL_H_
 
+int otrl_chat_protocol_id_key_read_file(OtrlUserState us, FILE *privf);
+int otrl_chat_protocol_id_keys_write_file(OtrlUserState us, FILE *privf);
+int otrl_chat_protocol_id_key_generate_new(OtrlUserState us, const OtrlMessageAppOps *ops, const char *accountname, const char *protocol);
+OtrlListPtr otrl_chat_protocol_id_key_list_create(OtrlUserState us);
+
 int otrl_chat_protocol_fingerprints_read_file(OtrlUserState us, FILE *fingerfile);
-
 int otrl_chat_protocol_fingerprints_write_file(OtrlUserState us, FILE *fingerfile);
+void otrl_chat_protocol_fingerprint_verify(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprintPtr fnprnt);
+void otrl_chat_protocol_fingerprint_forget(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprintPtr fnprnt);
 
-void otrl_chat_protocol_fingerprint_verify(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint fnprnt);
-
-void otrl_chat_protocol_fingerprint_forget(OtrlUserState us, const OtrlMessageAppOps *ops, OtrlChatFingerprint fnprnt);
-
-int chat_protocol_reset(ChatContext ctx);
+int chat_protocol_reset(ChatContextPtr ctx);
 
  int otrl_chat_protocol_receiving(OtrlUserState us, const OtrlMessageAppOps *ops,
  	void *opdata, const char *accountname, const char *protocol,

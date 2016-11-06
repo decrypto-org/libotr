@@ -76,11 +76,11 @@ gcry_error_t chat_enc_create_secret(ChatEncInfo *enc_info ,gcry_mpi_t w, DH_keyp
  *
  * TODO add support for encryption of any data, no just text, this might need
  * an extra msglen argument? */
-unsigned char * chat_enc_encrypt(ChatContext ctx,  const char *plaintext);
+unsigned char * chat_enc_encrypt(ChatContextPtr ctx,  const char *plaintext);
 
 /* Decrypts the data in ciphertext using the cipher information in ctx and
  * top_ctr as the top half (8 bytes) of the AES counter */
-char * chat_enc_decrypt(const ChatContext ctx, const unsigned char *ciphertext,
+char * chat_enc_decrypt(const ChatContextPtr ctx, const unsigned char *ciphertext,
 		size_t datalen, const unsigned char top_ctr[8], const char *sender);
 
 /* Encrypts buffer in to buffer out. The buffers must be already allocated */

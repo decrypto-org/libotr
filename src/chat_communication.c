@@ -30,12 +30,12 @@
 #include "chat_types.h"
 #include "list.h"
 
-int chat_communication_handle_data_message(ChatContext ctx, ChatMessage *msg,
+int chat_communication_handle_data_message(ChatContextPtr ctx, ChatMessage *msg,
 										   ChatMessage **msgToSend, char** plaintext)
 {
 	ChatMessagePayloadData *payload = msg->payload;
-    ChatParticipant sender;
-    OtrlListNode node;
+    ChatParticipantPtr sender;
+    OtrlListNodePtr node;
     unsigned int sender_pos;
 	char *plain = NULL;
     char *plain_cpy = NULL;
@@ -82,14 +82,14 @@ error:
 
 }
 
-int chat_communication_broadcast(ChatContext ctx, const char *message,
+int chat_communication_broadcast(ChatContextPtr ctx, const char *message,
 								 ChatMessage **msgToSend)
 {
 	unsigned char *ciphertext;
-	OtrlListNode node;
+	OtrlListNodePtr node;
 	size_t datalen;
 	ChatMessage *msg = NULL;
-    ChatParticipant me;
+    ChatParticipantPtr me;
     unsigned int pos;
     char *msg_cpy = NULL;
 
@@ -138,31 +138,24 @@ int chat_communication_is_my_message(ChatMessage *msg)
 {
     ChatMessageType msg_type = msg->msgType;
 
-    fprintf(stderr, "libotr-mpOTR: chat_communication_is_communication_message: start\n");
-
     switch(msg_type) {
         case CHAT_MSGTYPE_DATA:
-            fprintf(stderr, "libotr-mpOTR: chat_communication_is_communication_message: it is\n");
             return 1;
         default:
-    fprintf(stderr, "libotr-mpOTR: chat_communication_is_communication_message: it is not\n");
             return 0;
     }
 
 }
 
-int chat_communication_handle_msg(ChatContext ctx, ChatMessage *msg,
+int chat_communication_handle_msg(ChatContextPtr ctx, ChatMessage *msg,
                                   ChatMessage **msgToSend, char **plaintext)
 {
     ChatMessageType msg_type = msg->msgType;
     int err;
     char *plain;
 
-    fprintf(stderr, "libotr-mpOTR: chat_communication_handle_message: start\n");
-
     switch(msg_type) {
         case CHAT_MSGTYPE_DATA:
-            fprintf(stderr, "libotr-mpOTR: chat_communication_handle_message: data\n");
             err = chat_communication_handle_data_message(ctx, msg, msgToSend, &plain);
             if(err) { goto error; }
             break;

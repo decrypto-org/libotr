@@ -34,16 +34,16 @@
 #include "context.h"
 #include "list.h"
 
-struct ChatAttestInfoStruct {
+struct ChatAttestInfo {
 	size_t size;
 	size_t checked_count;
 	unsigned short int *checked;
 	ChatAttestState state;
 };
 
-ChatAttestInfo chat_attest_info_new(size_t size)
+ChatAttestInfoPtr chat_attest_info_new(size_t size)
 {
-	ChatAttestInfo attest_info;
+	ChatAttestInfoPtr attest_info;
 
 	attest_info = malloc(sizeof *attest_info);
 	if(!attest_info) { goto error; }
@@ -64,12 +64,12 @@ error:
 	return NULL;
 }
 
-ChatAttestState chat_attest_info_get_state(ChatAttestInfo attest_info)
+ChatAttestState chat_attest_info_get_state(ChatAttestInfoPtr attest_info)
 {
 	return attest_info->state;
 }
 
-void chat_attest_info_free(ChatAttestInfo attest_info)
+void chat_attest_info_free(ChatAttestInfoPtr attest_info)
 {
 	if(attest_info) {
 		free(attest_info->checked);
@@ -77,11 +77,11 @@ void chat_attest_info_free(ChatAttestInfo attest_info)
 	free(attest_info);
 }
 
-int chat_attest_assoctable_hash(OtrlList participants_list, unsigned char **hash)
+int chat_attest_assoctable_hash(OtrlListPtr participants_list, unsigned char **hash)
 {
-	OtrlListIterator iter;
-	OtrlListNode cur;
-	ChatParticipant participant;
+	OtrlListIteratorPtr iter;
+	OtrlListNodePtr cur;
+	ChatParticipantPtr participant;
 	unsigned char *buf = NULL, *key = NULL;
 	gcry_md_hd_t md;
 	gcry_error_t g_err;
@@ -126,7 +126,7 @@ error:
 	return 1;
 }
 
-int chat_attest_verify_sid(ChatContext ctx, unsigned char *sid)
+int chat_attest_verify_sid(ChatContextPtr ctx, unsigned char *sid)
 {
 	int res, eq;
 
@@ -136,7 +136,7 @@ int chat_attest_verify_sid(ChatContext ctx, unsigned char *sid)
 	return res;
 }
 
-int chat_attest_verify_assoctable_hash(OtrlList participants_list, unsigned char *hash, int *result)
+int chat_attest_verify_assoctable_hash(OtrlListPtr participants_list, unsigned char *hash, int *result)
 {
 	int err, res, eq;
 	unsigned char *ourhash;
@@ -157,14 +157,14 @@ error:
 	return 1;
 }
 
-int chat_attest_is_ready(ChatAttestInfo attest_info)
+int chat_attest_is_ready(ChatAttestInfoPtr attest_info)
 {
 	return (attest_info->checked_count == attest_info->size) ? 1 : 0;
 }
 
-int chat_attest_verify(ChatContext ctx, unsigned char *sid, unsigned char *assoctable_hash, unsigned int part_pos, int *result)
+int chat_attest_verify(ChatContextPtr ctx, unsigned char *sid, unsigned char *assoctable_hash, unsigned int part_pos, int *result)
 {
-	ChatAttestInfo attest_info;
+	ChatAttestInfoPtr attest_info;
 	int err, res;
 
 	attest_info = chat_context_get_attest_info(ctx);
@@ -196,10 +196,10 @@ error:
 
 }
 
-int chat_attest_info_init(ChatContext ctx)
+int chat_attest_info_init(ChatContextPtr ctx)
 {
 	size_t size;
-	ChatAttestInfo attest_info;
+	ChatAttestInfoPtr attest_info;
 
 	size = otrl_list_size(chat_context_get_participants_list(ctx));
 
@@ -216,7 +216,7 @@ error:
 	return 1;
 }
 
-int chat_attest_create_our_message(ChatContext ctx, unsigned int our_pos , ChatMessage **msgToSend)
+int chat_attest_create_our_message(ChatContextPtr ctx, unsigned int our_pos , ChatMessage **msgToSend)
 {
 	int err;
 	unsigned char *assoctable_hash;
@@ -239,9 +239,9 @@ error:
 	return 1;
 }
 
-int chat_attest_init(ChatContext ctx, ChatMessage **msgToSend)
+int chat_attest_init(ChatContextPtr ctx, ChatMessage **msgToSend)
 {
-	ChatAttestInfo attest_info;
+	ChatAttestInfoPtr attest_info;
 	int err;
 	unsigned int our_pos;
 	ChatMessage *ourMsg = NULL;
@@ -273,10 +273,10 @@ error:
 
 }
 
-int chat_attest_handle_message(ChatContext ctx, const ChatMessage *msg, ChatMessage **msgToSend)
+int chat_attest_handle_message(ChatContextPtr ctx, const ChatMessage *msg, ChatMessage **msgToSend)
 {
-	ChatAttestInfo attest_info;
-	OtrlList participants_list;
+	ChatAttestInfoPtr attest_info;
+	OtrlListPtr participants_list;
 	char *accountname;
 	unsigned int our_pos, their_pos;
 	int res, err;

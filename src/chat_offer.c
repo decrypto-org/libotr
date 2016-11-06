@@ -28,7 +28,7 @@
 #include "chat_participant.h"
 #include "chat_types.h"
 
-struct ChatOfferInfoStruct {
+struct ChatOfferInfo {
 		size_t size;
 		size_t added;
 		unsigned char **sid_contributions;
@@ -88,9 +88,9 @@ error:
 	return NULL;
 }
 
-ChatOfferInfo chat_offer_info_new(size_t size)
+ChatOfferInfoPtr chat_offer_info_new(size_t size)
 {
-	ChatOfferInfo offer_info;
+	ChatOfferInfoPtr offer_info;
 
 	offer_info = malloc(sizeof *offer_info);
 	if(!offer_info) { goto error; }
@@ -110,7 +110,7 @@ error:
 	return NULL;
 }
 
-void chat_offer_info_free(ChatOfferInfo info) {
+void chat_offer_info_free(ChatOfferInfoPtr info) {
 	unsigned int i;
 
 	if(info) {
@@ -121,13 +121,13 @@ void chat_offer_info_free(ChatOfferInfo info) {
 	free(info);
 }
 
-ChatOfferState chat_offer_info_get_state(ChatOfferInfo offer_info)
+ChatOfferState chat_offer_info_get_state(ChatOfferInfoPtr offer_info)
 {
 	return offer_info->state;
 }
 
-int chat_offer_info_init(ChatContext ctx, size_t size) {
-	ChatOfferInfo offer_info;
+int chat_offer_info_init(ChatContextPtr ctx, size_t size) {
+	ChatOfferInfoPtr offer_info;
 
 	offer_info = chat_offer_info_new(size);
 	if(!offer_info) { goto error; }
@@ -140,7 +140,7 @@ error:
 	return 1;
 }
 
-int chat_offer_add_sid_contribution(ChatOfferInfo offer_info, const unsigned char *sid_contribution, unsigned int position)
+int chat_offer_add_sid_contribution(ChatOfferInfoPtr offer_info, const unsigned char *sid_contribution, unsigned int position)
 {
 	unsigned char *contribution;
 
@@ -160,7 +160,7 @@ error:
 	return 1;
 }
 
-int chat_offer_sid_contribution_exists(ChatOfferInfo offer_info, unsigned int position)
+int chat_offer_sid_contribution_exists(ChatOfferInfoPtr offer_info, unsigned int position)
 {
 	//TODO maybe check if position >= offer_info->size???
 	if(offer_info->sid_contributions[position] == NULL) {
@@ -170,7 +170,7 @@ int chat_offer_sid_contribution_exists(ChatOfferInfo offer_info, unsigned int po
 	}
 }
 
-int chat_offer_is_ready(ChatOfferInfo offer_info)
+int chat_offer_is_ready(ChatOfferInfoPtr offer_info)
 {
 	if(offer_info->added < offer_info->size) {
 		return 0;
@@ -179,12 +179,12 @@ int chat_offer_is_ready(ChatOfferInfo offer_info)
 	}
 }
 
-int chat_offer_handle_message(ChatContext ctx, const ChatMessage *msg, ChatMessage **msgToSend)
+int chat_offer_handle_message(ChatContextPtr ctx, const ChatMessage *msg, ChatMessage **msgToSend)
 {
 	int err;
 	unsigned int their_pos, our_pos;
 	unsigned char *our_contribution, *sid;
-	ChatOfferInfo offer_info;
+	ChatOfferInfoPtr offer_info;
 	ChatMessage *newmsg = NULL;
 	ChatMessagePayloadOffer *payload = msg->payload;
 
@@ -244,9 +244,9 @@ error:
 	return 1;
 }
 
-int chat_offer_start(ChatContext ctx, ChatMessage **msgToSend)
+int chat_offer_start(ChatContextPtr ctx, ChatMessage **msgToSend)
 {
-	ChatOfferInfo offer_info;
+	ChatOfferInfoPtr offer_info;
 	unsigned int our_pos;
 	unsigned char *our_contribution, *sid;
 	ChatMessage *newmsg = NULL;

@@ -37,8 +37,8 @@
 #include "instag.h"
 #include "list.h"
 
-struct ChatContextStruct {
-		unsigned int protocol_version;     	/* The version of OTR in use */
+struct ChatContext {
+		unsigned int mpotr_version;     	/* The version of mpOTR in use */
 
 		/* Context information that is meant for application use */
         char * accountname;                 /* The username is relative to this account... */
@@ -50,31 +50,31 @@ struct ChatContextStruct {
 
         unsigned char sid[CHAT_OFFER_SID_LENGTH];
 
-        OtrlList participants_list;			/* The users in this chatroom */
-        OtrlList pending_list; 			    /* The pending messages */
+        OtrlListPtr participants_list;			/* The users in this chatroom */
+        OtrlListPtr pending_list; 			    /* The pending messages */
 
-        ChatOfferInfo offer_info;
-        ChatDSKEInfo dske_info;	    		/* Info needed for the DSKE */
-        ChatGKAInfo gka_info;          		/* Info needed for the GKA */
-        ChatAttestInfo attest_info;
+        ChatOfferInfoPtr offer_info;
+        ChatDSKEInfoPtr dske_info;	    		/* Info needed for the DSKE */
+        ChatGKAInfoPtr gka_info;          		/* Info needed for the GKA */
+        ChatAttestInfoPtr attest_info;
         ChatEncInfo *enc_info;          	/* Info needed for encrypting messages */
-        ChatShutdownInfo shutdown_info;
+        ChatShutdownInfoPtr shutdown_info;
 
         OtrlMessageState msg_state;
         ChatSignState sign_state;
 
         SignKey *signing_key;		   		/* The signing key */
-        ChatIdKey *identity_key;
+        ChatIdKeyPtr identity_key;
 };
 
 size_t chat_context_size()
 {
-	return sizeof(struct ChatContextStruct);
+	return sizeof(struct ChatContext);
 }
 
-ChatContext chat_context_new(const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token, otrl_instag_t instag)
+ChatContextPtr chat_context_new(const char *accountname, const char *protocol, otrl_chat_token_t the_chat_token, otrl_instag_t instag)
 {
-	ChatContext ctx;
+	ChatContextPtr ctx;
 
 	ctx = malloc(sizeof *ctx);
 	if(!ctx) { goto error; }
@@ -89,7 +89,7 @@ ChatContext chat_context_new(const char *accountname, const char *protocol, otrl
 
 	ctx->the_chat_token = the_chat_token;
 
-	ctx->protocol_version = CHAT_PROTOCOL_VERSION;
+	ctx->mpotr_version = CHAT_PROTOCOL_VERSION;
 	ctx->sign_state = CHAT_SIGNSTATE_NONE;
 	ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
 
@@ -106,6 +106,7 @@ ChatContext chat_context_new(const char *accountname, const char *protocol, otrl
 	ctx->enc_info = NULL;
 	ctx->shutdown_info = NULL;
 	ctx->signing_key = NULL;
+	ctx->identity_key = NULL;
 
 	return ctx;
 
@@ -121,7 +122,7 @@ error:
 	return NULL;
 }
 
-void chat_context_reset(ChatContext ctx)
+void chat_context_reset(ChatContextPtr ctx)
 {
 	otrl_list_clear(ctx->participants_list);
 	otrl_list_clear(ctx->pending_list);
@@ -147,11 +148,13 @@ void chat_context_reset(ChatContext ctx)
 	free(ctx->signing_key);
 	ctx->signing_key = NULL;
 
+	ctx->identity_key = NULL;
+
 	ctx->sign_state = CHAT_SIGNSTATE_NONE;
 	ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
 }
 
-void chat_context_free(ChatContext ctx)
+void chat_context_free(ChatContextPtr ctx)
 {
 	if(ctx) {
 		free(ctx->accountname);
@@ -169,157 +172,157 @@ void chat_context_free(ChatContext ctx)
 	free(ctx);
 }
 
-unsigned int chat_context_get_protocol_version(ChatContext ctx)
+unsigned int chat_context_get_mpotr_version(ChatContextPtr ctx)
 {
-	return ctx->protocol_version;
+	return ctx->mpotr_version;
 }
 
-char * chat_context_get_accountname(const ChatContext ctx)
+char * chat_context_get_accountname(const ChatContextPtr ctx)
 {
 	return ctx->accountname;
 }
 
-char * chat_context_get_protocol(const ChatContext ctx)
+char * chat_context_get_protocol(const ChatContextPtr ctx)
 {
 	return ctx->protocol;
 }
 
-otrl_chat_token_t chat_context_get_chat_token(const ChatContext ctx)
+otrl_chat_token_t chat_context_get_chat_token(const ChatContextPtr ctx)
 {
 	return ctx->the_chat_token;
 }
 
-otrl_instag_t chat_context_get_our_instag(ChatContext ctx)
+otrl_instag_t chat_context_get_our_instag(ChatContextPtr ctx)
 {
 	return ctx->our_instag;
 }
 
-unsigned int chat_context_get_id(ChatContext ctx)
+unsigned int chat_context_get_id(ChatContextPtr ctx)
 {
 	return ctx->id;
 }
 
-void chat_context_set_id(ChatContext ctx, unsigned int id)
+void chat_context_set_id(ChatContextPtr ctx, unsigned int id)
 {
 	ctx->id = id;
 }
 
-OtrlList chat_context_get_participants_list(const ChatContext ctx)
+OtrlListPtr chat_context_get_participants_list(const ChatContextPtr ctx)
 {
 	return ctx->participants_list;
 }
 
-OtrlList chat_context_get_pending_list(const ChatContext ctx)
+OtrlListPtr chat_context_get_pending_list(const ChatContextPtr ctx)
 {
 	return ctx->pending_list;
 }
 
-unsigned char * chat_context_get_sid(const ChatContext ctx)
+unsigned char * chat_context_get_sid(const ChatContextPtr ctx)
 {
 	return ctx->sid;
 }
 
-ChatOfferInfo chat_context_get_offer_info(const ChatContext ctx)
+ChatOfferInfoPtr chat_context_get_offer_info(const ChatContextPtr ctx)
 {
 	return ctx->offer_info;
 }
 
-void chat_context_set_offer_info(ChatContext ctx, ChatOfferInfo offer_info)
+void chat_context_set_offer_info(ChatContextPtr ctx, ChatOfferInfoPtr offer_info)
 {
 	ctx->offer_info = offer_info;
 }
 
-ChatDSKEInfo chat_context_get_dske_info(const ChatContext ctx)
+ChatDSKEInfoPtr chat_context_get_dske_info(const ChatContextPtr ctx)
 {
 	return ctx->dske_info;
 }
 
-void chat_context_set_dske_info(ChatContext ctx, ChatDSKEInfo dske_info)
+void chat_context_set_dske_info(ChatContextPtr ctx, ChatDSKEInfoPtr dske_info)
 {
 	ctx->dske_info = dske_info;
 }
 
-ChatGKAInfo chat_context_get_gka_info(const ChatContext ctx)
+ChatGKAInfoPtr chat_context_get_gka_info(const ChatContextPtr ctx)
 {
 	return ctx->gka_info;
 }
 
-void chat_context_set_gka_info(ChatContext ctx, ChatGKAInfo gka_info)
+void chat_context_set_gka_info(ChatContextPtr ctx, ChatGKAInfoPtr gka_info)
 {
 	ctx->gka_info = gka_info;
 }
 
-ChatAttestInfo chat_context_get_attest_info(const ChatContext ctx)
+ChatAttestInfoPtr chat_context_get_attest_info(const ChatContextPtr ctx)
 {
 	return ctx->attest_info;
 }
 
-void chat_context_set_attest_info(ChatContext ctx, ChatAttestInfo attest_info)
+void chat_context_set_attest_info(ChatContextPtr ctx, ChatAttestInfoPtr attest_info)
 {
 	ctx->attest_info = attest_info;
 }
 
-ChatEncInfo * chat_context_get_enc_info(const ChatContext ctx)
+ChatEncInfo * chat_context_get_enc_info(const ChatContextPtr ctx)
 {
 	return ctx->enc_info;
 }
 
-void chat_context_set_enc_info(ChatContext ctx, ChatEncInfo *enc_info)
+void chat_context_set_enc_info(ChatContextPtr ctx, ChatEncInfo *enc_info)
 {
 	ctx->enc_info = enc_info;
 }
 
-ChatShutdownInfo chat_context_get_shutdown_info(const ChatContext ctx)
+ChatShutdownInfoPtr chat_context_get_shutdown_info(const ChatContextPtr ctx)
 {
 	return ctx->shutdown_info;
 }
 
-void chat_context_set_shutdown_info(ChatContext ctx, ChatShutdownInfo shutdown_info)
+void chat_context_set_shutdown_info(ChatContextPtr ctx, ChatShutdownInfoPtr shutdown_info)
 {
 	ctx->shutdown_info = shutdown_info;
 }
 
-OtrlMessageState chat_context_get_msg_state(const ChatContext ctx)
+OtrlMessageState chat_context_get_msg_state(const ChatContextPtr ctx)
 {
 	return ctx->msg_state;
 }
 
-void chat_context_set_msg_state(ChatContext ctx, OtrlMessageState state)
+void chat_context_set_msg_state(ChatContextPtr ctx, OtrlMessageState state)
 {
 	ctx->msg_state = state;
 }
 
-ChatSignState chat_context_get_sign_state(const ChatContext ctx)
+ChatSignState chat_context_get_sign_state(const ChatContextPtr ctx)
 {
 	return ctx->sign_state;
 }
 
-void chat_context_set_sign_state(ChatContext ctx, ChatSignState state)
+void chat_context_set_sign_state(ChatContextPtr ctx, ChatSignState state)
 {
 	ctx->sign_state = state;
 }
 
-SignKey * chat_context_get_signing_key(const ChatContext ctx)
+SignKey * chat_context_get_signing_key(const ChatContextPtr ctx)
 {
 	return ctx->signing_key;
 }
 
-void chat_context_set_signing_key(ChatContext ctx, SignKey *signing_key)
+void chat_context_set_signing_key(ChatContextPtr ctx, SignKey *signing_key)
 {
 	ctx->signing_key = signing_key;
 }
 
-ChatIdKey * chat_context_get_identity_key(ChatContext ctx)
+ChatIdKeyPtr chat_context_get_identity_key(ChatContextPtr ctx)
 {
 	return ctx->identity_key;
 }
 
-void chat_context_set_identity_key(ChatContext ctx, ChatIdKey *identity_key)
+void chat_context_set_identity_key(ChatContextPtr ctx, ChatIdKeyPtr identity_key)
 {
 	ctx->identity_key = identity_key;
 }
 
-int chat_context_compare(ChatContext a, ChatContext b)
+int chat_context_compare(ChatContextPtr a, ChatContextPtr b)
 {
 	int res = 0;
 
@@ -334,7 +337,7 @@ int chat_context_compare(ChatContext a, ChatContext b)
 	return res;
 }
 
-void chat_context_print(ChatContext ctx)
+void chat_context_print(ChatContextPtr ctx)
 {
 	fprintf(stderr, "OtrlChatContext:\n");
 	fprintf(stderr, "|-accountname   : %s\n", chat_context_get_accountname(ctx));
@@ -344,11 +347,11 @@ void chat_context_print(ChatContext ctx)
 	fprintf(stderr, "|-the_chat_token: %d\n", chat_context_get_chat_token(ctx));
 }
 
-int chat_context_add(OtrlList context_list, ChatContext ctx)
+int chat_context_add(OtrlListPtr context_list, ChatContextPtr ctx)
 {
-	OtrlListNode node;
+	OtrlListNodePtr node;
 
-	node = otrl_list_insert(context_list, (OtrlListPayload)ctx);
+	node = otrl_list_insert(context_list, (OtrlListPayloadPtr)ctx);
 	if(!node) {goto error; }
 
 	return 0;
@@ -357,10 +360,10 @@ error:
 	return 1;
 }
 
-int chat_context_remove(OtrlList context_list, ChatContext ctx) {
-	OtrlListNode node;
+int chat_context_remove(OtrlListPtr context_list, ChatContextPtr ctx) {
+	OtrlListNodePtr node;
 
-	node = otrl_list_find(context_list, (OtrlListPayload)ctx);
+	node = otrl_list_find(context_list, (OtrlListPayloadPtr)ctx);
 	if(!node) { goto error; }
 
 	otrl_list_remove_and_free(context_list, node);
@@ -372,18 +375,18 @@ error:
 
 }
 
-ChatContext chat_context_find(OtrlList context_list, const char *accountname,
+ChatContextPtr chat_context_find(OtrlListPtr context_list, const char *accountname,
 		const char *protocol, otrl_chat_token_t the_chat_token, otrl_instag_t instag)
 {
-	OtrlListNode node;
-	ChatContext target, res;
+	OtrlListNodePtr node;
+	ChatContextPtr target, res;
 
 	target = chat_context_new(accountname, protocol, the_chat_token, instag);
 	if(!target) { goto error; }
 
 	otrl_list_dump(context_list);
 
-	node = otrl_list_find(context_list, (OtrlListPayload)target);
+	node = otrl_list_find(context_list, (OtrlListPayloadPtr)target);
 	if(!node) { goto error_with_target; }
 
 	res = otrl_list_node_get_payload(node);
@@ -398,10 +401,10 @@ error:
 	return NULL;
 }
 
-ChatContext chat_context_find_or_add(OtrlList context_list, const char *accountname,
+ChatContextPtr chat_context_find_or_add(OtrlListPtr context_list, const char *accountname,
 		const char *protocol, otrl_chat_token_t the_chat_token, otrl_instag_t instag)
 {
-	ChatContext ctx;
+	ChatContextPtr ctx;
 	int err;
 
 	ctx = chat_context_find(context_list, accountname, protocol, the_chat_token, instag);
@@ -421,25 +424,25 @@ error:
 	return NULL;
 }
 
-int chat_context_compareOp(OtrlListPayload a, OtrlListPayload b)
+int chat_context_compareOp(OtrlListPayloadPtr a, OtrlListPayloadPtr b)
 {
-	ChatContext ctx1 = a;
-	ChatContext ctx2 = b;
+	ChatContextPtr ctx1 = a;
+	ChatContextPtr ctx2 = b;
 
 	return chat_context_compare(ctx1, ctx2);
 }
 
-void chat_context_printOp(OtrlListNode node)
+void chat_context_printOp(OtrlListNodePtr node)
 {
-	ChatContext ctx;
+	ChatContextPtr ctx;
 
 	ctx = otrl_list_node_get_payload(node);
 	chat_context_print(ctx);
 }
 
-void chat_context_freeOp(OtrlListPayload a)
+void chat_context_freeOp(OtrlListPayloadPtr a)
 {
-	ChatContext ctx;
+	ChatContextPtr ctx;
 
 	ctx = a;
 	chat_context_free(ctx);
