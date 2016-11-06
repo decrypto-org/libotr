@@ -28,6 +28,8 @@
 #define CHAT_OFFER_SID_CONTRIBUTION_LENGTH 32
 #define CHAT_OFFER_SID_LENGTH 64
 
+#define CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH 64
+
 #include "proto.h"
 #include "tlv.h"
 #include "dh.h"
@@ -50,7 +52,10 @@ typedef enum {
 	OTRL_MSGTYPE_CHAT_DAKE_KEY,
     OTRL_MSGTYPE_CHAT_GKA_UPFLOW,
     OTRL_MSGTYPE_CHAT_GKA_DOWNFLOW,
-    OTRL_MSGTYPE_CHAT_DATA
+    OTRL_MSGTYPE_CHAT_ATTEST,
+    OTRL_MSGTYPE_CHAT_DATA,
+    OTRL_MSGTYPE_CHAT_SHUTDOWN_END,
+    OTRL_MSGTYPE_CHAT_SHUTDOWN_KEYRELEASE
 } OtrlChatMessageType;
 
 typedef void * MessagePayloadPtr;
@@ -74,17 +79,17 @@ typedef struct OtrlChatMessagePayloadOfferStruct {
 } OtrlChatMessagePayloadOffer;
 
 typedef struct OtrlChatMessagePayloadDAKEHandshakeStruct {
-		DAKE_handshake_message_data handshake_data;
+		DAKE_handshake_message_data *handshake_data;
 } OtrlChatMessagePayloadDAKEHandshake;
 
 typedef struct OtrlChatMessagePayloadDAKEConfirmStruct {
 		unsigned int recipient;
-		DAKE_confirm_message_data data;
+		DAKE_confirm_message_data *data;
 } OtrlChatMessagePayloadDAKEConfirm;
 
 typedef struct OtrlChatMessagePayloadDAKEKeyStruct {
 		unsigned int recipient;
-		DAKE_key_message_data data;
+		DAKE_key_message_data *data;
 } OtrlChatMessagePayloadDAKEKey;
 
 typedef struct OtrlChatMessagePayloadGKAUpflowStruct {
@@ -96,25 +101,47 @@ typedef struct OtrlChatMessagePayloadGKADownflowStruct {
 		OtrlList *interKeys;
 } OtrlChatMessagePayloadGKADownflow;
 
+typedef struct OtrlChatMessagePayloadAttestStruct {
+		unsigned char sid[CHAT_OFFER_SID_LENGTH];
+		unsigned char assoctable_hash[CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH];
+} OtrlChatMessagePayloadAttest;
+
 typedef struct OtrlChatMessagePayloadDataStruct {
         unsigned char ctr[8];
         size_t datalen;
         unsigned char *ciphertext;
 } OtrlChatMessagePayloadData;
 
-
-typedef struct OtrlChatOfferInfoStruct {
-		size_t size;
-		size_t added;
-		unsigned char **sid_contributions;
-
-} OtrlChatOfferInfo;
+typedef struct ChatMessagePayloadShutdownKeyReleaseStruct {
+		size_t keylen;
+		unsigned char *key;
+} ChatMessagePayloadShutdownKeyRelease;
 
 typedef enum {
 	OTRL_CHAT_OFFERSTATE_NONE,
 	OTRL_CHAT_OFFERSTATE_AWAITING,
 	OTRL_CHAT_OFFERSTATE_FINISHED
 } OtrlChatOfferState;
+
+typedef struct OtrlChatOfferInfoStruct {
+		size_t size;
+		size_t added;
+		unsigned char **sid_contributions;
+		OtrlChatOfferState state;
+} OtrlChatOfferInfo;
+
+typedef enum {
+    OTRL_CHAT_ATTESTSTATE_NONE,
+    OTRL_CHAT_ATTESTSTATE_AWAITING,
+    OTRL_CHAT_ATTESTSTATE_FINISHED
+} OtrlChatAttestState;
+
+typedef struct OtrlChatAttestInfoStruct {
+	size_t size;
+	size_t checked_count;
+	unsigned short int *checked;
+	OtrlChatAttestState state;
+} OtrlChatAttestInfo;
 
 typedef enum {
 	OTRL_CHAT_SINGSTATE_NONE,
@@ -167,6 +194,28 @@ typedef struct {
 	unsigned int remaining;
 } OtrlAuthDSKEInfo;
 
+typedef enum {
+	SHUTDOWN_WAITING_END,
+	SHUTDOWN_FINISHED
+} ShutdownState;
+
+typedef struct {
+	ShutdownState state;
+
+} Shutdown;
+
+typedef enum {
+	OTRL_CHAT_SHUTDOWNSTATE_NONE,
+	OTRL_CHAT_SHUTDOWNSTATE_AWAITING_ENDS,
+	OTRL_CHAT_SHUTDOWNSTATE_FINISHED
+} OtrlChatShutdownState;
+
+typedef struct {
+	int remaining;
+	unsigned char *has_send_end;
+	OtrlChatShutdownState state;
+} OtrlShutdownInfo;
+
 /* Chat token type declerations */
 typedef char* otrl_chat_token_t;
 
@@ -185,28 +234,21 @@ typedef struct OtrlChatContextStruct {
 
         OtrlList *participants_list;       /* The users in this chatroom */
 
-        Fingerprint fingerprint_root;      /* The root of a linked list of
-                                              Fingerprints entries. This list will
-                                              only be populated in master contexts.
-                                              For child contexts,
-                                              fingerprint_root.next will always
-                                              point to NULL. */
-
         OtrlChatOfferInfo *offer_info;
-        OtrlChatOfferState offer_state;
 
-        OtrlChatEncInfo enc_info;              /* Info needed for encrypting messages */
+        OtrlChatAttestInfo *attest_info;
+
+        OtrlChatEncInfo enc_info;          /* Info needed for encrypting messages */
 
         OtrlAuthGKAInfo gka_info;          /* Info needed for the GKA */
 
-        OtrlAuthDSKEInfo dske_info;	  /* Info needed for the DSKE */
+        OtrlAuthDSKEInfo *dske_info;	  	   /* Info needed for the DSKE */
+
+        OtrlShutdownInfo shutdown_info;
 
         OtrlMessageState msg_state;
 
         OtrlChatSignState sign_state;
-
-        Fingerprint *active_fingerprint;   /* Which fingerprint is in use now?
-                                              A pointer into the above list */
 
         SignKey *signing_key;		   /* The signing key */
         ChatIdKey *identity_key;
@@ -224,9 +266,11 @@ typedef struct OtrlChatContextStruct {
 typedef  struct OtrlChatParticipantStruct {
         char *username; // This users username
         OtrlChatMessage *pending_message; // A stored message by this user
+        unsigned char *pending_signed_message;
         SignKey *sign_key; //This users signing key
         ChatFingerprint *fingerprint;
         DAKE *dake;
+	Shutdown *shutdown;
 
 } OtrlChatParticipant;
 

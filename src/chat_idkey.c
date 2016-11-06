@@ -239,7 +239,8 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 	    chat_idkey_destroy_key(key);
 	    return NULL;
 	}
-	key->keyp.priv = gcry_mpi_copy(w);
+	key->keyp.priv = w;//gcry_mpi_copy(w);
+
 	if(!key->keyp.priv) {
 	    gcry_sexp_release(privs);
 	    gcry_sexp_release(pubs);
@@ -255,7 +256,7 @@ ChatIdKey * chat_idkey_parse_key(gcry_sexp_t accounts)
 	    chat_idkey_destroy_key(key);
 	    return NULL;
 	}
-	key->keyp.pub = gcry_mpi_copy(w);
+	key->keyp.pub = w; //gcry_mpi_copy(w);
 	if(!key->keyp.pub) {
 	    gcry_sexp_release(pubs);
 	    chat_idkey_destroy_key(key);

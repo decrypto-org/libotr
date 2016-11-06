@@ -468,6 +468,7 @@ gcry_error_t initialize_gka_info(OtrlAuthGKAInfo *gka_info) //OtrlChatContext *c
     	//otrl_list_clear(ctx->participants_list);
     	return err;
     }
+    mpi_toString(gka_info->keypair->priv);
 
 	return gcry_error(GPG_ERR_NO_ERROR);
 }
@@ -510,6 +511,7 @@ int chat_auth_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
 
     /* Create the intermediate key list to send */
     inter_key_list = intermediate_key_list_to_send(initial_key_list, ctx->gka_info.keypair);
+    otrl_list_dump(inter_key_list);
     fprintf(stderr, "libotr-mpOTR: otrl_chat_auth_init: after list to send\n");
 
     /* We don't need the initial list anymore */
@@ -566,6 +568,7 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
 
     /* Should we store the message for future use? */
     if(ctx->gka_info.state == OTRL_CHAT_GKASTATE_NONE) {
+    	fprintf(stderr, "libotr-mpOTR: handle_upflow_message: storing\n");
         sender = chat_participant_find(ctx, msg->senderName, &pos);
         if(!sender)
             return 1;
@@ -676,7 +679,7 @@ gcry_error_t handle_upflow_message(OtrlChatContext *ctx,
 
     	/* Set the gka_info state to finished */
     	ctx->gka_info.state = OTRL_CHAT_GKASTATE_FINISHED;
-    	ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
+    	//ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
     	ctx->id = ctx->gka_info.position;
     }
 
@@ -708,7 +711,7 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
 
 	fprintf(stderr, "libotr-mpOTR: handle_downflow_message: start\n");
 
-
+    //TODO check if we are in the correct state before processing downflow
     /* Check if the message is intended for the same users */
     if(memcmp(ctx->sid, msg->sid, CHAT_PARTICIPANTS_HASH_LENGTH)) {
     	fprintf(stderr,"libotr-mpOTR: handle_downflow_message: hashes are not equal");
@@ -754,7 +757,7 @@ gcry_error_t handle_downflow_message(OtrlChatContext *ctx,
     *msgToSend = NULL;
 
     ctx->gka_info.state = OTRL_CHAT_GKASTATE_FINISHED;
-    ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
+    //ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
     ctx->id = ctx->gka_info.position;
 
     fprintf(stderr, "libotr-mpOTR: handle_downflow_message: end\n");

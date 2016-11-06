@@ -60,11 +60,15 @@ gcry_error_t chat_enc_create_secret(OtrlChatEncInfo *enc_info ,gcry_mpi_t w, DH_
 	gcry_error_t err;
 	unsigned char *buf;
 	size_t buf_size;
-	gcry_mpi_t final_key;
+	gcry_mpi_t final_key = NULL;
 
 	fprintf(stderr, "libotr-mpOTR: create_secret: start\n");
 
 	final_key = gcry_mpi_snew(300);
+	if(!final_key) {
+		fprintf(stderr, "libotr-mpOTR: create_secret: no final_key\n");
+		return 1;
+	}
 
 	otrl_dh_powm(final_key, w, key->priv);
 

@@ -57,8 +57,11 @@ stop it before freeing the userstate. */
 void otrl_userstate_free(OtrlUserState us)
 {
     otrl_context_forget_all(us);
+    fprintf(stderr, "libotr-mpOTR: otrl_userstate_free: destroying chat_context_list\n");
     otrl_list_destroy(us->chat_context_list);			/* DIKOMAS */
+    fprintf(stderr, "libotr-mpOTR: otrl_userstate_free: destroying chat_privkey_list\n");
     otrl_list_destroy(us->chat_privkey_list);			/* DIKOMAS */
+    fprintf(stderr, "libotr-mpOTR: otrl_userstate_free: destroying chat_trusted_fingerprints\n");
     otrl_list_destroy(us->chat_trusted_fingerprints); 	/* DIKOMAS */
     otrl_privkey_forget_all(us);
     otrl_privkey_pending_forget_all(us);

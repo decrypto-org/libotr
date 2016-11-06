@@ -30,6 +30,13 @@
 #include "chat_serial.h"
 #include "chat_auth.h"
 
+/**
+  Checks if a serialized message is an OTR message
+
+  @param[in] message The message
+
+  @return 1 if it's an OTR message, else 0.
+ */
 int chat_message_is_otr(const char * message)
 {
 	if(strstr(message, "?OTR") == message)
@@ -38,6 +45,13 @@ int chat_message_is_otr(const char * message)
 		return 0;
 }
 
+/**
+  Checks if a serialized message is an OTR message fragment
+
+  @param[in] message The message
+
+  @return 1 if it's an OTR message fragment, else 0.
+ */
 int chat_message_is_fragment(const char * message)
 {
 	if(strstr(message, "?OTR|") == message)
@@ -46,34 +60,59 @@ int chat_message_is_fragment(const char * message)
 		return 0;
 }
 
-OtrlMessageType chat_message_message_type_parse(unsigned char c)
+/**
+  Parses a serialized message type
+
+  @param[in] c The byte containing the serialized message type
+
+  @return The message type.
+ */
+OtrlChatMessageType chat_message_message_type_parse(unsigned char c)
 {
-	return (OtrlMessageType)c;	// TODO Dimitris: do the actual mapping
+	return (OtrlChatMessageType)c;	// TODO Dimitris: do the actual mapping
 }
 
+/**
+  Serializes an offer message payload
 
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
+
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
 unsigned char * chat_message_payload_offer_serialize(MessagePayloadPtr payload, size_t *payload_size)
 {
-	unsigned int pos = 0;
-	unsigned char *ret;
 	OtrlChatMessagePayloadOffer *myPayload = payload;
+	unsigned char *ret;
+	unsigned int pos = 0;
+	size_t len;
 
-	ret = malloc((4 + CHAT_OFFER_SID_CONTRIBUTION_LENGTH)* sizeof *ret);
+	len = 4 + CHAT_OFFER_SID_CONTRIBUTION_LENGTH;
+	ret = malloc(len * sizeof *ret);
 	if(!ret) { goto error; }
-
-	*payload_size = 4 + CHAT_OFFER_SID_CONTRIBUTION_LENGTH;
 
 	chat_serial_int_to_string(myPayload->position, &ret[pos]);
 	pos += 4;
 	memcpy(&ret[pos], myPayload->sid_contribution, CHAT_OFFER_SID_CONTRIBUTION_LENGTH);
 	pos += CHAT_OFFER_SID_CONTRIBUTION_LENGTH;
 
+	*payload_size = len;
 	return ret;
 
 error:
 	return NULL;
 }
 
+/**
+  Parses a serialized offer message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller should
+  	  	  free the returned string using chat_message_payload_offer_free().
+ */
 MessagePayloadPtr chat_message_payload_offer_parse(const unsigned char *message, size_t length)
 {
 	unsigned int pos = 0;
@@ -95,32 +134,42 @@ error:
 	return NULL;
 }
 
+/**
+  Frees an offer message payload
+
+  @param[in] payload The payload to be freed
+ */
 void chat_message_payload_offer_free(MessagePayloadPtr payload)
 {
 	OtrlChatMessagePayloadOffer *myPayload = payload;
 	free(myPayload);
 }
 
+/**
+  Serializes a DAKE handshake message payload
+
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
+
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
 unsigned char * chat_message_payload_dake_handshake_serialize(MessagePayloadPtr payload, size_t *payload_size)
 {
 	OtrlChatMessagePayloadDAKEHandshake *myPayload = payload;
-	unsigned char *buf;
+	unsigned char *buf, *ephem_pub, *long_pub;
 	unsigned int pos = 0;
 	int err;
-	unsigned char *ephem_pub, *long_pub;
-	size_t ephem_size, long_size;
+	size_t len, ephem_size, long_size;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_handshake_serialize: start\n");
-
-	err = chat_serial_mpi_to_string(myPayload->handshake_data.ephem_pub, &ephem_pub, &ephem_size);
+	err = chat_serial_mpi_to_string(myPayload->handshake_data->ephem_pub, &ephem_pub, &ephem_size);
 	if(err) { goto error; }
-	err = chat_serial_mpi_to_string(myPayload->handshake_data.long_pub, &long_pub, &long_size);
+	err = chat_serial_mpi_to_string(myPayload->handshake_data->long_pub, &long_pub, &long_size);
 	if(err) { goto error_with_ehpem_pub; }
 
 	//4 for ephem_size, ephem_size for ephem_pub, 4 for long_size, long_size for long_pub
-	*payload_size = 8 + ephem_size + long_size;
-
-	buf = malloc(*payload_size * sizeof *buf);
+	len = 8 + ephem_size + long_size;
+	buf = malloc(len * sizeof *buf);
 	if(!buf) { goto error_with_long_pub; }
 
 	chat_serial_int_to_string(ephem_size, &buf[pos]);
@@ -135,8 +184,7 @@ unsigned char * chat_message_payload_dake_handshake_serialize(MessagePayloadPtr 
 	free(long_pub);
 	free(ephem_pub);
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_handshake_serialize: end\n");
-
+	*payload_size = len;
 	return buf;
 
 error_with_long_pub:
@@ -147,30 +195,41 @@ error:
 	return NULL;
 }
 
+/**
+  Parses a serialized DAKE handshake message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller
+  	  	  should free the returned string using
+  	  	  chat_message_payload_dake_handshake_free().
+ */
 MessagePayloadPtr chat_message_payload_dake_handshake_parse(const unsigned char *message, size_t length)
 {
 	unsigned int pos = 0;
 	OtrlChatMessagePayloadDAKEHandshake *payload;
 	size_t ephem_size, long_size;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_handshake_parse: start\n");
-
 	if(length < 8) { goto error; }
 
 	payload = malloc(sizeof *payload);
+	if(!payload) { goto error; }
+	payload->handshake_data = malloc(sizeof *(payload->handshake_data));
+	if(!payload->handshake_data) { goto error_with_payload; }
+
 
 	ephem_size = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
 	if(length < 8 + ephem_size) { goto error_with_payload; }
-	chat_serial_string_to_mpi(&message[pos], &payload->handshake_data.ephem_pub, ephem_size);
+	// TODO error handling for mpis
+	chat_serial_string_to_mpi(&message[pos], &payload->handshake_data->ephem_pub, ephem_size);
 	pos += ephem_size;
 	long_size = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
 	if(length != 8 + ephem_size+ long_size) { goto error_with_payload; }
-	chat_serial_string_to_mpi(&message[pos], &payload->handshake_data.long_pub, long_size);
+	chat_serial_string_to_mpi(&message[pos], &payload->handshake_data->long_pub, long_size);
 	pos += long_size;
-
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_handshake_parse: end\n");
 
 	return payload;
 
@@ -180,227 +239,244 @@ error:
 	return NULL;
 }
 
+/**
+  Frees a DAKE Handshake message payload
+
+  @param[in] payload The payload to be freed
+ */
 void chat_message_payload_dake_handshake_free(MessagePayloadPtr payload)
 {
 	OtrlChatMessagePayloadDAKEHandshake *myPayload = payload;
+	//TODO Dimitris: Is that correct????
+	gcry_mpi_release(myPayload->handshake_data->ephem_pub);
+	gcry_mpi_release(myPayload->handshake_data->long_pub);
+	free(myPayload->handshake_data);
 	free(myPayload);
 }
 
+/**
+  Serializes a DAKE Confirm message payload
+
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
+
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
 unsigned char * chat_message_payload_dake_confirm_serialize(MessagePayloadPtr payload, size_t *payload_size)
 {
 	OtrlChatMessagePayloadDAKEConfirm *myPayload = payload;
 	unsigned char *buf;
 	unsigned int pos = 0;
+	size_t len;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_confirm_serialize: start\n");
-
-	*payload_size = 4 + TDH_MAC_LENGTH;
-
-	buf = malloc(*payload_size * sizeof *buf);
+	len = 4 + TDH_MAC_LENGTH;
+	buf = malloc(len * sizeof *buf);
 	if(!buf) { goto error; }
 
 	chat_serial_int_to_string(myPayload->recipient, &buf[pos]);
 	pos += 4;
-	memcpy(&buf[pos], myPayload->data.mac, TDH_MAC_LENGTH);
+	memcpy(&buf[pos], myPayload->data->mac, TDH_MAC_LENGTH);
 	pos += TDH_MAC_LENGTH;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_confirm_serialize: end\n");
-
+	*payload_size = len;
 	return buf;
 
 error:
 	return NULL;
 }
 
+/**
+  Parses a serialized DAKE confirm message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller
+  	  	  should free the returned string using
+  	  	  chat_message_payload_dake_confirm_free().
+ */
 MessagePayloadPtr chat_message_payload_dake_confirm_parse(const unsigned char *message, size_t length)
 {
 	OtrlChatMessagePayloadDAKEConfirm *payload;
 	unsigned int pos = 0;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_confirm_parse: start\n");
-
 	if(length != 4 + TDH_MAC_LENGTH) { goto error; }
 
 	payload = malloc(sizeof *payload);
 	if(!payload) { goto error; }
+	payload->data = malloc(sizeof *(payload->data));
+	if(!payload->data) { goto error_with_payload; }
 
 	payload->recipient = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
-	memcpy(payload->data.mac, &message[pos], TDH_MAC_LENGTH);
+	memcpy(payload->data->mac, &message[pos], TDH_MAC_LENGTH);
 	pos += TDH_MAC_LENGTH;
-
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_confirm_parse: end\n");
 
 	return payload;
 
+error_with_payload:
+	free(payload);
 error:
 	return NULL;
 }
 
+/**
+  Frees a DAKE Confirm message payload
+
+  @param[in] payload The payload to be freed
+ */
 void chat_message_payload_dake_confirm_free(MessagePayloadPtr payload)
 {
 	OtrlChatMessagePayloadDAKEConfirm *myPayload = payload;
+	free(myPayload->data);
 	free(myPayload);
 }
 
+/**
+  Serializes a DAKE Key message payload
+
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
+
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
 unsigned char * chat_message_payload_dake_key_serialize(MessagePayloadPtr payload, size_t *payload_size)
 {
 	OtrlChatMessagePayloadDAKEKey *myPayload = payload;
 	unsigned char *buf;
 	unsigned int pos = 0;
-
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_key_serialize: start\n");
+	size_t len;
 
 	// 4 for recipient, TDH_MAC_LENGTH for mac, 4 for keylen, keylen for key
-	*payload_size = 8 + TDH_MAC_LENGTH + myPayload->data.keylen;
+	len = 8 + TDH_MAC_LENGTH + myPayload->data->keylen;
 
-	buf = malloc(*payload_size * sizeof *buf);
+	buf = malloc(len * sizeof *buf);
 	if(!buf) { goto error; }
 
 	chat_serial_int_to_string(myPayload->recipient, &buf[pos]);
 	pos += 4;
-	memcpy(&buf[pos], myPayload->data.mac, TDH_MAC_LENGTH);
+	memcpy(&buf[pos], myPayload->data->mac, TDH_MAC_LENGTH);
 	pos += TDH_MAC_LENGTH;
-	chat_serial_int_to_string(myPayload->data.keylen, &buf[pos]);
+	chat_serial_int_to_string(myPayload->data->keylen, &buf[pos]);
 	pos += 4;
-	memcpy(&buf[pos], myPayload->data.key, myPayload->data.keylen);
-	pos += myPayload->data.keylen;
+	memcpy(&buf[pos], myPayload->data->key, myPayload->data->keylen);
+	pos += myPayload->data->keylen;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_key_serialize: end\n");
-
+	*payload_size = len;
 	return buf;
 
 error:
 	return NULL;
 }
 
+/**
+  Parses a serialized DAKE Key message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller
+  	  	  should free the returned string using
+  	  	  chat_message_payload_dake_key_free().
+ */
 MessagePayloadPtr chat_message_payload_dake_key_parse(const unsigned char *message, size_t length)
 {
 	OtrlChatMessagePayloadDAKEKey *payload;
 	unsigned int pos = 0;
-
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_key_parse: start\n");
 
 	if(length < 8 + TDH_MAC_LENGTH) { goto error; }
 
 	payload = malloc(sizeof *payload);
 	if(!payload) { goto error; }
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_key_parse: before payload->recipient\n");
+	payload->data = malloc(sizeof *(payload->data));
+	if(!payload->data) { goto error_with_payload; }
+
 	payload->recipient = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_key_parse: before payload->data.mac\n");
-	memcpy(payload->data.mac, &message[pos], TDH_MAC_LENGTH);
+	memcpy(payload->data->mac, &message[pos], TDH_MAC_LENGTH);
 	pos += TDH_MAC_LENGTH;
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_key_parse: before payload->data.keylen\n");
-	payload->data.keylen = chat_serial_string_to_int(&message[pos]);
+	payload->data->keylen = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
-	if(length != 8 + TDH_MAC_LENGTH + payload->data.keylen) { goto error_with_payload; }
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_key_parse: before malloc\n");
-	payload->data.key = malloc(payload->data.keylen * sizeof *(payload->data.key));
-	if(!payload->data.key) { goto error_with_payload; }
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_key_parse: before payload->data.key\n");
-	memcpy(payload->data.key, &message[pos], payload->data.keylen);
-	pos += payload->data.keylen;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_dake_key_parse: end\n");
+	if(length != 8 + TDH_MAC_LENGTH + payload->data->keylen) { goto error_with_payload_data; }
+
+	payload->data->key = malloc(payload->data->keylen * sizeof *(payload->data->key));
+	if(!payload->data->key) { goto error_with_payload; }
+	memcpy(payload->data->key, &message[pos], payload->data->keylen);
+	pos += payload->data->keylen;
 
 	return payload;
 
+error_with_payload_data:
+	free(payload->data);
 error_with_payload:
 	free(payload);
 error:
 	return NULL;
 }
 
+/**
+  Frees a DAKE Key message payload
+
+  @param[in] payload The payload to be freed
+ */
 void chat_message_payload_dake_key_free(MessagePayloadPtr payload)
 {
 	OtrlChatMessagePayloadDAKEKey *myPayload = payload;
-	free(myPayload->data.key);
+
+	free(myPayload->data->key);
+	free(myPayload->data);
 	free(myPayload);
 }
 
-MessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char *message, size_t length)
-{
-	OtrlChatMessagePayloadGKAUpflow *payload;
+/**
+  Serializes a GKA Upflow payload
 
-	unsigned int pos = 0;
-	int keysLength, i, keySize;
-	gcry_mpi_t *key;
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
 
-	// TODO check length
-
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_gka_upflow_parse: start\n");
-
-	payload = malloc(sizeof *payload);
-	if(!payload) { goto error; }
-
-	payload->recipient = chat_serial_string_to_int(&message[pos]);
-	pos += 4;
-	keysLength = chat_serial_string_to_int(&message[pos]);
-	pos += 4;
-
-	payload->interKeys = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
-	if(!payload->interKeys) { goto error_with_payload; }
-
-	for(i=0; i<keysLength; i++) {
-		keySize = chat_serial_string_to_int(&message[pos]);
-		pos += 4;
-		key = malloc(sizeof *key);
-		if(!key) { goto error_with_payload_interKeys; }
-		chat_serial_string_to_mpi(&message[pos], key, keySize);
-		pos += keySize;
-		otrl_list_append(payload->interKeys, key);
-	}
-
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_gka_upflow_parse: end\n");
-
-	return (MessagePayloadPtr)payload;
-
-error_with_payload_interKeys:
-	otrl_list_destroy(payload->interKeys);
-error_with_payload:
-	free(payload);
-error:
-	return NULL;
-}
-
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
 unsigned char * chat_message_payload_gka_upflow_serialize(MessagePayloadPtr payload, size_t *payload_size)
 {
-	OtrlChatMessagePayloadGKAUpflow *myPayload;
+	OtrlChatMessagePayloadGKAUpflow *myPayload = payload;
 	unsigned char *ret, **keys;
 	unsigned int i;
 	int err;
-	size_t *keySizes;
+	size_t *keySizes, len;
 	gcry_mpi_t *k;
 	OtrlListNode *cur;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_gka_upflow_serialize: start\n");
+	fprintf(stderr,"chat_message_payload_gka_upflow_serialize: start\n");
 
-	myPayload = payload;
+	otrl_list_dump(myPayload->interKeys);
 
 	keys = malloc(myPayload->interKeys->size * sizeof *keys);
 	if(!keys) { goto error; }
 
+	for(i = 0; i < myPayload->interKeys->size; i++) {
+		keys[i] = NULL;
+	}
+
 	keySizes = malloc(myPayload->interKeys->size * sizeof *keySizes);
 	if(!keySizes) { goto error_with_keys; }
 
-	*payload_size = 0;
-
+	len = 0;
 	for(i = 0, cur = myPayload->interKeys->head; cur != NULL; i++, cur = cur->next) {
 		k = cur->payload;
 		err = chat_serial_mpi_to_string(*k, &keys[i], &keySizes[i]);
-		if(err) {
-			for(unsigned int j = 0; j < i; j++) { free(keys[i]); }
-			goto error_with_keySizes;
-		}
-		*payload_size += keySizes[i] + 4;
+		if(err) { goto error_with_filled_keys; }
+		len += keySizes[i] + 4;
 	}
 
 	// 4 recipient, 4 interkeys size header
-	*payload_size += 8;
+	len += 8;
 
-	ret = malloc(*payload_size * sizeof *ret);
+	ret = malloc(len * sizeof *ret);
 	if(!ret) { goto error_with_filled_keys; }
 
 	unsigned int pos = 0;
@@ -421,13 +497,17 @@ unsigned char * chat_message_payload_gka_upflow_serialize(MessagePayloadPtr payl
 	free(keySizes);
 	free(keys);
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_gka_upflow_serialize: end\n");
+	fprintf(stderr,"chat_message_payload_gka_upflow_serialize: serialized payload: ");
+	for(unsigned int i=0; i<len; i++) fprintf(stderr, "%02X", ret[i]);
+	fprintf(stderr,"\n");
 
+	fprintf(stderr,"chat_message_payload_gka_upflow_serialize: end\n");
+
+	*payload_size = len;
 	return ret;
 
 error_with_filled_keys:
 	for(i=0; i<myPayload->interKeys->size; i++) { free(keys[i]); }
-error_with_keySizes:
 	free(keySizes);
 error_with_keys:
 	free(keys);
@@ -435,28 +515,32 @@ error:
 	return NULL;
 }
 
-void chat_message_payload_gka_upflow_free(MessagePayloadPtr payload)
+/**
+  Parses a serialized GKA Upflow message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller
+  	  	  should free the returned string using
+  	  	  chat_message_payload_gka_upflow_free().
+ */
+MessagePayloadPtr chat_message_payload_gka_upflow_parse(const unsigned char *message, size_t length)
 {
-	OtrlChatMessagePayloadGKAUpflow *myPayload = payload;
-
-	otrl_list_destroy(myPayload->interKeys);
-	free(myPayload);
-}
-
-
-MessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned char *message, size_t length)
-{
-	OtrlChatMessagePayloadGKADownflow *payload;
+	OtrlChatMessagePayloadGKAUpflow *payload;
 
 	unsigned int pos = 0;
-	int keysLength, i, keySize;
+	int keysLength, i, keySize, err;
 	gcry_mpi_t *key;
 
 	// TODO check length
+	if(length < 8) { goto error; }
 
 	payload = malloc(sizeof *payload);
 	if(!payload) { goto error; }
 
+	payload->recipient = chat_serial_string_to_int(&message[pos]);
+	pos += 4;
 	keysLength = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
 
@@ -464,14 +548,26 @@ MessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned char *m
 	if(!payload->interKeys) { goto error_with_payload; }
 
 	for(i=0; i<keysLength; i++) {
+		if(length < pos + 4) { goto error_with_payload_interKeys; }
+
 		keySize = chat_serial_string_to_int(&message[pos]);
 		pos += 4;
+
+		if(length < pos + keySize) { goto error_with_payload_interKeys; }
+
 		key = malloc(sizeof *key);
 		if(!key) { goto error_with_payload_interKeys; }
-		chat_serial_string_to_mpi(&message[pos], key, keySize);
+		// TODO Dimitris error handling every use of chat_serial_string to mpi
+		err = chat_serial_string_to_mpi(&message[pos], key, keySize);
+		if(err) {
+			free(key);
+			goto error_with_payload_interKeys;
+		}
 		pos += keySize;
 		otrl_list_append(payload->interKeys, key);
 	}
+
+	if(length != pos ) { goto error_with_payload_interKeys; }
 
 	return (MessagePayloadPtr)payload;
 
@@ -483,41 +579,60 @@ error:
 	return NULL;
 }
 
+/**
+  Frees a GKA Upflow message payload
+
+  @param[in] payload The payload to be freed
+ */
+void chat_message_payload_gka_upflow_free(MessagePayloadPtr payload)
+{
+	OtrlChatMessagePayloadGKAUpflow *myPayload = payload;
+
+	otrl_list_destroy(myPayload->interKeys);
+	free(myPayload);
+}
+
+/**
+  Serializes a GKA Downflow payload
+
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
+
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
 unsigned char * chat_message_payload_gka_downflow_serialize(MessagePayloadPtr payload, size_t *payload_size)
 {
-	OtrlChatMessagePayloadGKADownflow *myPayload;
+	OtrlChatMessagePayloadGKADownflow *myPayload = payload;
 	unsigned char *ret, **keys;
 	unsigned int i;
 	int err;
-	size_t *keySizes;
+	size_t *keySizes, len;
 	gcry_mpi_t *k;
 	OtrlListNode *cur;
-
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_gka_downflow_serialize: start\n");
-
-	myPayload = payload;
 
 	keys = malloc(myPayload->interKeys->size * sizeof *keys);
 	if(!keys) { goto error; }
 
+	for(i = 0; i < myPayload->interKeys->size; i++) {
+		keys[i] = NULL;
+	}
+
 	keySizes = malloc(myPayload->interKeys->size * sizeof *keySizes);
 	if(!keySizes) { goto error_with_keys; }
 
-	*payload_size = 0;
+	len = 0;
 	for(i = 0, cur = myPayload->interKeys->head; cur != NULL; i++, cur = cur->next) {
 		k = cur->payload;
 		err = chat_serial_mpi_to_string(*k, &keys[i], &keySizes[i]);
-		if(err) {
-			for(unsigned int j = 0; j < i; j++) { free(keys[i]); }
-			goto error_with_keySizes;
-		}
-		*payload_size += keySizes[i] + 4;
+		if(err) { goto error_with_filled_keys;	}
+		len += keySizes[i] + 4;
 	}
 
 	// 4 interkeys size header
-	*payload_size += 4;
+	len += 4;
 
-	ret = malloc(*payload_size * sizeof *ret);
+	ret = malloc(len * sizeof *ret);
 	if(!ret) { goto error_with_filled_keys; }
 
 	unsigned int pos = 0;
@@ -535,13 +650,11 @@ unsigned char * chat_message_payload_gka_downflow_serialize(MessagePayloadPtr pa
 	free(keySizes);
 	free(keys);
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_payload_gka_downflow_serialize: end\n");
-
+	*payload_size = len;
 	return ret;
 
 error_with_filled_keys:
 	for(i=0; i<myPayload->interKeys->size; i++) { free(keys[i]); }
-error_with_keySizes:
 	free(keySizes);
 error_with_keys:
 	free(keys);
@@ -549,6 +662,63 @@ error:
 	return NULL;
 }
 
+/**
+  Parses a serialized GKA Downflow message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller
+  	  	  should free the returned string using
+  	  	  chat_message_payload_gka_downflow_free().
+ */
+MessagePayloadPtr chat_message_payload_gka_downflow_parse(const unsigned char *message, size_t length)
+{
+	OtrlChatMessagePayloadGKADownflow *payload;
+
+	unsigned int pos = 0;
+	int keysLength, i, keySize;
+	gcry_mpi_t *key;
+
+	if(length < 4) { goto error; }
+
+	payload = malloc(sizeof *payload);
+	if(!payload) { goto error; }
+
+	keysLength = chat_serial_string_to_int(&message[pos]);
+	pos += 4;
+
+	payload->interKeys = otrl_list_create(&interKeyOps, sizeof(gcry_mpi_t));
+	if(!payload->interKeys) { goto error_with_payload; }
+
+	for(i=0; i<keysLength; i++) {
+		if(length < pos + 4) { goto error_with_payload_interKeys; }
+		keySize = chat_serial_string_to_int(&message[pos]);
+		pos += 4;
+
+		if(length < pos + keySize) { goto error_with_payload_interKeys; }
+		key = malloc(sizeof *key);
+		if(!key) { goto error_with_payload_interKeys; }
+		chat_serial_string_to_mpi(&message[pos], key, keySize);
+		pos += keySize;
+		otrl_list_append(payload->interKeys, key);
+	}
+
+	return (MessagePayloadPtr)payload;
+
+error_with_payload_interKeys:
+	otrl_list_destroy(payload->interKeys);
+error_with_payload:
+	free(payload);
+error:
+	return NULL;
+}
+
+/**
+  Frees a GKA Downflow message payload
+
+  @param[in] payload The payload to be freed
+ */
 void chat_message_payload_gka_downflow_free(MessagePayloadPtr payload)
 {
 	OtrlChatMessagePayloadGKADownflow *myPayload = payload;
@@ -557,9 +727,130 @@ void chat_message_payload_gka_downflow_free(MessagePayloadPtr payload)
 	free(myPayload);
 }
 
+
+/**
+  Serializes an Attest payload
+
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
+
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
+unsigned char * chat_message_payload_attest_serialize(MessagePayloadPtr payload, size_t *payload_size)
+{
+	OtrlChatMessagePayloadAttest *myPayload = payload;
+	unsigned char *buf;
+	size_t len;
+	unsigned int pos = 0;
+
+	len = CHAT_OFFER_SID_LENGTH + CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH;
+	buf = malloc(len * sizeof *buf);
+	if(!buf) { goto error; }
+
+	memcpy(&buf[pos], myPayload->sid, CHAT_OFFER_SID_LENGTH);
+	pos += CHAT_OFFER_SID_LENGTH;
+	memcpy(&buf[pos], myPayload->assoctable_hash, CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH);
+	pos += CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH;
+
+	*payload_size = len;
+	return buf;
+
+error:
+	return NULL;
+}
+
+/**
+  Parses a serialized Attest message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller
+  	  	  should free the returned string using
+  	  	  chat_message_payload_attest_free().
+ */
+MessagePayloadPtr chat_message_payload_attest_parse(const unsigned char *message, size_t length)
+{
+	OtrlChatMessagePayloadAttest *payload;
+	unsigned int pos = 0;
+
+	if(length != CHAT_OFFER_SID_LENGTH + CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH) { goto error; }
+
+	payload = malloc(sizeof *payload);
+
+	memcpy(payload->sid, &message[pos], CHAT_OFFER_SID_LENGTH);
+	pos += CHAT_OFFER_SID_LENGTH;
+	memcpy(payload->assoctable_hash, &message[pos], CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH);
+	pos += CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH;
+
+	return (MessagePayloadPtr)payload;
+
+error:
+	return NULL;
+}
+
+/**
+  Frees an Attest message payload
+
+  @param[in] payload The payload to be freed
+ */
+void chat_message_payload_attest_free(MessagePayloadPtr payload)
+{
+	OtrlChatMessagePayloadAttest *myPayload = payload;
+	free(myPayload);
+}
+
+/**
+  Serializes a Data payload
+
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
+
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
+unsigned char * chat_message_payload_data_serialize(MessagePayloadPtr payload, size_t *payload_size)
+{
+	unsigned char *buf;
+	unsigned int pos = 0;
+	OtrlChatMessagePayloadData *myPayload= payload;
+	size_t len;
+
+	// 8 bytes for ctr, 4 for datalen + datalen for data
+	len = 12 + myPayload->datalen;
+	buf = malloc(len * sizeof *buf);
+	if(!buf) { goto error; }
+
+	memcpy(&buf[pos], myPayload->ctr, 8);
+	pos += 8;
+
+	chat_serial_int_to_string((int)myPayload->datalen, &buf[pos]);
+	pos += 4;
+	memcpy(&buf[pos], myPayload->ciphertext, myPayload->datalen);
+	pos += myPayload->datalen;
+
+	*payload_size = len;
+	return buf;
+
+error:
+	return NULL;
+}
+
+/**
+  Parses a serialized Data message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller
+  	  	  should free the returned string using
+  	  	  chat_message_payload_data_free().
+ */
 MessagePayloadPtr chat_message_payload_data_parse(const unsigned char *message, size_t length)
 {
 	OtrlChatMessagePayloadData *payload;
+	unsigned int pos = 0;
 
 	// 8 bytes for ctr, 4 for datalen
 	if(length < 12) { goto error; }
@@ -567,18 +858,18 @@ MessagePayloadPtr chat_message_payload_data_parse(const unsigned char *message, 
 	payload = malloc(sizeof *payload);
 	if(!payload) { goto error; }
 
-	for(int i=0; i<8; i++) {
-		payload->ctr[i] = message[i];
-	}
+	memcpy(payload->ctr, &message[pos], 8);
+	pos += 8;
 
-	payload->datalen = chat_serial_string_to_int(&message[8]);
+	payload->datalen = chat_serial_string_to_int(&message[pos]);
+	pos += 4;
 
-	if(length != 12 + payload->datalen) { goto error_with_payload; }
+	if(length != pos + payload->datalen) { goto error_with_payload; }
 
 	payload->ciphertext = malloc(payload->datalen * sizeof *(payload->ciphertext));
 	if(!(payload->ciphertext)) { goto error_with_payload; }
-
-	memcpy(payload->ciphertext, &message[12], payload->datalen);
+	memcpy(payload->ciphertext, &message[pos], payload->datalen);
+	pos += payload->datalen;
 
 	return (MessagePayloadPtr)payload;
 
@@ -588,36 +879,14 @@ error:
 	return NULL;
 }
 
-unsigned char * chat_message_payload_data_serialize(MessagePayloadPtr payload, size_t *payload_size)
-{
-	unsigned char *buf;
-	OtrlChatMessagePayloadData *myPayload;
+/**
+  Frees a Data message payload
 
-	myPayload = payload;
-
-	// 8 bytes for ctr, 4 for datalen + datalen for data
-	*payload_size = 12 + myPayload->datalen;
-	buf = malloc(*payload_size * sizeof *buf);
-	if(!buf) { goto error; }
-
-	for(int i=0; i<8; i++) {
-		buf[i] = myPayload->ctr[i];
-	}
-
-	chat_serial_int_to_string((int)myPayload->datalen, &buf[8]);
-	memcpy(&buf[12], myPayload->ciphertext, myPayload->datalen);
-
-	return buf;
-
-error:
-	return NULL;
-}
-
+  @param[in] payload The payload to be freed
+ */
 void chat_message_payload_data_free(MessagePayloadPtr payload)
 {
-	OtrlChatMessagePayloadData *myPayload;
-
-	myPayload = payload;
+	OtrlChatMessagePayloadData *myPayload= payload;
 
 	if(myPayload) {
 		if(myPayload->ciphertext) {
@@ -627,9 +896,98 @@ void chat_message_payload_data_free(MessagePayloadPtr payload)
 	}
 }
 
+/**
+  Serializes a Shutdown KeyRelease payload
+
+  @param[in] 	payload 		A pointer to the payload
+  @param[out] 	payload_size 	Returns the size of the serialized payload
+
+  @return The serialized payload. NULL in case of error. Caller should free the
+  	  	  returned string.
+ */
+unsigned char * chat_message_payload_shutdown_keyrelease_serialize(MessagePayloadPtr payload, size_t *payload_size)
+{
+	unsigned char *buf;
+	unsigned int pos = 0;
+	ChatMessagePayloadShutdownKeyRelease *myPayload= payload;
+	size_t len;
+
+	// 4 for keylen + keylen for key
+	len = 4 + myPayload->keylen;
+	buf = malloc(len * sizeof *buf);
+	if(!buf) { goto error; }
+
+	chat_serial_int_to_string((int)myPayload->keylen, &buf[pos]);
+	pos += 4;
+	memcpy(&buf[pos], myPayload->key, myPayload->keylen);
+	pos += myPayload->keylen;
+
+	*payload_size = len;
+	return buf;
+
+error:
+	return NULL;
+}
+
+/**
+  Parses a serialized Shutdown KeyRelease message payload
+
+  @param[in] message 	The serialized payload
+  @param[in] length 	The length of the message string
+
+  @return A pointer to the parsed payload. NULL in case of error. Caller
+  	  	  should free the returned string using
+  	  	  chat_message_payload_shutdown_keyrelease_free().
+ */
+MessagePayloadPtr chat_message_payload_shutdown_keyrelease_parse(const unsigned char *message, size_t length)
+{
+	ChatMessagePayloadShutdownKeyRelease *payload;
+	unsigned int pos = 0;
+
+	// 4 for datalen
+	if(length < 4) { goto error; }
+
+	payload = malloc(sizeof *payload);
+	if(!payload) { goto error; }
+
+
+	payload->keylen = chat_serial_string_to_int(&message[pos]);
+	pos += 4;
+
+	if(length != pos + payload->keylen) { goto error_with_payload; }
+
+	payload->key = malloc(payload->keylen * sizeof *(payload->key));
+	if(!(payload->key)) { goto error_with_payload; }
+	memcpy(payload->key, &message[pos], payload->keylen);
+	pos += payload->keylen;
+
+	return (MessagePayloadPtr)payload;
+
+error_with_payload:
+	free(payload);
+error:
+	return NULL;
+}
+
+/**
+  Frees a Shutdown KeyRelease message payload
+
+  @param[in] payload The payload to be freed
+ */
+void chat_message_payload_shutdown_keyrelease_free(MessagePayloadPtr payload)
+{
+	ChatMessagePayloadShutdownKeyRelease *myPayload= payload;
+
+	if(myPayload) {
+		if(myPayload->key) {
+			free(myPayload->key);
+		}
+		free(myPayload);
+	}
+}
+
 void chat_message_free(OtrlChatMessage * msg)
 {
-	fprintf(stderr, "libotr-mpOTR: chat_message_free: start\n");
 	if(msg) {
 		if(msg->payload_free && msg->payload) {
 			msg->payload_free(msg->payload);
@@ -637,70 +995,62 @@ void chat_message_free(OtrlChatMessage * msg)
 		free(msg->senderName);
 		free(msg);
 	}
-	fprintf(stderr, "libotr-mpOTR: chat_message_free: end\n");
 }
 
-unsigned char chat_message_message_type_serialize(OtrlMessageType msgType)
+unsigned char chat_message_message_type_serialize(OtrlChatMessageType msgType)
 {
 	return ((unsigned char)msgType);
 }
 
-int chat_message_type_contains_sid(OtrlMessageType type)
+int chat_message_type_contains_sid(OtrlChatMessageType type)
 {
 	switch(type) {
-		case OTRL_MSGTYPE_CHAT_DAKE_HANDSHAKE:
-		case OTRL_MSGTYPE_CHAT_DAKE_CONFIRM:
-		case OTRL_MSGTYPE_CHAT_GKA_UPFLOW:
-		case OTRL_MSGTYPE_CHAT_GKA_DOWNFLOW:
-		case OTRL_MSGTYPE_CHAT_DATA:
-			return 1;
-			break;
 		case OTRL_MSGTYPE_CHAT_NOTOTR:
 		case OTRL_MSGTYPE_CHAT_OFFER:
-		default:
 			return 0;
+			break;
+		default:
+			return 1;
+
 	}
 }
 
-int chat_message_type_should_be_signed(OtrlMessageType type)
+int chat_message_type_should_be_signed(OtrlChatMessageType type)
 {
 	switch(type) {
-		case OTRL_MSGTYPE_CHAT_GKA_UPFLOW:
-		case OTRL_MSGTYPE_CHAT_GKA_DOWNFLOW:
-		case OTRL_MSGTYPE_CHAT_DATA:
-			return 1;
-			break;
 		case OTRL_MSGTYPE_CHAT_NOTOTR:
 		case OTRL_MSGTYPE_CHAT_OFFER:
 		case OTRL_MSGTYPE_CHAT_DAKE_HANDSHAKE:
 		case OTRL_MSGTYPE_CHAT_DAKE_CONFIRM:
-		default:
+		case OTRL_MSGTYPE_CHAT_DAKE_KEY:
 			return 0;
+			break;
+		default:
+			return 1;
 	}
 }
 
 unsigned char * chat_message_serialize(OtrlChatMessage *msg, size_t *length)
 {
 	//char *message;
-	unsigned char *buf;
-	size_t buflen, payloadlen;
+	unsigned char *buf, *payload_serialized = NULL;
+	size_t buflen, payloadlen = 0;
 	unsigned int pos = 0;
 
 	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: start\n");
 
-	if(!msg || !msg->payload_serialize) { goto error; }
+	if(!msg) { goto error; }
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before msg->payload_serialize\n");
-	unsigned char *payload_serialized = msg->payload_serialize(msg->payload, &payloadlen);
-	if(!payload_serialized) { goto error; }
+	if(msg->payload_serialize && msg->payload) {
+		payload_serialized = msg->payload_serialize(msg->payload, &payloadlen);
+		if(!payload_serialized) { goto error; }
+	}
 
 	buflen = payloadlen + 11;
-	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before chat_message_type_contains_sid\n");
 	if(chat_message_type_contains_sid(msg->msgType)) {
 		buflen += CHAT_OFFER_SID_LENGTH;
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: before buf = malloc\n");
 	buf = malloc(buflen * sizeof *buf);
 	if(!buf) { goto error_with_payload_serialized; }
 
@@ -716,25 +1066,18 @@ unsigned char * chat_message_serialize(OtrlChatMessage *msg, size_t *length)
 		memcpy(&buf[pos], msg->sid, CHAT_OFFER_SID_LENGTH);
 		pos += CHAT_OFFER_SID_LENGTH;
 	}
-	memcpy(&buf[pos], payload_serialized, payloadlen);
-	pos += payloadlen;
 
-	//fprintf(stderr, "libotr-mpOTR: chat_message_serialize: serialized message:\n");
-	//for(unsigned int i = 0; i<buflen;i++) fprintf(stderr,"%02X",buf[i]); fprintf(stderr,"\n");
-
-	//message = otrl_base64_otr_encode(buf, buflen);
-	//if(!message) { goto error_with_buf; }
-
-	//free(buf);
-	free(payload_serialized);
-
-	*length = buflen;
+	if(payload_serialized) {
+		memcpy(&buf[pos], payload_serialized, payloadlen);
+		pos += payloadlen;
+		free(payload_serialized);
+	}
 
 	fprintf(stderr, "libotr-mpOTR: chat_message_serialize: end\n");
+
+	*length = buflen;
 	return buf;
 
-//error_with_buf:
-//	free(buf);
 error_with_payload_serialized:
 	free(payload_serialized);
 error:
@@ -788,10 +1131,30 @@ int chat_message_payload_parse(OtrlChatMessage *msg, const unsigned char *messag
 			if(!msg->payload) { goto error; }
 			break;
 
+		case OTRL_MSGTYPE_CHAT_ATTEST:
+			msg->payload_free = chat_message_payload_attest_free;
+			msg->payload_serialize = chat_message_payload_attest_serialize;
+			msg->payload = chat_message_payload_attest_parse(message, length);
+			if(!msg->payload) { goto error; }
+			break;
+
 		case OTRL_MSGTYPE_CHAT_DATA:
 			msg->payload_free = chat_message_payload_data_free;
 			msg->payload_serialize = chat_message_payload_data_serialize;
 			msg->payload = chat_message_payload_data_parse(message, length);
+			if(!msg->payload) { goto error; }
+			break;
+
+		case OTRL_MSGTYPE_CHAT_SHUTDOWN_END:
+			msg->payload_free = NULL;
+			msg->payload_serialize = NULL;
+			msg->payload = NULL;
+			break;
+
+		case OTRL_MSGTYPE_CHAT_SHUTDOWN_KEYRELEASE:
+			msg->payload_free = chat_message_payload_shutdown_keyrelease_free;
+			msg->payload_serialize = chat_message_payload_shutdown_keyrelease_serialize;
+			msg->payload = chat_message_payload_shutdown_keyrelease_parse(message, length);
 			if(!msg->payload) { goto error; }
 			break;
 
@@ -819,36 +1182,17 @@ error:
 OtrlChatMessage * chat_message_parse(const unsigned char *message, const size_t messagelen, const char *accountname)
 {
 	OtrlChatMessage *msg;
-	//unsigned char *buf = NULL;
-	//size_t buflen;
 	unsigned int pos = 0;
 	int err;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_parse: start, accountname: %s\n", accountname);
+	if(messagelen < 11)	{ goto error; }
 
 	msg = malloc(sizeof *msg);
 	if(!msg) { goto error; }
 
-	// TODO Dimtiris: maybe not return a struct in this case?
-	/*
-	if(!chat_message_is_otr((char *)message)) {
-		msg->protoVersion = 0;
-		msg->msgType = OTRL_MSGTYPE_NOTOTR;
-		msg->senderInsTag = 0;
-		msg->chatInsTag = 0;
-		msg->payload = NULL;
-		msg->payload_free = NULL;
-		msg->payload_serialize = NULL;
-		return msg;
-	}*/
-
-	// TODO: handle this case
-	//if(chat_message_is_fragment(message)) { goto error_with_msg; }
-
-	//res = otrl_base64_otr_decode(message, &buf, &buflen);
-	//if(res != 0 ) { goto error_with_msg; }
-
-	if(messagelen < 11)	{ goto error_with_msg; }
+	msg->senderName = NULL;
+	msg->senderName = strdup(accountname);
+	if(!msg->senderName) { goto error_with_msg; }
 
 	msg->protoVersion = chat_serial_string_to_int16(&message[pos]);
 	pos += 2;
@@ -859,26 +1203,31 @@ OtrlChatMessage * chat_message_parse(const unsigned char *message, const size_t 
 	msg->chatInsTag = chat_serial_string_to_int(&message[pos]);
 	pos += 4;
 	if(chat_message_type_contains_sid(msg->msgType)) {
-		if(messagelen < 11 + CHAT_OFFER_SID_LENGTH) { goto error_with_msg; }
+		if(messagelen < pos + CHAT_OFFER_SID_LENGTH) { goto error_with_msg; }
 		memcpy(msg->sid, &message[pos], CHAT_OFFER_SID_LENGTH);
 		pos += CHAT_OFFER_SID_LENGTH;
 	}
-	msg->senderName = strdup(accountname);
 	err = chat_message_payload_parse(msg, &message[pos], messagelen-pos);
 	if(err) { goto error_with_msg; }
 
-	//free(buf);
-
 	return msg;
 
-//error_with_buf:
-//	free(buf);
 error_with_msg:
 	chat_message_free(msg);
 error:
 	return NULL;
 }
 
+/**
+  Creates a new Chat Message with an empty payload
+
+  @param[in] ctx 		The Context in which the message is created
+  @param[in] msgType 	The message type
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
 OtrlChatMessage * chat_message_create(OtrlChatContext *ctx, OtrlChatMessageType msgType)
 {
 	OtrlChatMessage *msg;
@@ -891,6 +1240,7 @@ OtrlChatMessage * chat_message_create(OtrlChatContext *ctx, OtrlChatMessageType 
 	msg->senderInsTag = ctx->our_instance;
 	msg->chatInsTag = OTRL_INSTAG_CHAT;
 	msg->senderName = strdup(ctx->accountname);
+	if(!msg->senderName) { goto error_with_msg; }
 	if(chat_message_type_contains_sid(msgType)) {
 		memcpy(msg->sid, ctx->sid, CHAT_OFFER_SID_LENGTH);
 	}
@@ -900,10 +1250,23 @@ OtrlChatMessage * chat_message_create(OtrlChatContext *ctx, OtrlChatMessageType 
 
 	return msg;
 
+error_with_msg:
+	free(msg);
 error:
 	return NULL;
 }
 
+/**
+  Creates a new Offer message
+
+  @param[in] ctx 				The Context in which the message is created
+  @param[in] sid_contribution 	The sender's sid_contribution, used be value
+  @param[in] position 			The sender's index in the participants list
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
 OtrlChatMessage * chat_message_offer_create(OtrlChatContext *ctx, const unsigned char *sid_contribution, unsigned int position)
 {
 	OtrlChatMessage *msg;
@@ -930,6 +1293,17 @@ error:
 	return NULL;
 }
 
+/**
+  Creates a new DAKE Handshake message
+
+  @param[in] ctx 	The Context in which the message is created
+  @param[in] data 	A pointer to the list containing the DAKE Handshake message
+  	  	  	  	  	data, used by reference
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
 OtrlChatMessage * chat_message_dake_handshake_create(OtrlChatContext *ctx, DAKE_handshake_message_data *data)
 {
 	OtrlChatMessage *msg;
@@ -941,7 +1315,7 @@ OtrlChatMessage * chat_message_dake_handshake_create(OtrlChatContext *ctx, DAKE_
 	payload = malloc(sizeof *payload);
 	if(!payload) { goto error_with_msg; }
 
-	payload->handshake_data = *data;
+	payload->handshake_data = data;
 
 	msg->payload = payload;
 	msg->payload_free = chat_message_payload_dake_handshake_free;
@@ -955,6 +1329,18 @@ error:
 	return NULL;
 }
 
+/**
+  Creates a new DAKE Confirm message
+
+  @param[in] ctx 		The Context in which the message is created
+  @param[in] recipient 	The index of the participant the message is intended for
+  @param[in] data 		A pointer to the list containing the DAKE Confirm
+						message data, used by reference
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
 OtrlChatMessage * chat_message_dake_confirm_create(OtrlChatContext *ctx, unsigned int recipient, DAKE_confirm_message_data *data)
 {
 	OtrlChatMessage *msg;
@@ -967,7 +1353,7 @@ OtrlChatMessage * chat_message_dake_confirm_create(OtrlChatContext *ctx, unsigne
 	if(!payload) { goto error_with_msg; }
 
 	payload->recipient = recipient;
-	payload->data = *data;
+	payload->data = data;
 
 	msg->payload = payload;
 	msg->payload_free = chat_message_payload_dake_confirm_free;
@@ -981,6 +1367,18 @@ error:
 	return NULL;
 }
 
+/**
+  Creates a new DAKE Key message
+
+  @param[in] ctx 		The Context in which the message is created
+  @param[in] recipient 	The index of the participant the message is intended for
+  @param[in] data 		A pointer to the list containing the DAKE Key message
+						data, used by reference
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
 OtrlChatMessage * chat_message_dake_key_create(OtrlChatContext *ctx, unsigned int recipient, DAKE_key_message_data *data)
 {
 	OtrlChatMessage *msg;
@@ -993,7 +1391,7 @@ OtrlChatMessage * chat_message_dake_key_create(OtrlChatContext *ctx, unsigned in
 	if(!payload) { goto error_with_msg; }
 
 	payload->recipient = recipient;
-	payload->data = *data;
+	payload->data = data;
 
 	msg->payload = payload;
 	msg->payload_free = chat_message_payload_dake_key_free;
@@ -1007,6 +1405,19 @@ error:
 	return NULL;
 }
 
+/**
+  Creates a new GKA Upflow message
+
+  @param[in] ctx 		The Context in which the message is created
+  @param[in] interKeys 	A pointer to the list containing the intermediate keys,
+						used by reference
+  @param[in] recipient 	The index of the participant the message is intended
+						for
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
 OtrlChatMessage * chat_message_gka_upflow_create(OtrlChatContext *ctx, OtrlList *interKeys, unsigned int recipient)
 {
 	OtrlChatMessage *msg;
@@ -1019,8 +1430,6 @@ OtrlChatMessage * chat_message_gka_upflow_create(OtrlChatContext *ctx, OtrlList 
 	if(!payload) { goto error_with_msg; }
 
 	payload->interKeys = interKeys;
-    // TODO fix this so that it adds the sid in the message
-	//memcpy(payload->partlistHash, partlistHash, sizeof(payload->partlistHash));
 	payload->recipient = recipient;
 
 	msg->payload = payload;
@@ -1035,6 +1444,17 @@ error:
 	return NULL;
 }
 
+/**
+  Creates a new GKA Downflow message
+
+  @param[in] ctx 		The Context in which the message is created
+  @param[in] interKeys 	A pointer to the list containing the intermediate keys,
+						used by reference
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
 OtrlChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, OtrlList *interKeys)
 {
 	OtrlChatMessage *msg;
@@ -1047,8 +1467,6 @@ OtrlChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, OtrlLis
 	if(!payload) { goto error_with_msg; }
 
 	payload->interKeys = interKeys;
-    //TODO fix this so that it add the sid in the message
-	//memcpy(payload->partlistHash, partlistHash, sizeof(payload->partlistHash));
 
 	msg->payload = payload;
 	msg->payload_free = chat_message_payload_gka_downflow_free;
@@ -1062,6 +1480,55 @@ error:
 	return NULL;
 }
 
+/**
+  Creates a new Attest message
+
+  @param[in] ctx 				The Context in which the message is created
+  @param[in] sid 				The sessionId, used by value
+  @param[in] assoctable_hash 	The Association Table hash, used by value
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
+OtrlChatMessage * chat_message_attest_create(OtrlChatContext *ctx, unsigned char *sid, unsigned char *assoctable_hash)
+{
+	OtrlChatMessage *msg;
+	OtrlChatMessagePayloadAttest *payload;
+
+	msg = chat_message_create(ctx, OTRL_MSGTYPE_CHAT_ATTEST);
+	if(!msg) {goto error; }
+
+	payload = malloc(sizeof *payload);
+	if(!payload) { goto error_with_msg; }
+
+	memcpy(payload->sid, sid, CHAT_OFFER_SID_LENGTH);
+	memcpy(payload->assoctable_hash, assoctable_hash, CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH);
+
+	msg->payload = payload;
+	msg->payload_free = chat_message_payload_attest_free;
+	msg->payload_serialize = chat_message_payload_attest_serialize;
+
+	return msg;
+
+error_with_msg:
+	chat_message_free(msg);
+error:
+	return NULL;
+}
+
+/**
+  Creates a new data message
+
+  @param[in] ctx 		The Context in which the message is created
+  @param[in] ctr 		The AES counter
+  @param[in] datalen 	The number of bytes contained in ciphertext
+  @param[in] ciphertext The encrypted message. Used by reference
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
 OtrlChatMessage * chat_message_data_create(OtrlChatContext *ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext)
 {
 	OtrlChatMessage *msg;
@@ -1089,51 +1556,70 @@ error:
 	return NULL;
 }
 
+/**
+  Creates a new Shutdown End message
 
-/*
-int chat_message_send(const OtrlMessageAppOps *ops, OtrlChatContext *ctx, OtrlChatMessage *msg)
+  @param[in] ctx 		The Context in which the message is created
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
+OtrlChatMessage * chat_message_shutdown_end_create(OtrlChatContext *ctx)
 {
-	char *message, *token;
-	unsigned char *buf;
-	size_t buflen;
-	int chat_flag = 1;
+	OtrlChatMessage *msg;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_send: start\n");
+	msg = chat_message_create(ctx, OTRL_MSGTYPE_CHAT_SHUTDOWN_END);
+	if(!msg) { goto error; }
 
-	buf = chat_message_serialize(msg, &buflen);
-	if(!buf) { goto error; }
+	msg->payload = NULL;
+	msg->payload_free = NULL;
+	msg->payload_serialize = NULL;
 
-	fprintf(stderr, "libotr-mpOTR: chat_message_send: before chat_message_type_should_be_signed\n");
-	//if(chat_message_type_should_be_signed(msg->msgType) && ctx->sign_state == OTRL_CHAT_SINGSTATE_SINGED) {
-		// TODO attach the sign to the serialized message and save it to *messagep
-		//Signature *signature = chat_sign_sign(ctx->signing_key, buf, buflen);
-	//}
-	fprintf(stderr, "libotr-mpOTR: chat_message_send: before otrl_base64_otr_encode\n");
-	message = otrl_base64_otr_encode(buf, buflen);
-	if(!message) { goto error_with_buf; }
+	return msg;
 
-	// TODO Dimtiris: this is a work-around to pass the token as a recipient string. We should change that ASAP
-	// 				  maybe define another callback with this prototype:
-	//				  inject_chat_message(const char * accountname, const char *protocol, otrl_chat_token_t token, const char *message)
-	token = malloc(sizeof(int));
-	if(!token) { goto error_with_message; }
-
-	memcpy(token, (char*)ctx->the_chat_token, sizeof(int));
-	ops->inject_message(&chat_flag, ctx->accountname, ctx->protocol, token, message);
-
-	free(token);
-	free(buf);
-	free(message);
-
-	fprintf(stderr, "libotr-mpOTR: chat_message_send: end\n");
-
-	return 0;
-
-error_with_message:
-	free(message);
-error_with_buf:
-	free(buf);
 error:
-	return 1;
+	return NULL;
 }
-*/
+
+/**
+  Creates a new Shutdown KeyRelease message
+
+  @param[in] ctx 		The Context in which the message is created
+  @param[in] keylen 	The number of bytes contained in key
+  @param[in] key 		The key to be released. Used by value
+
+  @return A pointer to the message created. NULL in case of error. Caller
+  	  	  should free the returned message using the chat_message_free()
+  	  	  function.
+ */
+OtrlChatMessage * chat_message_shutdown_keyrelease_create(OtrlChatContext *ctx, unsigned char *key, size_t keylen)
+{
+	OtrlChatMessage *msg;
+	ChatMessagePayloadShutdownKeyRelease *payload;
+
+	msg = chat_message_create(ctx, OTRL_MSGTYPE_CHAT_SHUTDOWN_KEYRELEASE);
+	if(!msg) { goto error; }
+
+	payload = malloc(sizeof *payload);
+	if(!payload) { goto error_with_msg; }
+
+	payload->keylen = keylen;
+
+	payload->key = malloc(payload->keylen * sizeof *(payload->key));
+	if(!payload->key) { goto error_with_payload; }
+	memcpy(payload->key, key, keylen);
+
+	msg->payload = payload;
+	msg->payload_free = chat_message_payload_shutdown_keyrelease_free;
+	msg->payload_serialize = chat_message_payload_shutdown_keyrelease_serialize;
+
+	return msg;
+
+error_with_payload:
+	free(payload);
+error_with_msg:
+	chat_message_free(msg);
+error:
+	return NULL;
+}

@@ -21,6 +21,8 @@
 
 int chat_dske_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend);
 
+void chat_dske_destroy_info(OtrlAuthDSKEInfo **dske_info);
+
 int chat_dske_is_my_message(const OtrlChatMessage *msg);
 
 int chat_dske_handle_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
