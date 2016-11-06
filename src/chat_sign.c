@@ -207,6 +207,8 @@ Signature * chat_sign_sign(SignKey *key, const unsigned char *data, size_t datal
     return signature;
 }
 
+//TODO there is a bug in this function that causes it to segfault randomly (?) so let
+//the error messages be
 int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Signature *signature)
 {
 
@@ -230,10 +232,9 @@ int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Si
     //fprintf(stderr,"\nlibotr-mpOTR: chat_sign_verify: after get_data_hash\n");
 
     if (datalen) {
-        //fprintf(stderr,"libotr-mpOTR: chat_sign_verify: datalen is not zero\n");
+        fprintf(stderr,"libotr-mpOTR: chat_sign_verify: datalen is not zero\n");
         if(chat_sign_get_data_hash(data, datalen, hash)) {
-            //fprintf(stderr,"libotr-mpOTR: chat_sign_verify: hash errored\n");
-            //free(signature);
+            fprintf(stderr,"libotr-mpOTR: chat_sign_verify: hash errored\n");
             return 1;
         }
     	gcry_mpi_scan(&datampi, GCRYMPI_FMT_USG, hash, SIGN_HASH_SIZE, NULL);
@@ -241,10 +242,10 @@ int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Si
     	datampi = gcry_mpi_set_ui(NULL, 0);
     }
 
-    //fprintf(stderr,"libotr-mpOTR: chat_sign_verify: hash is:");
-    //for(unsigned int i = 0; i < SIGN_HASH_SIZE ; i++)
-    //    fprintf(stderr,"%02X",hash[i]);
-    //fprintf(stderr,"\n");
+    fprintf(stderr,"libotr-mpOTR: chat_sign_verify: hash is:");
+    for(unsigned int i = 0; i < SIGN_HASH_SIZE ; i++)
+        fprintf(stderr,"%02X",hash[i]);
+    fprintf(stderr,"\n");
 
     gcry_sexp_build(&datas, NULL, datastr, datampi);
     gcry_mpi_release(datampi);
@@ -258,6 +259,8 @@ int chat_sign_verify(SignKey *key, const unsigned char *data, size_t datalen, Si
     gcry_sexp_release(datas);
     gcry_sexp_release(sigs);
 
+    fprintf(stderr, "libotr-mpOTR: chat_sign_verify: end\n");
+
     return err;
 }
 
@@ -266,14 +269,11 @@ void chat_sign_serialize_pubkey(SignKey *key, unsigned char **serialized, size_t
     gcry_sexp_t temps, pubvals;
     unsigned char *temp;
 
-
-    gcry_sexp_dump(key->pub_key);
     temps = gcry_sexp_find_token(key->pub_key, "ecc", 0);
     pubvals = gcry_sexp_find_token(temps, "q", 0);
-    gcry_sexp_dump(pubvals);
     // TODO Dimitris: maybe we should check if the returned value is NULL and do error handling?
     temp = (unsigned char*) gcry_sexp_nth_data(pubvals, 1, serlen);
-    fprintf(stderr,"chat_sign_serialize_pubkey: serlen %lu\n", *serlen);
+    //fprintf(stderr,"chat_sign_serialize_pubkey: serlen %lu\n", *serlen);
     if(!temp) {
     	fprintf(stderr,"chat_sign_serialize_pubkey: temp not found\n");
     	goto error;
@@ -283,9 +283,9 @@ void chat_sign_serialize_pubkey(SignKey *key, unsigned char **serialized, size_t
     *serialized = malloc(*serlen);
     if(!*serialized) { goto error; }
 
-    fprintf(stderr,"chat_sign_serialize_pubkey: serlen %lu\n", *serlen);
+    //fprintf(stderr,"chat_sign_serialize_pubkey: serlen %lu\n", *serlen);
     memcpy(*serialized, temp, *serlen);
-    fprintf(stderr,"chat_sign_serialize_pubkey: serlen %lu\n", *serlen);
+    //fprintf(stderr,"chat_sign_serialize_pubkey: serlen %lu\n", *serlen);
 error:
 	gcry_sexp_release(pubvals);
 	gcry_sexp_release(temps);

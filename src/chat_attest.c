@@ -36,32 +36,22 @@ int chat_attest_assoctable_hash(OtrlList *partList, unsigned char **hash)
 	gcry_error_t err;
 	size_t len;
 
-	fprintf(stderr, "libotr-mpOTR: chat_attest_assoctable_hash: start\n");
-
 	err = gcry_md_open(&md, GCRY_MD_SHA512, 0);
 	if(err) { goto error; }
 
-	fprintf(stderr, "libotr-mpOTR: chat_attest_assoctable_hash: before for\n");
 	for(cur=partList->head; cur!=NULL; cur=cur->next) {
-		OtrlChatParticipant *part = cur->payload;
-		fprintf(stderr, "libotr-mpOTR: chat_attest_assoctable_hash: before if(part->sign_key == NULL) \n");
+		ChatParticipant *part = cur->payload;
 		if(part->sign_key == NULL) { goto error_with_md; }
-
-		fprintf(stderr, "libotr-mpOTR: chat_attest_assoctable_hash: before chat_sign_serialize_pubkey\n");
 		chat_sign_serialize_pubkey(part->sign_key, &key, &len);
 		gcry_md_write(md, key, len);
 		free(key);
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_attest_assoctable_hash: before malloc\n");
 	buf = malloc(CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH * sizeof *buf);
 	if(buf == NULL) { goto error_with_md; }
 
-	fprintf(stderr, "libotr-mpOTR: chat_attest_assoctable_hash: before memcpy\n");
 	memcpy(buf, gcry_md_read(md, GCRY_MD_SHA512), CHAT_ATTEST_ASSOCTABLE_HASH_LENGTH);
 	gcry_md_close(md);
-
-	fprintf(stderr, "libotr-mpOTR: chat_attest_assoctable_hash: end\n");
 
 	*hash = buf;
 	return 0;
@@ -103,7 +93,7 @@ error:
 	return 1;
 }
 
-int chat_attest_is_ready(OtrlChatAttestInfo *info)
+int chat_attest_is_ready(ChatAttestInfo *info)
 {
 	return (info->checked_count == info->size) ? 1 : 0;
 }
@@ -149,7 +139,7 @@ void chat_attest_info_destroy(OtrlChatContext *ctx)
 
 int chat_attest_info_init(OtrlChatContext *ctx)
 {
-	OtrlChatAttestInfo *info;
+	ChatAttestInfo *info;
 
 	info = malloc(sizeof *(ctx->attest_info));
 	if(!info) { goto error; }
@@ -164,7 +154,7 @@ int chat_attest_info_init(OtrlChatContext *ctx)
 		info->checked[i] = 0;
 	}*/
 
-	info->state = OTRL_CHAT_ATTESTSTATE_AWAITING;
+	info->state = CHAT_ATTESTSTATE_AWAITING;
 
 	if(ctx->attest_info) {
 		chat_attest_info_destroy(ctx);
@@ -180,11 +170,11 @@ error:
 	return 1;
 }
 
-int chat_attest_create_our_message(OtrlChatContext *ctx, unsigned int our_pos , OtrlChatMessage **msgToSend)
+int chat_attest_create_our_message(OtrlChatContext *ctx, unsigned int our_pos , ChatMessage **msgToSend)
 {
 	int err;
 	unsigned char *assoctable_hash;
-	OtrlChatMessage *msg;
+	ChatMessage *msg;
 
 	fprintf(stderr, "libotr-mpOTR: chat_attest_create_our_message: start\n");
 
@@ -207,11 +197,11 @@ error:
 	return 1;
 }
 
-int chat_attest_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
+int chat_attest_init(OtrlChatContext *ctx, ChatMessage **msgToSend)
 {
 	int err;
 	unsigned int our_pos;
-	OtrlChatMessage *ourMsg = NULL;
+	ChatMessage *ourMsg = NULL;
 
 	fprintf(stderr, "libotr-mpOTR: chat_attest_init: start\n");
 
@@ -230,7 +220,7 @@ int chat_attest_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
 		ctx->attest_info->checked_count++;
 	}
 
-	ctx->attest_info->state = OTRL_CHAT_ATTESTSTATE_AWAITING;
+	ctx->attest_info->state = CHAT_ATTESTSTATE_AWAITING;
 
 	fprintf(stderr, "libotr-mpOTR: chat_attest_init: end\n");
 
@@ -242,12 +232,12 @@ error:
 
 }
 
-int chat_attest_handle_message(OtrlChatContext *ctx, const OtrlChatMessage *msg, OtrlChatMessage **msgToSend)
+int chat_attest_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, ChatMessage **msgToSend)
 {
 	unsigned int our_pos, their_pos;
 	int res, err;
-	OtrlChatMessagePayloadAttest *payload;
-	OtrlChatMessage *ourMsg = NULL;
+	ChatMessagePayloadAttest *payload;
+	ChatMessage *ourMsg = NULL;
 
 	fprintf(stderr, "libotr-mpOTR: chat_attest_handle_message: start\n");
 
@@ -255,8 +245,8 @@ int chat_attest_handle_message(OtrlChatContext *ctx, const OtrlChatMessage *msg,
 		chat_attest_info_init(ctx);
 	}
 
-	if(msg->msgType != OTRL_MSGTYPE_CHAT_ATTEST) { goto error; }
-	if(ctx->attest_info->state != OTRL_CHAT_ATTESTSTATE_AWAITING) { goto error; }
+	if(msg->msgType != CHAT_MSGTYPE_ATTEST) { goto error; }
+	if(ctx->attest_info->state != CHAT_ATTESTSTATE_AWAITING) { goto error; }
 
 	payload = msg->payload;
 
@@ -286,7 +276,7 @@ int chat_attest_handle_message(OtrlChatContext *ctx, const OtrlChatMessage *msg,
 
 		if(chat_attest_is_ready(ctx->attest_info)) {
 			fprintf(stderr, "libotr-mpOTR: chat_attest_handle_message: chat_attest_is_ready!\n");
-			ctx->attest_info->state = OTRL_CHAT_ATTESTSTATE_FINISHED;
+			ctx->attest_info->state = CHAT_ATTESTSTATE_FINISHED;
 			ctx->msg_state = OTRL_MSGSTATE_ENCRYPTED;
 		}
 	}
@@ -301,12 +291,12 @@ error:
 }
 
 
-int chat_attest_is_my_message(OtrlChatMessage *msg)
+int chat_attest_is_my_message(ChatMessage *msg)
 {
-	OtrlChatMessageType msg_type = msg->msgType;
+	ChatMessageType msg_type = msg->msgType;
 
 	switch(msg_type) {
-		case OTRL_MSGTYPE_CHAT_ATTEST:
+		case CHAT_MSGTYPE_ATTEST:
 			return 1;
 		default:
 			return 0;

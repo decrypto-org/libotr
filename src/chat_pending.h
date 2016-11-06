@@ -17,20 +17,18 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "message.h"
-#include "chat_types.h"
+#ifndef CHAT_PENDING_H_
+#define CHAT_PENDING_H_
 
-#ifndef CHAT_OFFER_H_
-#define CHAT_OFFER_H_
+typedef struct ChatPending* ChatPendingPtr;
 
-void chat_offer_info_destroy(ChatOfferInfo **info);
+size_t chat_pending_size();
+ChatPendingPtr chat_pending_create(const char *sender, const unsigned char *msg, size_t msglen);
+void chat_pending_destroy(ChatPendingPtr pending);
+char *chat_pending_get_sender(ChatPendingPtr pending);
+unsigned char *chat_pending_get_msg(ChatPendingPtr pending);
+size_t chat_pending_get_msglen(ChatPendingPtr pending);
 
-int chat_offer_info_init(OtrlChatContext *ctx, size_t size);
+struct OtrlListOpsStruct chat_pending_listOps;
 
-int chat_offer_handle_message(OtrlChatContext *ctx, const ChatMessage *msg, ChatMessage **msgToSend);
-
-int chat_offer_start(OtrlChatContext *ctx, ChatMessage **msgToSend);
-
-int chat_offer_is_my_message(const ChatMessage *msg);
-
-#endif /* CHAT_OFFER_H_ */
+#endif /* CHAT_PENDING_H_ */

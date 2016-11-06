@@ -29,12 +29,15 @@
 #include "chat_offer.h"
 #include "chat_dske.h"
 #include "chat_attest.h"
+#include "chat_pending.h"
 
 OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname, const char *protocol,
 		otrl_chat_token_t the_chat_token)
 {
 	OtrlChatContext *ctx;
 	OtrlInsTag *ourInstanceTag;
+
+	//fprintf(stderr, "libotr-mpOTR: chat_context_create: start\n");
 
 	//TODO initialize other Context elements
 	ctx = (OtrlChatContext *)malloc(sizeof(OtrlChatContext));
@@ -53,15 +56,18 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname,
 	}
 	ctx->our_instance = ourInstanceTag->instag;
 	ctx->the_chat_token = the_chat_token;
-	ctx->participants_list = otrl_list_create(&chat_participant_listOps, sizeof(OtrlChatParticipant));
+	ctx->participants_list = otrl_list_create(&chat_participant_listOps, sizeof(ChatParticipant));
 	if(!ctx->participants_list) { goto error_with_protocol; }
+
+	ctx->pending_list = otrl_list_create(&chat_pending_listOps, chat_pending_size());
+	if(!ctx->pending_list) { goto error_with_participants_list; }
 
 	ctx->offer_info = NULL;
 	ctx->attest_info = NULL;
 	ctx->dske_info = NULL;
-	ctx->sign_state = OTRL_CHAT_SINGSTATE_NONE;
+	ctx->sign_state = CHAT_SINGSTATE_NONE;
 	ctx->gka_info.keypair = NULL;
-	ctx->gka_info.state = OTRL_CHAT_GKASTATE_NONE;
+	ctx->gka_info.state = CHAT_GKASTATE_NONE;
 	ctx->msg_state = OTRL_MSGSTATE_PLAINTEXT;
 	ctx->protocol_version = CHAT_PROTOCOL_VERSION;
 	ctx->enc_info.key = NULL;
@@ -69,9 +75,12 @@ OtrlChatContext * chat_context_create(OtrlUserState us, const char *accountname,
 	ctx->app_data = NULL;
 	ctx->app_data_free = NULL;
 
+	//fprintf(stderr, "libotr-mpOTR: chat_context_create: end\n");
 
 	return ctx;
 
+error_with_participants_list:
+	otrl_list_destroy(ctx->participants_list);
 error_with_protocol:
 	free(ctx->protocol);
 error_with_accountname:
@@ -139,6 +148,8 @@ OtrlChatContext* chat_context_find_or_add(OtrlUserState us,
 	OtrlChatContext *ctx;
 	int err;
 
+	fprintf(stderr, "libotr-mpOTR: chat_context_find_or_add: start\n");
+
 	ctx = chat_context_find(us, accountname, protocol, the_chat_token);
 
 	if(!ctx) {
@@ -147,6 +158,8 @@ OtrlChatContext* chat_context_find_or_add(OtrlUserState us,
 		err = chat_context_add(us, ctx);
 		if(err) { goto error_with_ctx; }
 	}
+
+	fprintf(stderr, "libotr-mpOTR: chat_context_find_or_add: end\n");
 
 	return ctx;
 
@@ -177,43 +190,36 @@ void chat_context_free(PayloadPtr a)
 {
 	OtrlChatContext *ctx = a;
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_free: start\n");
+	//fprintf(stderr, "libotr-mpOTR: chat_context_free: start\n");
 	if(ctx) {
-		fprintf(stderr, "libotr-mpOTR: chat_context_free: before accountname\n");
 		if(ctx->accountname) {
 			free(ctx->accountname);
 		}
 
-		fprintf(stderr, "libotr-mpOTR: chat_context_free: before protocol\n");
 		if(ctx->protocol) {
 			free(ctx->protocol);
 		}
 
-		fprintf(stderr, "libotr-mpOTR: chat_context_free: before participants_list\n");
 		if(ctx->participants_list) {
 			otrl_list_destroy(ctx->participants_list);
 		}
 
-		fprintf(stderr, "libotr-mpOTR: chat_context_free: before offer_info\n");
+		otrl_list_destroy(ctx->pending_list);
+
 		if(ctx->offer_info) {
 			chat_offer_info_destroy(&ctx->offer_info);
 		}
 
-		fprintf(stderr, "libotr-mpOTR: chat_context_free: before chat_dske_destroy_info\n");
 		chat_dske_destroy_info(&ctx->dske_info);
 
-		fprintf(stderr, "libotr-mpOTR: chat_context_free: before chat_auth_gka_info_destroy\n");
 		chat_auth_gka_info_destroy(&ctx->gka_info);
 
-		fprintf(stderr, "libotr-mpOTR: chat_context_free: before attest_info\n");
 		if(ctx->attest_info) {
 			chat_attest_info_destroy(ctx);
 		}
 
-		fprintf(stderr, "libotr-mpOTR: chat_context_free: before chat_enc_info_destroy\n");
 		chat_enc_info_destroy(&ctx->enc_info);
 
-		fprintf(stderr, "libotr-mpOTR: chat_context_free: before signing_key\n");
 		free(ctx->signing_key);
 
 		if(ctx->app_data && ctx->app_data_free) {
@@ -222,7 +228,7 @@ void chat_context_free(PayloadPtr a)
 		free(ctx);
 	}
 
-	fprintf(stderr, "libotr-mpOTR: chat_context_free: end\n");
+	//fprintf(stderr, "libotr-mpOTR: chat_context_free: end\n");
 }
 
 

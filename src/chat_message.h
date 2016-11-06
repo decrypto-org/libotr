@@ -55,34 +55,38 @@ typedef struct OtrlChatMessagePayloadDataStruct {
 
 int chat_message_is_otr(const char * message);
 
-void chat_message_free(OtrlChatMessage * msg);
+void chat_message_free(ChatMessage * msg);
 
-int chat_message_type_should_be_signed(OtrlChatMessageType type);
+int chat_message_type_contains_sid(ChatMessageType type);
 
-unsigned char * chat_message_serialize(OtrlChatMessage *msg, size_t *length);
+int chat_message_type_should_be_signed(ChatMessageType type);
 
-int chat_message_parse_type(const unsigned char *message, const size_t messagelen, OtrlChatMessageType *type);
+unsigned char * chat_message_serialize(ChatMessage *msg, size_t *length);
 
-OtrlChatMessage * chat_message_parse(const unsigned char *message, const size_t messagelen, const char *accountname);
+int chat_message_parse_type(const unsigned char *message, const size_t messagelen, ChatMessageType *type);
 
-OtrlChatMessage * chat_message_offer_create(OtrlChatContext *ctx, unsigned char *sid_contribution, unsigned int position);
+int chat_message_parse_sid(const unsigned char *message, const size_t messagelen, unsigned char **sid);
 
-OtrlChatMessage * chat_message_dake_handshake_create(OtrlChatContext *ctx, DAKE_handshake_message_data *data);
+ChatMessage * chat_message_parse(const unsigned char *message, const size_t messagelen, const char *accountname);
 
-OtrlChatMessage * chat_message_dake_confirm_create(OtrlChatContext *ctx, unsigned int recipient, DAKE_confirm_message_data *data);
+ChatMessage * chat_message_offer_create(OtrlChatContext *ctx, unsigned char *sid_contribution, unsigned int position);
 
-OtrlChatMessage * chat_message_dake_key_create(OtrlChatContext *ctx, unsigned int recipient, DAKE_key_message_data *data);
+ChatMessage * chat_message_dake_handshake_create(OtrlChatContext *ctx, DAKE_handshake_message_data *data);
 
-OtrlChatMessage * chat_message_gka_upflow_create(OtrlChatContext *ctx, OtrlList *interKeys, unsigned int recipient);
+ChatMessage * chat_message_dake_confirm_create(OtrlChatContext *ctx, unsigned int recipient, DAKE_confirm_message_data *data);
 
-OtrlChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, OtrlList *interKeys);
+ChatMessage * chat_message_dake_key_create(OtrlChatContext *ctx, unsigned int recipient, DAKE_key_message_data *data);
 
-OtrlChatMessage * chat_message_attest_create(OtrlChatContext *ctx, unsigned char *sid, unsigned char *assoctable_hash);
+ChatMessage * chat_message_gka_upflow_create(OtrlChatContext *ctx, OtrlList *interKeys, unsigned int recipient);
 
-OtrlChatMessage * chat_message_data_create(OtrlChatContext *ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
+ChatMessage * chat_message_gka_downflow_create(OtrlChatContext *ctx, OtrlList *interKeys);
 
-OtrlChatMessage * chat_message_shutdown_end_create(OtrlChatContext *ctx);
+ChatMessage * chat_message_attest_create(OtrlChatContext *ctx, unsigned char *sid, unsigned char *assoctable_hash);
 
-OtrlChatMessage * chat_message_shutdown_keyrelease_create(OtrlChatContext *ctx, unsigned char *key, size_t keylen);
+ChatMessage * chat_message_data_create(OtrlChatContext *ctx, unsigned char *ctr, size_t datalen, unsigned char *ciphertext);
+
+ChatMessage * chat_message_shutdown_end_create(OtrlChatContext *ctx);
+
+ChatMessage * chat_message_shutdown_keyrelease_create(OtrlChatContext *ctx, unsigned char *key, size_t keylen);
 
 #endif /* CHAT_MESSAGE_H_ */

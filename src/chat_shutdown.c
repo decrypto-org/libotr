@@ -22,7 +22,7 @@
 #include "chat_sign.h"
 #include "chat_participant.h"
 
-void chat_shutdown_info_destroy(OtrlShutdownInfo *shutdown_info)
+void chat_shutdown_info_destroy(ShutdownInfo *shutdown_info)
 {
 	free(shutdown_info->has_send_end);
 }
@@ -42,16 +42,16 @@ int chat_shutdown_init(OtrlChatContext *ctx)
     }
 
     ctx->shutdown_info.remaining = otrl_list_length(ctx->participants_list) - 1;
-    ctx->shutdown_info.state = OTRL_CHAT_SHUTDOWNSTATE_AWAITING_ENDS;
+    ctx->shutdown_info.state = CHAT_SHUTDOWNSTATE_AWAITING_ENDS;
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_init: end\n");
 
     return 0;
 }
 
-int chat_shutdown_send_end(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
+int chat_shutdown_send_end(OtrlChatContext *ctx, ChatMessage **msgToSend)
 {
-    OtrlChatParticipant *me;
+    ChatParticipant *me;
     unsigned int my_pos;
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_send_end: start\n");
@@ -77,10 +77,10 @@ int chat_shutdown_send_end(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
     return 0;
 }
 
-int chat_shutdown_handle_end_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
-                                 OtrlChatMessage **msgToSend)
+int chat_shutdown_handle_end_message(OtrlChatContext *ctx, ChatMessage *msg,
+                                 ChatMessage **msgToSend)
 {
-    OtrlChatParticipant *sender;
+    ChatParticipant *sender;
     unsigned int their_pos;
     int error = 0;
 
@@ -91,7 +91,7 @@ int chat_shutdown_handle_end_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
         return 1;
     }
 
-    if(ctx->shutdown_info.state != OTRL_CHAT_SHUTDOWNSTATE_AWAITING_ENDS) {
+    if(ctx->shutdown_info.state != CHAT_SHUTDOWNSTATE_AWAITING_ENDS) {
         return 1;
     }
 
@@ -106,14 +106,14 @@ int chat_shutdown_handle_end_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
     ctx->shutdown_info.has_send_end[their_pos] = 1; // True
     ctx->shutdown_info.remaining -= 1;
     if(ctx->shutdown_info.remaining == 0) {
-        ctx->shutdown_info.state = OTRL_CHAT_SHUTDOWNSTATE_FINISHED;
+        ctx->shutdown_info.state = CHAT_SHUTDOWNSTATE_FINISHED;
     }
 
     fprintf(stderr, "libotr-mpOTR: chat_shutdown_handle_end: end\n");
     return 0;
 }
 
-int chat_shutdown_release_secrets(OtrlChatContext *ctx, OtrlChatMessage **msgToSend)
+int chat_shutdown_release_secrets(OtrlChatContext *ctx, ChatMessage **msgToSend)
 {
     unsigned char *key_bytes;
     size_t keylen;
@@ -131,24 +131,24 @@ int chat_shutdown_release_secrets(OtrlChatContext *ctx, OtrlChatMessage **msgToS
 	return 0;
 }
 
-int chat_shutdown_is_my_message(const OtrlChatMessage *msg)
+int chat_shutdown_is_my_message(const ChatMessage *msg)
 {
-    OtrlChatMessageType msgType = msg->msgType;
+	ChatMessageType msg_type = msg->msgType;
 
-    switch(msgType) {
-        case OTRL_MSGTYPE_CHAT_SHUTDOWN_END:
+    switch(msg_type) {
+        case CHAT_MSGTYPE_SHUTDOWN_END:
             return 1;
         default:
             return 0;
     }
 }
 
-int chat_shutdown_handle_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
-                                 OtrlChatMessage **msgToSend)
+int chat_shutdown_handle_message(OtrlChatContext *ctx, ChatMessage *msg,
+                                 ChatMessage **msgToSend)
 {
-	OtrlChatMessageType msgType = msg->msgType;
+	ChatMessageType msgType = msg->msgType;
     switch(msgType) {
-        case OTRL_MSGTYPE_CHAT_SHUTDOWN_END:
+        case CHAT_MSGTYPE_SHUTDOWN_END:
             return chat_shutdown_handle_end_message(ctx, msg, msgToSend);
         default:
             return 0;

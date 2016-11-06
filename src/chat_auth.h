@@ -57,7 +57,7 @@ void chat_auth_gka_info_destroy(OtrlAuthGKAInfo *gka_info);
  @param ctx The context for which the qery will be created
  @param msgToSend The query message will be stored here
  */
-gcry_error_t chat_auth_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend);
+gcry_error_t chat_auth_init(OtrlChatContext *ctx, ChatMessage **msgToSend);
 
 /* Handle a chat query message msg using the ctx context. Prepares the Query response
  * and stores it in msgToSend */
@@ -76,7 +76,7 @@ gcry_error_t chat_auth_init(OtrlChatContext *ctx, OtrlChatMessage **msgToSend);
   @param msg The message to check
   @returns 1 if the message belongs to the authentication protocol. 0 otherwise
  */
-int chat_auth_is_auth_message(const OtrlChatMessage *msg);
+int chat_auth_is_my_message(const ChatMessage *msg);
 
 /**
   Handle a message that belongs to the authentication protocol
@@ -91,6 +91,6 @@ int chat_auth_is_auth_message(const OtrlChatMessage *msg);
    to the handled message will be stored here
   @returns 1 if the message belongs to the authentication protocol. 0 otherwise
  */
-int chat_auth_handle_message(OtrlChatContext *ctx, OtrlChatMessage *msg,
-		OtrlChatMessage **msgToSend, int* free_msg);
+int chat_auth_handle_message(OtrlChatContext *ctx, ChatMessage *msg,
+		ChatMessage **msgToSend);
 #endif /* CHAT_AUTH_H_ */

@@ -79,13 +79,30 @@ ChatFingerprint *chat_fingerprint_new(char *accountname, char *protocol, char *u
 	fnprnt = malloc(sizeof *fnprnt);
 	if(!fnprnt) { goto error; }
 
-	fnprnt->accountname = accountname;
-	fnprnt->protocol = protocol;
-	fnprnt->username = username;
-	fnprnt->fingerprint = fingerprint;
+	fnprnt->accountname = strdup(accountname);
+	if(!fnprnt->accountname) { goto error_with_fnprnt; }
+
+	fnprnt->protocol = strdup(protocol);
+	if(!fnprnt->protocol) { goto error_with_accountname; }
+
+	fnprnt->username = strdup(username);
+	if(!fnprnt->username) { goto error_with_protocol; }
+
+	fnprnt->fingerprint = malloc(CHAT_FINGERPRINT_SIZE * sizeof *fnprnt->fingerprint);
+	if(!fnprnt->fingerprint) { goto error_with_username; }
+
+	memcpy(fnprnt->fingerprint, fingerprint, CHAT_FINGERPRINT_SIZE);
 
 	return fnprnt;
 
+error_with_username:
+	free(fnprnt->username);
+error_with_protocol:
+	free(fnprnt->protocol);
+error_with_accountname:
+	free(fnprnt->accountname);
+error_with_fnprnt:
+	free(fnprnt);
 error:
 	return NULL;
 }
@@ -219,7 +236,8 @@ error:
 	return 1;
 }
 
-void chat_fingerprint_destroy(ChatFingerprint *fingerprint){
+void chat_fingerprint_destroy(ChatFingerprint *fingerprint)
+{
     free(fingerprint->fingerprint);
     free(fingerprint->username);
     free(fingerprint->accountname);
@@ -227,12 +245,14 @@ void chat_fingerprint_destroy(ChatFingerprint *fingerprint){
     free(fingerprint);
 }
 
-void chat_fingerprint_destroyOp(PayloadPtr a) {
+void chat_fingerprint_destroyOp(PayloadPtr a)
+{
 	ChatFingerprint *fingerprint = a;
 	chat_fingerprint_destroy(fingerprint);
 }
 
-void chat_fingerprint_print(ChatFingerprint *fingerprint) {
+void chat_fingerprint_print(ChatFingerprint *fingerprint)
+{
 	char *finhex = chat_fingerprint_bytes_to_hex(fingerprint->fingerprint);
 	fprintf(stderr, "fingerprint:\n");
 	fprintf(stderr, "|- fingerprint: %s\n", finhex);
@@ -243,7 +263,8 @@ void chat_fingerprint_print(ChatFingerprint *fingerprint) {
 	free(finhex);
 }
 
-void chat_fingerprint_printOp(OtrlListNode* a) {
+void chat_fingerprint_printOp(OtrlListNode* a)
+{
 	ChatFingerprint *fingerprint = a->payload;
 	chat_fingerprint_print(fingerprint);
 }

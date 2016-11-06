@@ -36,6 +36,8 @@ char *chat_fingerprint_bytes_to_hex(const unsigned char *fingerprint);
 
 ChatFingerprint *chat_fingerprint_find(OtrlUserState us, char *accountname , char *protocol, char *username);
 
+ChatFingerprint *chat_fingerprint_new(char *accountname, char *protocol, char *username, unsigned char *fingerprint);
+
 int otrl_chat_fingerprint_read_FILEp(OtrlUserState us, FILE *fingerfile);
 
 struct OtrlListOpsStruct chat_fingerprint_listOps;
